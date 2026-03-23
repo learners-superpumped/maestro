@@ -66,6 +66,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         result_json=json.loads(d["result_json"]) if d.get("result_json") else None,
         error=d.get("error"),
         cost_usd=d.get("cost_usd", 0.0),
+        review_count=d.get("review_count", 0),
         created_at=_iso_to_dt(d["created_at"]) or datetime.now(timezone.utc),
         scheduled_at=_iso_to_dt(d.get("scheduled_at")),
         started_at=_iso_to_dt(d.get("started_at")),
@@ -151,6 +152,17 @@ class Store:
         async with self._conn() as db:
             await db.executescript(schema_sql)
             await db.commit()
+        await self._migrate()
+
+    async def _migrate(self) -> None:
+        try:
+            async with self._conn() as db:
+                await db.execute(
+                    "ALTER TABLE tasks ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0"
+                )
+                await db.commit()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Task CRUD
@@ -165,14 +177,14 @@ class Store:
                     id, type, status, workspace, title, instruction,
                     goal_id, parent_task_id, priority, approval_level,
                     schedule, deadline, session_id, attempt, max_retries,
-                    budget_usd, result_json, error, cost_usd,
+                    budget_usd, result_json, error, cost_usd, review_count,
                     created_at, scheduled_at, started_at, completed_at,
                     timeout_at, updated_at
                 ) VALUES (
                     :id, :type, :status, :workspace, :title, :instruction,
                     :goal_id, :parent_task_id, :priority, :approval_level,
                     :schedule, :deadline, :session_id, :attempt, :max_retries,
-                    :budget_usd, :result_json, :error, :cost_usd,
+                    :budget_usd, :result_json, :error, :cost_usd, :review_count,
                     :created_at, :scheduled_at, :started_at, :completed_at,
                     :timeout_at, :updated_at
                 )
@@ -199,6 +211,7 @@ class Store:
                     else None,
                     "error": task.error,
                     "cost_usd": task.cost_usd,
+                    "review_count": task.review_count,
                     "created_at": _dt_to_iso(task.created_at),
                     "scheduled_at": _dt_to_iso(task.scheduled_at),
                     "started_at": _dt_to_iso(task.started_at),
@@ -735,6 +748,52 @@ class Store:
                 f"ON CONFLICT(goal_id) DO UPDATE SET {update_clause}"
             )
             await db.execute(sql, vals)
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # Schedule / Scheduler state
+    # ------------------------------------------------------------------
+
+    async def get_schedule_last_run(self, name: str) -> str | None:
+        async with self._conn() as db:
+            async with db.execute(
+                "SELECT last_run_at FROM schedule_runs WHERE name = ?", (name,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else None
+
+    async def set_schedule_last_run(self, name: str, dt_iso: str) -> None:
+        async with self._conn() as db:
+            await db.execute(
+                "INSERT INTO schedule_runs (name, last_run_at) VALUES (?, ?) "
+                "ON CONFLICT(name) DO UPDATE SET last_run_at = excluded.last_run_at",
+                (name, dt_iso),
+            )
+            await db.commit()
+
+    async def get_scheduler_state(self, key: str) -> str | None:
+        async with self._conn() as db:
+            async with db.execute(
+                "SELECT value FROM scheduler_state WHERE key = ?", (key,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else None
+
+    async def set_scheduler_state(self, key: str, value: str) -> None:
+        async with self._conn() as db:
+            await db.execute(
+                "INSERT INTO scheduler_state (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+            await db.commit()
+
+    async def increment_review_count(self, task_id: str) -> None:
+        async with self._conn() as db:
+            await db.execute(
+                "UPDATE tasks SET review_count = review_count + 1 WHERE id = ?",
+                (task_id,),
+            )
             await db.commit()
 
     async def record_spend(self, date: str, amount: float) -> None:

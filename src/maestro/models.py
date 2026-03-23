@@ -152,6 +152,7 @@ class Task:
     result_json: Optional[Any] = None
     error: Optional[str] = None
     cost_usd: float = 0.0
+    review_count: int = 0
 
     # --- Timestamps (auto-set) ---
     created_at: datetime = field(default_factory=_now)
