@@ -484,7 +484,8 @@ def task_tree(task_id: str) -> None:
 
 @main.command()
 @click.argument("task_id")
-def approve(task_id: str) -> None:
+@click.option("--note", default=None, help="Instructions for the agent when resuming")
+def approve(task_id: str, note: str | None) -> None:
     """Approve a pending/paused task."""
     config_file = _config_path()
     if not config_file.exists():
@@ -508,8 +509,12 @@ def approve(task_id: str) -> None:
 
     if approval and approval["status"] == "pending":
         # Use ApprovalManager for tasks with approval records
+        if note:
+            asyncio.run(store.update_approval(approval["id"], reviewer_note=note))
         asyncio.run(mgr.approve(task_id))
         click.echo(f"Task {task_id}: Approved (approval {approval['id']})")
+        if note:
+            click.echo(f"  Note: {note}")
     else:
         # Direct status update for tasks without approval records (e.g. pending tasks)
         asyncio.run(store.update_task_status(task_id, TaskStatus.APPROVED))
