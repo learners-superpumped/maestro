@@ -21,5 +21,8 @@ workspaces/*/sessions/pending/*.json
 # Chrome profiles (large, binary)
 chrome-profiles/
 
+# Claude Code
+.claude/settings.local.json
+
 # OS
 .DS_Store
