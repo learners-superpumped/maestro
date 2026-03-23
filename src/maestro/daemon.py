@@ -11,6 +11,7 @@ Runs an async main loop that:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -20,10 +21,12 @@ from typing import Optional
 from aiohttp import web
 
 from maestro.api import create_api_app
+from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
 from maestro.dispatcher import Dispatcher
 from maestro.models import Task, TaskResult, TaskStatus
 from maestro.notifications import NotificationManager
+from maestro.planner import Planner, SignalCollector
 from maestro.reconciler import Reconciler
 from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
@@ -54,9 +57,12 @@ class Daemon:
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
+        self._budget_mgr = BudgetManager(store, config.budget)
+        signal_collector = SignalCollector(store, config.goals)
+        self._planner = Planner(store, config, signal_collector)
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
-        self._last_planner_tick = datetime.now(timezone.utc)
+        self._last_planner_tick: float = 0.0
         self._last_reconcile: float = 0.0
 
     # ------------------------------------------------------------------
@@ -132,15 +138,18 @@ class Daemon:
         """Run the tick loop until :meth:`stop` is called."""
         interval_s = self._config.daemon.dispatcher_interval_ms / 1_000.0
         reconcile_interval_s = self._config.daemon.reconcile_interval_ms / 1_000.0
+        planner_interval_s = self._config.daemon.planner_interval_ms / 1_000.0
 
         logger.info(
-            "Main loop started (dispatch every %.1fs, reconcile every %.1fs)",
+            "Main loop started (dispatch every %.1fs, reconcile every %.1fs, planner every %.1fs)",
             interval_s,
             reconcile_interval_s,
+            planner_interval_s,
         )
 
         loop = asyncio.get_event_loop()
         self._last_reconcile = loop.time()
+        self._last_planner_tick = loop.time()
 
         while not self._shutdown.is_set():
             try:
@@ -153,6 +162,11 @@ class Daemon:
                 if (now_mono - self._last_reconcile) >= reconcile_interval_s:
                     await self._reconciler.reconcile()
                     self._last_reconcile = now_mono
+
+                # Planner on schedule
+                if (now_mono - self._last_planner_tick) >= planner_interval_s:
+                    await self._planner_tick()
+                    self._last_planner_tick = now_mono
 
             except Exception:
                 logger.exception("Error in main loop tick")
@@ -181,6 +195,27 @@ class Daemon:
                 logger.info(
                     "Auto-approved task %s (level=%d)", task.id, task.approval_level
                 )
+
+    # ------------------------------------------------------------------
+    # Planner
+    # ------------------------------------------------------------------
+
+    async def _planner_tick(self) -> None:
+        """Run the planner to create new tasks from goal signals."""
+        task_specs = await self._planner.plan()
+        if task_specs:
+            ids = await self._planner.create_planned_tasks(task_specs)
+            logger.info("Planner created %d tasks: %s", len(ids), ids)
+
+        # Update goal states for current signals
+        signals = await self._planner.collector.collect_signals()
+        now = datetime.now(timezone.utc).isoformat()
+        for signal in signals:
+            await self._store.update_goal_state(
+                signal["goal_id"],
+                last_evaluated_at=now,
+                current_gap=json.dumps(signal),
+            )
 
     # ------------------------------------------------------------------
     # Dispatch

@@ -420,3 +420,42 @@ async def test_search_history(db_path: pathlib.Path) -> None:
     # All
     all_actions = await store.search_history()
     assert len(all_actions) == 3
+
+
+# ---------------------------------------------------------------------------
+# Goal State
+# ---------------------------------------------------------------------------
+
+async def test_get_goal_state_none(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    result = await store.get_goal_state("nonexistent")
+    assert result is None
+
+
+async def test_update_goal_state_insert(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    await store.update_goal_state(
+        "g1", last_evaluated_at="2026-03-23T00:00:00+00:00", current_gap="no posts"
+    )
+    state = await store.get_goal_state("g1")
+    assert state is not None
+    assert state["goal_id"] == "g1"
+    assert state["last_evaluated_at"] == "2026-03-23T00:00:00+00:00"
+    assert state["current_gap"] == "no posts"
+    assert state["updated_at"] is not None
+
+
+async def test_update_goal_state_upsert(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    await store.update_goal_state("g1", current_gap="old gap")
+    await store.update_goal_state("g1", current_gap="new gap")
+
+    state = await store.get_goal_state("g1")
+    assert state is not None
+    assert state["current_gap"] == "new gap"
+
+
+async def test_update_goal_state_rejects_unknown_field(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    with pytest.raises(ValueError, match="unknown field"):
+        await store.update_goal_state("g1", bad_field="value")

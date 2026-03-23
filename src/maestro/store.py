@@ -667,6 +667,55 @@ class Store:
     # Budget
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Goal State
+    # ------------------------------------------------------------------
+
+    async def get_goal_state(self, goal_id: str) -> dict[str, Any] | None:
+        """Return the goal_state row for *goal_id*, or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM goal_state WHERE goal_id = ?", (goal_id,)
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def update_goal_state(self, goal_id: str, **kwargs: Any) -> None:
+        """Upsert goal state.  Creates the row if it doesn't exist yet."""
+        allowed = {
+            "last_evaluated_at", "current_gap", "last_task_created_at",
+        }
+        now = _now_iso()
+
+        for key in kwargs:
+            if key not in allowed:
+                raise ValueError(f"update_goal_state: unknown field '{key}'")
+
+        async with self._conn() as db:
+            # Try INSERT first, then UPDATE on conflict
+            cols = ["goal_id", "updated_at"]
+            vals = [goal_id, now]
+            for key, value in kwargs.items():
+                cols.append(key)
+                vals.append(value)
+
+            placeholders = ", ".join(["?"] * len(cols))
+            col_names = ", ".join(cols)
+
+            update_parts = ["updated_at = excluded.updated_at"]
+            for key in kwargs:
+                update_parts.append(f"{key} = excluded.{key}")
+            update_clause = ", ".join(update_parts)
+
+            sql = (
+                f"INSERT INTO goal_state ({col_names}) VALUES ({placeholders}) "
+                f"ON CONFLICT(goal_id) DO UPDATE SET {update_clause}"
+            )
+            await db.execute(sql, vals)
+            await db.commit()
+
     async def record_spend(self, date: str, amount: float) -> None:
         """
         Upsert *amount* into budget_daily for *date*.
