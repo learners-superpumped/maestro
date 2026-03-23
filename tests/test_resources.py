@@ -121,8 +121,9 @@ class TestReleaseUnknown:
         cfg = _config_with_chrome()
         rm = ResourceManager(cfg)
 
-        # Should not raise
+        # Should not raise, and all known resources remain available
         await rm.release("nonexistent/resource")
+        assert rm.is_available("chrome-profiles/threads") is True
 
     @pytest.mark.asyncio
     async def test_release_without_acquire_is_noop(self) -> None:

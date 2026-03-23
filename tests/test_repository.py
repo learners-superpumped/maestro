@@ -68,16 +68,18 @@ async def test_store_satisfies_task_repository(store: Store) -> None:
     ws_tasks = await store.list_tasks(workspace="test-ws")
     assert all(t.workspace == "test-ws" for t in ws_tasks)
 
-    # list_dispatchable_tasks
+    # list_dispatchable_tasks — approved task should be dispatchable
     dispatchable = await store.list_dispatchable_tasks()
-    assert isinstance(dispatchable, list)
+    assert len(dispatchable) == 1
+    assert dispatchable[0].id == "tr-1"
+    assert dispatchable[0].status == TaskStatus.APPROVED
 
-    # count_running
+    # count_running — no running tasks yet
     count = await store.count_running()
-    assert isinstance(count, int)
+    assert count == 0
 
     count_ws = await store.count_running(workspace="test-ws")
-    assert isinstance(count_ws, int)
+    assert count_ws == 0
 
 
 # ---------------------------------------------------------------------------
