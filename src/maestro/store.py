@@ -510,6 +510,163 @@ class Store:
     # Budget
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Approvals
+    # ------------------------------------------------------------------
+
+    async def create_approval(self, approval: dict[str, Any]) -> None:
+        """Insert a new approval record."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO approvals (
+                    id, task_id, status, draft_json,
+                    reviewer_note, revised_content,
+                    created_at, reviewed_at
+                ) VALUES (
+                    :id, :task_id, :status, :draft_json,
+                    :reviewer_note, :revised_content,
+                    :created_at, :reviewed_at
+                )
+                """,
+                {
+                    "id": approval["id"],
+                    "task_id": approval["task_id"],
+                    "status": approval.get("status", "pending"),
+                    "draft_json": approval["draft_json"],
+                    "reviewer_note": approval.get("reviewer_note"),
+                    "revised_content": approval.get("revised_content"),
+                    "created_at": approval.get("created_at", now),
+                    "reviewed_at": approval.get("reviewed_at"),
+                },
+            )
+            await db.commit()
+
+    async def get_approval_by_task(self, task_id: str) -> Optional[dict[str, Any]]:
+        """Return the latest approval record for a task, or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM approvals WHERE task_id = ? ORDER BY created_at DESC LIMIT 1",
+                (task_id,),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def list_approvals(self, status: Optional[str] = None) -> list[dict[str, Any]]:
+        """Return approval records, optionally filtered by status."""
+        if status is not None:
+            sql = "SELECT * FROM approvals WHERE status = ? ORDER BY created_at DESC"
+            params: list[Any] = [status]
+        else:
+            sql = "SELECT * FROM approvals ORDER BY created_at DESC"
+            params = []
+
+        async with self._conn() as db:
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def update_approval(self, approval_id: str, **kwargs: Any) -> None:
+        """Update fields on an approval record."""
+        allowed = {
+            "status", "reviewer_note", "revised_content", "reviewed_at",
+        }
+        params: dict[str, Any] = {"id": approval_id}
+        set_clauses: list[str] = []
+
+        for key, value in kwargs.items():
+            if key not in allowed:
+                raise ValueError(f"update_approval: unknown field '{key}'")
+            params[key] = value
+            set_clauses.append(f"{key} = :{key}")
+
+        if not set_clauses:
+            return
+
+        sql = f"UPDATE approvals SET {', '.join(set_clauses)} WHERE id = :id"
+        async with self._conn() as db:
+            await db.execute(sql, params)
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # Notifications
+    # ------------------------------------------------------------------
+
+    async def create_notification(self, notification: dict[str, Any]) -> None:
+        """Insert a new notification record."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO notifications (
+                    id, type, task_id, message, delivered, channel, created_at
+                ) VALUES (
+                    :id, :type, :task_id, :message, :delivered, :channel, :created_at
+                )
+                """,
+                {
+                    "id": notification["id"],
+                    "type": notification["type"],
+                    "task_id": notification.get("task_id"),
+                    "message": notification["message"],
+                    "delivered": notification.get("delivered", 0),
+                    "channel": notification.get("channel", "log"),
+                    "created_at": notification.get("created_at", now),
+                },
+            )
+            await db.commit()
+
+    async def list_notifications(
+        self,
+        channel: Optional[str] = None,
+        delivered: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        """Return notifications, optionally filtered by channel and/or delivered."""
+        clauses: list[str] = []
+        params: list[Any] = []
+
+        if channel is not None:
+            clauses.append("channel = ?")
+            params.append(channel)
+        if delivered is not None:
+            clauses.append("delivered = ?")
+            params.append(delivered)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT * FROM notifications {where} ORDER BY created_at DESC"
+
+        async with self._conn() as db:
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def update_notification(self, notification_id: str, **kwargs: Any) -> None:
+        """Update fields on a notification record."""
+        allowed = {"delivered"}
+        params: dict[str, Any] = {"id": notification_id}
+        set_clauses: list[str] = []
+
+        for key, value in kwargs.items():
+            if key not in allowed:
+                raise ValueError(f"update_notification: unknown field '{key}'")
+            params[key] = value
+            set_clauses.append(f"{key} = :{key}")
+
+        if not set_clauses:
+            return
+
+        sql = f"UPDATE notifications SET {', '.join(set_clauses)} WHERE id = :id"
+        async with self._conn() as db:
+            await db.execute(sql, params)
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # Budget
+    # ------------------------------------------------------------------
+
     async def record_spend(self, date: str, amount: float) -> None:
         """
         Upsert *amount* into budget_daily for *date*.

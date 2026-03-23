@@ -23,6 +23,7 @@ from maestro.api import create_api_app
 from maestro.config import MaestroConfig
 from maestro.dispatcher import Dispatcher
 from maestro.models import Task, TaskResult, TaskStatus
+from maestro.notifications import NotificationManager
 from maestro.reconciler import Reconciler
 from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
@@ -52,6 +53,7 @@ class Daemon:
         self._scheduler = Scheduler(config.schedules)
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
+        self._notifier = NotificationManager(store)
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick = datetime.now(timezone.utc)
@@ -143,6 +145,7 @@ class Daemon:
         while not self._shutdown.is_set():
             try:
                 await self._auto_approve_pending()
+                await self._resume_approved_tasks()
                 await self._dispatch_tick()
 
                 # Reconcile on schedule
@@ -208,6 +211,76 @@ class Daemon:
                 self._execute_task(task), name=f"task-{task.id}"
             )
             self._running_procs[task.id] = atask
+
+    # ------------------------------------------------------------------
+    # Resume paused-then-approved tasks
+    # ------------------------------------------------------------------
+
+    async def _resume_approved_tasks(self) -> None:
+        """Find tasks that were paused, now approved, and have a session_id. Resume them."""
+        approved = await self._store.list_tasks(status=TaskStatus.APPROVED)
+        for task in approved:
+            if task.session_id:  # Was paused and approved — resume
+                # Avoid re-resuming if already in running_procs
+                if task.id in self._running_procs:
+                    continue
+
+                approval = await self._store.get_approval_by_task(task.id)
+                instruction = "Approved. Continue execution."
+                if approval and approval.get("reviewer_note"):
+                    instruction = f"Approved with feedback: {approval['reviewer_note']}"
+                if approval and approval.get("revised_content"):
+                    instruction = f"Revision requested: {approval['revised_content']}"
+
+                await self._store.update_task_status(task.id, TaskStatus.CLAIMED)
+
+                atask = asyncio.create_task(
+                    self._resume_task(task, instruction),
+                    name=f"resume-{task.id}",
+                )
+                self._running_procs[task.id] = atask
+
+    async def _resume_task(self, task: Task, instruction: str) -> None:
+        """Resume a paused task's CLI session."""
+        workspace_path = self._base_path / "workspaces" / task.workspace
+        if not workspace_path.exists():
+            logger.error(
+                "Workspace %s does not exist for resume of task %s",
+                workspace_path, task.id,
+            )
+            await self._store.update_task_status(
+                task.id,
+                TaskStatus.FAILED,
+                error=f"Workspace not found: {workspace_path}",
+            )
+            return
+
+        now = datetime.now(timezone.utc)
+        timeout_ms = self._config.agent.turn_timeout_ms
+        timeout_at = datetime.fromtimestamp(
+            now.timestamp() + timeout_ms / 1_000.0, tz=timezone.utc
+        )
+
+        await self._store.update_task_status(
+            task.id,
+            TaskStatus.RUNNING,
+            started_at=now.isoformat(),
+            timeout_at=timeout_at.isoformat(),
+        )
+
+        try:
+            result = await self._runner.resume(
+                task, task.session_id, instruction, workspace_path  # type: ignore[arg-type]
+            )
+        except Exception as exc:
+            logger.exception("Runner raised resuming task %s: %s", task.id, exc)
+            result = TaskResult(
+                task_id=task.id,
+                success=False,
+                error=str(exc),
+            )
+
+        await self._handle_result(task, result)
 
     # ------------------------------------------------------------------
     # Execution
@@ -298,6 +371,14 @@ class Daemon:
             logger.info(
                 "Task %s completed (cost=$%.4f)", task.id, result.cost_usd
             )
+
+            # Level 1 post-notification
+            if task.approval_level == 1:
+                await self._notifier.notify(
+                    "task_completed",
+                    f"Task completed: {task.title}",
+                    task.id,
+                )
         else:
             # Check retry eligibility
             new_attempt = task.attempt + 1

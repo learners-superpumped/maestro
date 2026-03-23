@@ -130,7 +130,10 @@ async def task_result_handler(request: web.Request) -> web.Response:
 
 async def approval_submit_handler(request: web.Request) -> web.Response:
     """POST /api/internal/approval/submit — pause a task pending human approval."""
+    from maestro.approval import ApprovalManager
+
     store: Store = request.app["store"]
+    mgr = ApprovalManager(store)
 
     try:
         body = await request.json()
@@ -141,8 +144,39 @@ async def approval_submit_handler(request: web.Request) -> web.Response:
     if not task_id:
         raise web.HTTPBadRequest(reason="'task_id' is required")
 
-    await store.update_task_status(task_id, TaskStatus.PAUSED)
-    return web.json_response({"ok": True})
+    draft_json = json.dumps(body.get("draft_json", {}))
+    approval_id = await mgr.submit_draft(task_id, draft_json)
+
+    return web.json_response({"ok": True, "approval_id": approval_id})
+
+
+async def approval_get_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/approval/{task_id} — get approval details for a task."""
+    from maestro.approval import ApprovalManager
+
+    store: Store = request.app["store"]
+    mgr = ApprovalManager(store)
+    task_id = request.match_info["task_id"]
+
+    approval = await mgr.get_approval(task_id)
+    if approval is None:
+        raise web.HTTPNotFound(reason=f"No approval found for task: {task_id}")
+
+    return web.json_response(approval, dumps=lambda obj: json.dumps(obj, default=str))
+
+
+async def approvals_pending_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/approvals/pending — list pending approvals."""
+    from maestro.approval import ApprovalManager
+
+    store: Store = request.app["store"]
+    mgr = ApprovalManager(store)
+
+    pending = await mgr.get_pending_approvals()
+    return web.json_response(
+        {"approvals": pending, "count": len(pending)},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
 
 
 async def history_record_handler(request: web.Request) -> web.Response:
@@ -253,6 +287,8 @@ def create_api_app(store: Store) -> web.Application:
     app.router.add_post("/api/internal/task/update", task_update_handler)
     app.router.add_post("/api/internal/task/result", task_result_handler)
     app.router.add_post("/api/internal/approval/submit", approval_submit_handler)
+    app.router.add_get("/api/internal/approval/{task_id}", approval_get_handler)
+    app.router.add_get("/api/internal/approvals/pending", approvals_pending_handler)
     app.router.add_post("/api/internal/history/record", history_record_handler)
     app.router.add_post("/api/internal/asset/register", asset_register_handler)
     app.router.add_get("/api/internal/asset/{asset_id}", asset_get_handler)

@@ -338,27 +338,13 @@ def task_get(task_id: str) -> None:
 @main.command()
 @click.argument("task_id")
 def approve(task_id: str) -> None:
-    """Approve a pending task."""
-    _update_task_status(task_id, TaskStatus.APPROVED, "Approved")
-
-
-@main.command()
-@click.argument("task_id")
-def reject(task_id: str) -> None:
-    """Reject a pending task (set to CANCELLED)."""
-    _update_task_status(task_id, TaskStatus.CANCELLED, "Rejected")
-
-
-@main.command()
-@click.argument("task_id")
-@click.option("--note", required=True, help="Reviewer note for revision")
-def revise(task_id: str, note: str) -> None:
-    """Revise a task (approve with reviewer note)."""
+    """Approve a pending/paused task."""
     config_file = _config_path()
     if not config_file.exists():
         click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
         sys.exit(1)
 
+    from maestro.approval import ApprovalManager
     from maestro.config import load_config
     from maestro.store import Store
 
@@ -370,21 +356,135 @@ def revise(task_id: str, note: str) -> None:
         click.echo(f"Task not found: {task_id}", err=True)
         sys.exit(1)
 
-    # Append reviewer note to instruction
-    updated_instruction = f"{t.instruction}\n\n[Reviewer note]: {note}"
+    mgr = ApprovalManager(store)
+    approval = asyncio.run(mgr.get_approval(task_id))
 
-    async def _revise() -> None:
-        async with store._conn() as db:
-            await db.execute(
-                "UPDATE tasks SET instruction = ?, updated_at = ? WHERE id = ?",
-                (updated_instruction, datetime.now(timezone.utc).isoformat(), task_id),
-            )
-            await db.commit()
-        await store.update_task_status(task_id, TaskStatus.APPROVED)
+    if approval and approval["status"] == "pending":
+        # Use ApprovalManager for tasks with approval records
+        asyncio.run(mgr.approve(task_id))
+        click.echo(f"Task {task_id}: Approved (approval {approval['id']})")
+    else:
+        # Direct status update for tasks without approval records (e.g. pending tasks)
+        asyncio.run(store.update_task_status(task_id, TaskStatus.APPROVED))
+        click.echo(f"Task {task_id}: Approved ({t.status.value} -> approved)")
 
-    asyncio.run(_revise())
-    click.echo(f"Task {task_id} revised and approved.")
+
+@main.command()
+@click.argument("task_id")
+@click.option("--note", default=None, help="Rejection note")
+def reject(task_id: str, note: str | None) -> None:
+    """Reject a pending/paused task (set to CANCELLED)."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.approval import ApprovalManager
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+
+    t = asyncio.run(store.get_task(task_id))
+    if t is None:
+        click.echo(f"Task not found: {task_id}", err=True)
+        sys.exit(1)
+
+    mgr = ApprovalManager(store)
+    approval = asyncio.run(mgr.get_approval(task_id))
+
+    if approval and approval["status"] == "pending":
+        asyncio.run(mgr.reject(task_id, note=note))
+        click.echo(f"Task {task_id}: Rejected (approval {approval['id']})")
+    else:
+        asyncio.run(store.update_task_status(task_id, TaskStatus.CANCELLED))
+        click.echo(f"Task {task_id}: Rejected ({t.status.value} -> cancelled)")
+
+    if note:
+        click.echo(f"  Note: {note}")
+
+
+@main.command()
+@click.argument("task_id")
+@click.option("--note", required=True, help="Reviewer note for revision")
+@click.option("--content", default=None, help="Revised content to use")
+def revise(task_id: str, note: str, content: str | None) -> None:
+    """Revise a task (approve with reviewer note)."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.approval import ApprovalManager
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+
+    t = asyncio.run(store.get_task(task_id))
+    if t is None:
+        click.echo(f"Task not found: {task_id}", err=True)
+        sys.exit(1)
+
+    mgr = ApprovalManager(store)
+    approval = asyncio.run(mgr.get_approval(task_id))
+
+    if approval and approval["status"] == "pending":
+        asyncio.run(mgr.revise(task_id, note=note, revised_content=content))
+        click.echo(f"Task {task_id} revised and approved (approval {approval['id']}).")
+    else:
+        # Fallback: direct update for tasks without approval records
+        updated_instruction = f"{t.instruction}\n\n[Reviewer note]: {note}"
+
+        async def _revise() -> None:
+            async with store._conn() as db:
+                await db.execute(
+                    "UPDATE tasks SET instruction = ?, updated_at = ? WHERE id = ?",
+                    (updated_instruction, datetime.now(timezone.utc).isoformat(), task_id),
+                )
+                await db.commit()
+            await store.update_task_status(task_id, TaskStatus.APPROVED)
+
+        asyncio.run(_revise())
+        click.echo(f"Task {task_id} revised and approved.")
+
     click.echo(f"  Note: {note}")
+
+
+@main.command()
+def approvals() -> None:
+    """List pending approvals with drafts."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.approval import ApprovalManager
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+    mgr = ApprovalManager(store)
+
+    pending = asyncio.run(mgr.get_pending_approvals())
+
+    if not pending:
+        click.echo("No pending approvals.")
+        return
+
+    click.echo(f"{'APPROVAL':<14} {'TASK':<10} {'STATUS':<10} {'TITLE'}")
+    click.echo("-" * 60)
+    for a in pending:
+        click.echo(
+            f"{a['id']:<14} {a['task_id']:<10} "
+            f"{a.get('task_status', '?'):<10} {a.get('task_title', '?')}"
+        )
+        if a.get("draft_json"):
+            draft_preview = a["draft_json"][:80]
+            click.echo(f"  Draft: {draft_preview}...")
 
 
 def _update_task_status(task_id: str, new_status: TaskStatus, action_label: str) -> None:

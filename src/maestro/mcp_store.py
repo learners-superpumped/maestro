@@ -103,12 +103,23 @@ async def maestro_history_record(action: dict[str, Any]) -> dict[str, Any]:
 
 async def maestro_approval_check(task_id: str) -> dict[str, Any]:
     """Check approval status for a task."""
-    task = await _daemon_get(f"/api/internal/task/{task_id}")
-    return {
-        "task_id": task_id,
-        "status": task.get("status"),
-        "approved": task.get("status") == "approved",
-    }
+    try:
+        approval = await _daemon_get(f"/api/internal/approval/{task_id}")
+        return {
+            "task_id": task_id,
+            "approval_status": approval.get("status"),
+            "approved": approval.get("status") == "approved",
+            "reviewer_note": approval.get("reviewer_note"),
+            "revised_content": approval.get("revised_content"),
+        }
+    except Exception:
+        # Fallback to task status check if no approval record
+        task = await _daemon_get(f"/api/internal/task/{task_id}")
+        return {
+            "task_id": task_id,
+            "status": task.get("status"),
+            "approved": task.get("status") == "approved",
+        }
 
 
 async def maestro_approval_submit(

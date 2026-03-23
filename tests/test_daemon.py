@@ -16,7 +16,7 @@ from maestro.config import (
     ProjectConfig,
 )
 from maestro.daemon import Daemon
-from maestro.models import Task, TaskStatus
+from maestro.models import Task, TaskResult, TaskStatus
 from maestro.store import Store
 
 
@@ -221,3 +221,110 @@ async def test_stop_sets_shutdown(tmp_path: pathlib.Path, db_path: pathlib.Path)
     assert not daemon._shutdown.is_set()
     daemon.stop()
     assert daemon._shutdown.is_set()
+
+
+@pytest.mark.asyncio
+async def test_resume_approved_paused_task(db_path: pathlib.Path, tmp_path: pathlib.Path) -> None:
+    """An approved task with session_id should be picked up for resume."""
+    store = Store(db_path)
+    config = _make_config()
+
+    # Create workspace dir
+    ws_dir = tmp_path / "workspaces" / "ws1"
+    ws_dir.mkdir(parents=True)
+
+    daemon = Daemon(config, store, tmp_path)
+
+    # Create task in PENDING state, advance to APPROVED, then set session_id
+    task = _make_task(task_id="resume-1", approval_level=2, status=TaskStatus.PENDING)
+    await store.create_task(task)
+
+    # Simulate: task ran, got paused, then approved with a session_id
+    await store.update_task_status("resume-1", TaskStatus.APPROVED)
+    await store.update_task_status("resume-1", TaskStatus.CLAIMED)
+    await store.update_task_status("resume-1", TaskStatus.RUNNING, session_id="sess-resume-123")
+    await store.update_task_status("resume-1", TaskStatus.PAUSED)
+
+    # Create an approval record
+    await store.create_approval({
+        "id": "appr-resume-1",
+        "task_id": "resume-1",
+        "status": "pending",
+        "draft_json": '{"content": "draft"}',
+    })
+
+    # Now approve it
+    from maestro.approval import ApprovalManager
+    mgr = ApprovalManager(store)
+    await mgr.approve("resume-1")
+
+    # Verify task is APPROVED with session_id
+    t = await store.get_task("resume-1")
+    assert t is not None
+    assert t.status == TaskStatus.APPROVED
+    assert t.session_id == "sess-resume-123"
+
+    # Call _resume_approved_tasks — it should claim the task and spawn a resume
+    # We mock the runner to avoid actually running CLI
+    from unittest.mock import AsyncMock
+    daemon._runner.resume = AsyncMock(return_value=TaskResult(
+        task_id="resume-1",
+        success=True,
+        session_id="sess-resume-123",
+        cost_usd=0.01,
+    ))
+
+    await daemon._resume_approved_tasks()
+
+    # Task should be claimed (resume was spawned)
+    t = await store.get_task("resume-1")
+    assert t is not None
+    assert t.status == TaskStatus.CLAIMED
+
+    # Wait for the spawned asyncio task to complete
+    if "resume-1" in daemon._running_procs:
+        await daemon._running_procs["resume-1"]
+
+    # Now it should be completed
+    t = await store.get_task("resume-1")
+    assert t is not None
+    assert t.status == TaskStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_handle_result_level1_sends_notification(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """A completed Level 1 task should create a notification."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    # Create a level-1 task
+    pending_task = _make_task(task_id="lvl1-1", approval_level=1, status=TaskStatus.PENDING)
+    pending_task.title = "Level 1 Task"
+    await store.create_task(pending_task)
+    await store.update_task_status("lvl1-1", TaskStatus.APPROVED)
+    await store.update_task_status("lvl1-1", TaskStatus.CLAIMED)
+    await store.update_task_status("lvl1-1", TaskStatus.RUNNING)
+
+    task = _make_task(task_id="lvl1-1", approval_level=1, status=TaskStatus.RUNNING)
+    task.title = "Level 1 Task"
+
+    result = TaskResult(
+        task_id="lvl1-1",
+        success=True,
+        cost_usd=0.02,
+    )
+
+    await daemon._handle_result(task, result)
+
+    updated = await store.get_task("lvl1-1")
+    assert updated is not None
+    assert updated.status == TaskStatus.COMPLETED
+
+    # Check notification was created
+    notifications = await store.list_notifications()
+    assert len(notifications) == 1
+    assert notifications[0]["type"] == "task_completed"
+    assert "Level 1 Task" in notifications[0]["message"]
