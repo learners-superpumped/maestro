@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from aiohttp import web
 
-from maestro.models import TaskStatus
+from maestro.models import Task, TaskStatus
 from maestro.store import Store
 
 logger = logging.getLogger(__name__)
@@ -150,6 +150,13 @@ async def approval_submit_handler(request: web.Request) -> web.Response:
 
     draft_json = json.dumps(body.get("draft_json", {}))
     approval_id = await mgr.submit_draft(task_id, draft_json)
+
+    # Send Slack notification if configured
+    slack = request.app.get("slack")
+    if slack and slack.available:
+        task = await store.get_task(task_id)
+        title = task.title if task else task_id
+        await slack.send_approval_request(task_id, title, draft_json[:500])
 
     return web.json_response({"ok": True, "approval_id": approval_id})
 
@@ -427,14 +434,75 @@ async def task_revise_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Webhook handlers
+# ---------------------------------------------------------------------------
+
+
+async def webhook_generic_handler(request: web.Request) -> web.Response:
+    """POST /api/webhooks/generic — create a task from an external system."""
+    store: Store = request.app["store"]
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    workspace = body.get("workspace")
+    task_type = body.get("type")
+    title = body.get("title")
+    instruction = body.get("instruction")
+
+    if not workspace or not title or not instruction:
+        raise web.HTTPBadRequest(
+            reason="'workspace', 'title', and 'instruction' are required"
+        )
+
+    import uuid
+
+    task = Task(
+        id=uuid.uuid4().hex[:12],
+        type=task_type or "generic",
+        workspace=workspace,
+        title=title,
+        instruction=instruction,
+        priority=int(body.get("priority", 3)),
+        approval_level=int(body.get("approval_level", 2)),
+    )
+
+    await store.create_task(task)
+    logger.info("Webhook created task %s: %s", task.id, title)
+
+    return web.json_response({"ok": True, "task_id": task.id}, status=201)
+
+
+async def webhook_slack_handler(request: web.Request) -> web.Response:
+    """POST /api/webhooks/slack — receive Slack slash commands (placeholder)."""
+    # Future: parse Slack slash command payloads
+    return web.json_response({"ok": True, "message": "Slack webhook received"})
+
+
+async def webhook_linear_handler(request: web.Request) -> web.Response:
+    """POST /api/webhooks/linear — receive Linear webhook events (placeholder)."""
+    # Future: parse Linear webhook payloads and create/update tasks
+    return web.json_response({"ok": True, "message": "Linear webhook received"})
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
 
-def create_api_app(store: Store) -> web.Application:
-    """Create and configure the aiohttp Application."""
+def create_api_app(store: Store, slack: object | None = None) -> web.Application:
+    """Create and configure the aiohttp Application.
+
+    Args:
+        store: The data store instance.
+        slack: Optional SlackNotifier instance for sending notifications.
+    """
     app = web.Application()
     app["store"] = store
+    if slack is not None:
+        app["slack"] = slack
 
     # Dashboard
     app.router.add_get("/", dashboard_handler)
@@ -468,5 +536,10 @@ def create_api_app(store: Store) -> web.Application:
     app.router.add_post("/api/internal/asset/register", asset_register_handler)
     app.router.add_get("/api/internal/asset/{asset_id}", asset_get_handler)
     app.router.add_get("/api/internal/assets", asset_list_handler)
+
+    # Webhooks
+    app.router.add_post("/api/webhooks/generic", webhook_generic_handler)
+    app.router.add_post("/api/webhooks/slack", webhook_slack_handler)
+    app.router.add_post("/api/webhooks/linear", webhook_linear_handler)
 
     return app

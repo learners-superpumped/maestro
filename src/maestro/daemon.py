@@ -23,6 +23,7 @@ from aiohttp import web
 from maestro.api import create_api_app
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
+from maestro.integrations.slack import SlackNotifier
 from maestro.dispatcher import Dispatcher
 from maestro.models import Task, TaskResult, TaskStatus
 from maestro.notifications import NotificationManager
@@ -57,6 +58,9 @@ class Daemon:
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
+        self._slack = SlackNotifier(
+            webhook_url=config.integrations.slack.webhook_url
+        )
         self._budget_mgr = BudgetManager(store, config.budget)
         signal_collector = SignalCollector(store, config.goals)
         self._planner = Planner(store, config, signal_collector)
@@ -77,7 +81,7 @@ class Daemon:
                   picks an ephemeral port.
         """
         # 1. Create the aiohttp app
-        app = create_api_app(self._store)
+        app = create_api_app(self._store, slack=self._slack)
 
         # 2. Start TCP site on loopback
         runner = web.AppRunner(app)
@@ -414,6 +418,8 @@ class Daemon:
                     f"Task completed: {task.title}",
                     task.id,
                 )
+                if self._slack.available:
+                    await self._slack.send_completion(task.id, task.title)
         else:
             # Check retry eligibility
             new_attempt = task.attempt + 1

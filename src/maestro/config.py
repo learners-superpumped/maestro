@@ -60,6 +60,23 @@ class LoggingConfig:
 
 
 @dataclass
+class SlackConfig:
+    webhook_url: str | None = None
+
+
+@dataclass
+class LinearConfig:
+    api_key: str | None = None
+    project_slug: str | None = None
+
+
+@dataclass
+class IntegrationsConfig:
+    slack: SlackConfig = field(default_factory=SlackConfig)
+    linear: LinearConfig = field(default_factory=LinearConfig)
+
+
+@dataclass
 class ScheduleEntry:
     name: str
     workspace: str
@@ -93,6 +110,7 @@ class MaestroConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     schedules: list[ScheduleEntry] = field(default_factory=list)
     goals: list[GoalEntry] = field(default_factory=list)
+    integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     # dict[resource_type, dict[profile_name, ResourceProfile]]
     resources: dict[str, dict[str, ResourceProfile]] = field(default_factory=dict)
 
@@ -202,6 +220,20 @@ def _parse_goals(items: list[dict[str, Any]]) -> list[GoalEntry]:
     return entries
 
 
+def _parse_integrations(data: dict[str, Any]) -> IntegrationsConfig:
+    slack_data = data.get("slack") or {}
+    linear_data = data.get("linear") or {}
+
+    slack = SlackConfig(
+        webhook_url=slack_data.get("webhook_url") or None,
+    )
+    linear = LinearConfig(
+        api_key=linear_data.get("api_key") or None,
+        project_slug=linear_data.get("project_slug") or None,
+    )
+    return IntegrationsConfig(slack=slack, linear=linear)
+
+
 def _parse_resources(
     data: dict[str, Any],
 ) -> dict[str, dict[str, ResourceProfile]]:
@@ -274,6 +306,7 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     logging_cfg = _parse_logging(data.get("logging") or {})
     schedules = _parse_schedules(data.get("schedules") or [])
     goals = _parse_goals(data.get("goals") or [])
+    integrations = _parse_integrations(data.get("integrations") or {})
     resources = _parse_resources(data.get("resources") or {})
 
     return MaestroConfig(
@@ -285,5 +318,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
         logging=logging_cfg,
         schedules=schedules,
         goals=goals,
+        integrations=integrations,
         resources=resources,
     )
