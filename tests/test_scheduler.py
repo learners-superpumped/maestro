@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import time
-from datetime import datetime, timezone
-
-import pytest
+from datetime import datetime, timedelta, timezone
 
 from maestro.config import ScheduleEntry
 from maestro.scheduler import Scheduler
@@ -121,36 +118,38 @@ class TestGetDueIntervals:
         entry = _make_interval_entry("frequent-job", 60_000)
         scheduler = Scheduler([entry])
 
-        due = scheduler.get_due_intervals()
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        due = scheduler.get_due_intervals(now)
 
         assert len(due) == 1
         assert due[0].name == "frequent-job"
 
-    def test_interval_not_due_immediately_after_mark_triggered(self) -> None:
+    def test_interval_not_due_immediately_after_trigger(self) -> None:
         """After mark_triggered, an interval entry should not be due until the interval elapses."""
-        # Very long interval (1 hour) so it won't elapse during the test.
-        entry = _make_interval_entry("slow-job", 3_600_000)
+        entry = _make_interval_entry("slow-job", 3_600_000)  # 1 hour
         scheduler = Scheduler([entry])
 
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+
         # Confirm it's due on the first call.
-        assert len(scheduler.get_due_intervals()) == 1
+        assert len(scheduler.get_due_intervals(now)) == 1
 
-        scheduler.mark_triggered("slow-job")
+        scheduler.mark_triggered("slow-job", now)
 
-        # Should no longer be due immediately.
-        assert scheduler.get_due_intervals() == []
+        # Should no longer be due immediately (only 1 second later).
+        soon = now + timedelta(seconds=1)
+        assert scheduler.get_due_intervals(soon) == []
 
-    def test_interval_becomes_due_after_elapsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_interval_due_after_elapsed(self) -> None:
         """An interval entry should become due again once the interval has elapsed."""
         entry = _make_interval_entry("fast-job", 500)  # 500 ms
         scheduler = Scheduler([entry])
 
-        # Simulate trigger happening 1 second ago by monkeypatching monotonic.
-        triggered_at = time.monotonic() - 1.0  # 1 second ago
-        scheduler._last_triggered["fast-job"] = triggered_at
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        scheduler.mark_triggered("fast-job", now)
 
-        # 500 ms interval has elapsed — should be due.
-        due = scheduler.get_due_intervals()
+        later = now + timedelta(milliseconds=entry.interval_ms)
+        due = scheduler.get_due_intervals(later)
 
         assert len(due) == 1
         assert due[0].name == "fast-job"
@@ -160,7 +159,8 @@ class TestGetDueIntervals:
         entry = _make_cron_entry("cron-job", "0 9 * * *")
         scheduler = Scheduler([entry])
 
-        due = scheduler.get_due_intervals()
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        due = scheduler.get_due_intervals(now)
 
         assert due == []
 
@@ -168,7 +168,8 @@ class TestGetDueIntervals:
         """Scheduler with no entries should always return an empty list for intervals."""
         scheduler = Scheduler([])
 
-        assert scheduler.get_due_intervals() == []
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        assert scheduler.get_due_intervals(now) == []
 
     def test_multiple_interval_entries_independent(self) -> None:
         """Each interval entry tracks its own last_triggered independently."""
@@ -176,13 +177,16 @@ class TestGetDueIntervals:
         job_b = _make_interval_entry("job-b", 3_600_000)  # 1 hour
         scheduler = Scheduler([job_a, job_b])
 
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+
         # Both due initially.
-        assert len(scheduler.get_due_intervals()) == 2
+        assert len(scheduler.get_due_intervals(now)) == 2
 
         # Trigger only job-a.
-        scheduler.mark_triggered("job-a")
+        scheduler.mark_triggered("job-a", now)
 
-        due = scheduler.get_due_intervals()
+        soon = now + timedelta(seconds=1)
+        due = scheduler.get_due_intervals(soon)
         assert len(due) == 1
         assert due[0].name == "job-b"
 
@@ -193,23 +197,70 @@ class TestGetDueIntervals:
 
 
 class TestMarkTriggered:
-    def test_mark_triggered_records_timestamp(self) -> None:
-        """mark_triggered should store a monotonic timestamp for the given name."""
+    def test_mark_triggered_records_iso_timestamp(self) -> None:
+        """mark_triggered should store an ISO datetime string for the given name."""
         entry = _make_interval_entry("job", 1_000)
         scheduler = Scheduler([entry])
 
-        before = time.monotonic()
-        scheduler.mark_triggered("job")
-        after = time.monotonic()
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        scheduler.mark_triggered("job", now)
 
         assert "job" in scheduler._last_triggered
-        assert before <= scheduler._last_triggered["job"] <= after
+        assert scheduler._last_triggered["job"] == now.isoformat()
 
     def test_mark_triggered_unknown_name_is_recorded(self) -> None:
         """mark_triggered on an unknown name should still record without raising."""
         scheduler = Scheduler([])
 
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
         # Should not raise.
-        scheduler.mark_triggered("nonexistent")
+        scheduler.mark_triggered("nonexistent", now)
 
         assert "nonexistent" in scheduler._last_triggered
+
+
+# ---------------------------------------------------------------------------
+# Scheduler.restore_last_triggered
+# ---------------------------------------------------------------------------
+
+
+class TestRestoreLastTriggered:
+    def test_restore_last_triggered(self) -> None:
+        """Restored last_triggered should prevent immediate re-triggering."""
+        entry = _make_interval_entry("interval-job", 3_600_000)  # 1 hour
+        scheduler = Scheduler([entry])
+
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        scheduler.restore_last_triggered({entry.name: now.isoformat()})
+
+        # Should not be due immediately (just "restored" as triggered).
+        soon = now + timedelta(seconds=1)
+        due = scheduler.get_due_intervals(soon)
+        assert entry not in due
+
+    def test_restore_last_triggered_becomes_due_after_interval(self) -> None:
+        """After restore, entry should become due once the interval elapses."""
+        entry = _make_interval_entry("interval-job", 3_600_000)  # 1 hour
+        scheduler = Scheduler([entry])
+
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        scheduler.restore_last_triggered({entry.name: now.isoformat()})
+
+        later = now + timedelta(milliseconds=entry.interval_ms)
+        due = scheduler.get_due_intervals(later)
+        assert entry in due
+
+    def test_restore_merges_with_existing(self) -> None:
+        """restore_last_triggered should merge, not replace, existing state."""
+        job_a = _make_interval_entry("job-a", 3_600_000)
+        job_b = _make_interval_entry("job-b", 3_600_000)
+        scheduler = Scheduler([job_a, job_b])
+
+        now = datetime(2026, 3, 23, 9, 0, tzinfo=timezone.utc)
+        scheduler.mark_triggered("job-a", now)
+        scheduler.restore_last_triggered({"job-b": now.isoformat()})
+
+        soon = now + timedelta(seconds=1)
+        due = scheduler.get_due_intervals(soon)
+        # Neither job should be due — both have been "triggered" at `now`.
+        assert due == []
