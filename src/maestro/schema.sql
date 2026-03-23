@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace);
 CREATE INDEX IF NOT EXISTS idx_tasks_scheduled ON tasks(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 
 CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,

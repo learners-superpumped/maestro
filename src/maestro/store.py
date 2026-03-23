@@ -174,6 +174,16 @@ class Store:
         except Exception:
             pass
 
+        # NEW: parent_task_id index
+        try:
+            async with self._conn() as db:
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)"
+                )
+                await db.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Task CRUD
     # ------------------------------------------------------------------
@@ -805,6 +815,46 @@ class Store:
                 (task_id,),
             )
             await db.commit()
+
+    async def list_children(self, parent_task_id: str) -> list[Task]:
+        """Return direct children of a task."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM tasks WHERE parent_task_id = ? ORDER BY created_at ASC",
+                (parent_task_id,),
+            )
+            rows = await cursor.fetchall()
+        return [_row_to_task(r) for r in rows]
+
+    async def find_root_task_id(self, task_id: str) -> str:
+        """Walk parent_task_id chain to find root (parent_task_id IS NULL)."""
+        current = task_id
+        seen: set[str] = set()
+        while True:
+            if current in seen:
+                return current  # cycle protection
+            seen.add(current)
+            t = await self.get_task(current)
+            if t is None or t.parent_task_id is None:
+                return current
+            current = t.parent_task_id
+
+    async def get_task_tree(self, root_id: str) -> list[Task]:
+        """Return root and all descendants using recursive CTE."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """
+                WITH RECURSIVE tree AS (
+                    SELECT * FROM tasks WHERE id = ?
+                    UNION ALL
+                    SELECT t.* FROM tasks t JOIN tree ON t.parent_task_id = tree.id
+                )
+                SELECT * FROM tree ORDER BY created_at ASC
+                """,
+                (root_id,),
+            )
+            rows = await cursor.fetchall()
+        return [_row_to_task(r) for r in rows]
 
     async def record_spend(self, date: str, amount: float) -> None:
         """
