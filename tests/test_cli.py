@@ -1,0 +1,250 @@
+"""Tests for the Maestro CLI."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from click.testing import CliRunner
+
+from maestro.cli import main
+
+
+class TestHelp:
+    def test_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "Maestro" in result.output
+
+    def test_task_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["task", "--help"])
+        assert result.exit_code == 0
+        assert "Manage tasks" in result.output
+
+    def test_init_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["init", "--help"])
+        assert result.exit_code == 0
+
+
+class TestInit:
+    def test_init_creates_config(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["init"])
+            assert result.exit_code == 0
+            assert Path("maestro.yaml").exists()
+            assert Path("store").is_dir()
+            assert Path("workspaces/_base/knowledge").is_dir()
+            assert Path("logs").is_dir()
+            assert "initialized" in result.output.lower()
+
+    def test_init_copies_example(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            # Write an example config
+            Path("maestro.yaml.example").write_text(
+                'project:\n  name: "from-example"\n  store_path: ./store/maestro.db\n',
+                encoding="utf-8",
+            )
+            result = runner.invoke(main, ["init"])
+            assert result.exit_code == 0
+            content = Path("maestro.yaml").read_text()
+            assert "from-example" in content
+            assert "copied from example" in result.output.lower()
+
+    def test_init_skips_existing_config(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("maestro.yaml").write_text(
+                'project:\n  name: "existing"\n  store_path: ./store/maestro.db\n',
+                encoding="utf-8",
+            )
+            result = runner.invoke(main, ["init"])
+            assert result.exit_code == 0
+            assert "already exists" in result.output.lower()
+
+
+class TestStatus:
+    def test_status_no_daemon(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["status"])
+            assert result.exit_code == 0
+            assert "not running" in result.output.lower()
+
+    def test_status_stale_pid(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            store_dir = Path("store")
+            store_dir.mkdir()
+            # Use a PID that almost certainly doesn't exist
+            (store_dir / "maestro.pid").write_text("999999999")
+            result = runner.invoke(main, ["status"])
+            assert result.exit_code == 0
+            assert "not running" in result.output.lower()
+
+
+class TestStop:
+    def test_stop_no_pid(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["stop"])
+            assert result.exit_code == 0
+            assert "not running" in result.output.lower()
+
+
+class TestTaskCommands:
+    def _init_project(self) -> None:
+        """Helper: init project in the current isolated filesystem."""
+        Path("maestro.yaml").write_text(
+            'project:\n  name: "test"\n  store_path: ./store/maestro.db\n',
+            encoding="utf-8",
+        )
+        runner = CliRunner()
+        runner.invoke(main, ["init"])
+
+    def test_task_create(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            result = runner.invoke(main, [
+                "task", "create",
+                "--workspace", "test-ws",
+                "--type", "shell",
+                "--title", "Test task",
+                "--instruction", "echo hello",
+            ])
+            assert result.exit_code == 0
+            assert "task created" in result.output.lower()
+
+    def test_task_list_empty(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            result = runner.invoke(main, ["task", "list"])
+            assert result.exit_code == 0
+            assert "no tasks found" in result.output.lower()
+
+    def test_task_create_and_list(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1",
+                "--type", "shell",
+                "--title", "My Task",
+                "--instruction", "do stuff",
+            ])
+            result = runner.invoke(main, ["task", "list"])
+            assert result.exit_code == 0
+            assert "My Task" in result.output
+
+    def test_task_get(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            create_result = runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1",
+                "--type", "claude",
+                "--title", "Detail Task",
+                "--instruction", "do things",
+            ])
+            # Extract task ID from output ("Task created: <id>")
+            task_id = create_result.output.split("Task created: ")[1].split("\n")[0].strip()
+
+            result = runner.invoke(main, ["task", "get", task_id])
+            assert result.exit_code == 0
+            assert "Detail Task" in result.output
+            assert "pending" in result.output.lower()
+
+    def test_task_get_not_found(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            result = runner.invoke(main, ["task", "get", "nonexist"])
+            assert result.exit_code != 0
+
+    def test_approve(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            create_result = runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1",
+                "--type", "shell",
+                "--title", "Approve Me",
+                "--instruction", "run it",
+            ])
+            task_id = create_result.output.split("Task created: ")[1].split("\n")[0].strip()
+
+            result = runner.invoke(main, ["approve", task_id])
+            assert result.exit_code == 0
+            assert "approved" in result.output.lower()
+
+    def test_reject(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            create_result = runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1",
+                "--type", "shell",
+                "--title", "Reject Me",
+                "--instruction", "bad task",
+            ])
+            task_id = create_result.output.split("Task created: ")[1].split("\n")[0].strip()
+
+            result = runner.invoke(main, ["reject", task_id])
+            assert result.exit_code == 0
+            assert "rejected" in result.output.lower()
+
+    def test_revise(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            create_result = runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1",
+                "--type", "shell",
+                "--title", "Revise Me",
+                "--instruction", "original instruction",
+            ])
+            task_id = create_result.output.split("Task created: ")[1].split("\n")[0].strip()
+
+            result = runner.invoke(main, ["revise", task_id, "--note", "please fix X"])
+            assert result.exit_code == 0
+            assert "revised" in result.output.lower()
+
+            # Verify the note was appended
+            get_result = runner.invoke(main, ["task", "get", task_id])
+            assert "please fix X" in get_result.output
+
+    def test_task_list_filter_status(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            # Create two tasks
+            runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1", "--type", "shell",
+                "--title", "T1", "--instruction", "a",
+            ])
+            create2 = runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1", "--type", "shell",
+                "--title", "T2", "--instruction", "b",
+            ])
+            task2_id = create2.output.split("Task created: ")[1].split("\n")[0].strip()
+            # Approve second task
+            runner.invoke(main, ["approve", task2_id])
+
+            # Filter by approved
+            result = runner.invoke(main, ["task", "list", "--status", "approved"])
+            assert result.exit_code == 0
+            assert "T2" in result.output
+            assert "T1" not in result.output
