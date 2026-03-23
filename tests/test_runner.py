@@ -176,6 +176,7 @@ class TestBuildExecuteArgs:
             "claude",
             "-p", sample_task.instruction,
             "--output-format", "stream-json",
+            "--verbose",
             "--allowedTools", "Read,Write",
             "--max-turns", "20",
             "--max-budget-usd", str(sample_task.budget_usd),
@@ -227,6 +228,7 @@ class TestBuildResumeArgs:
             "--resume", session_id,
             "-p", instruction,
             "--output-format", "stream-json",
+            "--verbose",
         ]
 
     def test_different_session_ids(self, runner: AgentRunner):

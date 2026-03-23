@@ -86,6 +86,7 @@ class AgentRunner:
             "claude",
             "-p", task.instruction,
             "--output-format", "stream-json",
+            "--verbose",
             "--allowedTools", ",".join(allowed_tools),
             "--max-turns", str(max_turns),
             "--max-budget-usd", str(task.budget_usd),
@@ -111,6 +112,7 @@ class AgentRunner:
             "--resume", session_id,
             "-p", instruction,
             "--output-format", "stream-json",
+            "--verbose",
         ]
 
     # ------------------------------------------------------------------
@@ -147,6 +149,7 @@ class AgentRunner:
             # Use create_subprocess_exec (not shell=True) to avoid injection.
             proc = await asyncio.create_subprocess_exec(
                 *args,
+                stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(workspace_path),
