@@ -605,6 +605,65 @@ def revise(task_id: str, note: str, content: str | None) -> None:
 
 
 @main.command()
+def dashboard() -> None:
+    """Show system dashboard summary."""
+    config = _load_config()
+
+    from maestro.store import Store
+
+    store = Store(config.project.store_path)
+
+    async def _run():
+        await store.init_db()
+        from datetime import datetime, timezone
+        tasks = await store.list_tasks()
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        daily_spend = await store.get_daily_spend(today)
+        running_count = await store.count_running()
+
+        # Status counts
+        status_counts: dict[str, int] = {}
+        ws_stats: dict[str, dict] = {}
+        for t in tasks:
+            sv = t.status.value
+            status_counts[sv] = status_counts.get(sv, 0) + 1
+            if t.workspace not in ws_stats:
+                ws_stats[t.workspace] = {"count": 0, "cost": 0.0}
+            ws_stats[t.workspace]["count"] += 1
+            ws_stats[t.workspace]["cost"] += t.cost_usd
+
+        click.echo("📊 Maestro Dashboard")
+        click.echo("─" * 40)
+
+        # Tasks summary
+        parts = []
+        for s in ["completed", "running", "paused", "pending", "approved",
+                   "claimed", "retry_queued", "failed", "cancelled"]:
+            count = status_counts.get(s, 0)
+            if count > 0:
+                emoji = _STATUS_EMOJI.get(s, "")
+                parts.append(f"{count} {emoji} {s}")
+        click.echo(f"Tasks:      {', '.join(parts) if parts else 'none'}")
+
+        # Budget
+        limit = config.budget.daily_limit_usd
+        pct = (daily_spend / limit * 100) if limit > 0 else 0
+        click.echo(f"Budget:     ${daily_spend:.2f} / ${limit:.2f} ({pct:.1f}%)")
+
+        # Agents
+        max_agents = config.concurrency.max_total_agents
+        click.echo(f"Agents:     {running_count}/{max_agents} active")
+
+        # Workspaces
+        if ws_stats:
+            click.echo("Workspaces:")
+            for ws, stats in sorted(ws_stats.items()):
+                click.echo(f"  {ws:<20} {stats['count']} tasks, ${stats['cost']:.2f}")
+
+    asyncio.run(_run())
+
+
+@main.command()
 def approvals() -> None:
     """List pending approvals with drafts."""
     config_file = _config_path()
