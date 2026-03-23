@@ -528,7 +528,12 @@ def workspace() -> None:
 
 @workspace.command("create")
 @click.argument("name")
-@click.option("--template", default="default", help="Template to use (default: default)")
+@click.option(
+    "--template",
+    default="default",
+    type=click.Choice(WorkspaceManager.available_templates(), case_sensitive=False),
+    help="Template to use (default: default)",
+)
 def workspace_create(name: str, template: str) -> None:
     """Create a new workspace."""
     root = _project_root()
@@ -540,8 +545,12 @@ def workspace_create(name: str, template: str) -> None:
     except FileExistsError:
         click.echo(f"Error: workspace '{name}' already exists.", err=True)
         sys.exit(1)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     click.echo(f"Workspace created: {ws_path}")
+    click.echo(f"  Template: {template}")
     warnings = wm.validate_workspace(name)
     if warnings:
         for w in warnings:

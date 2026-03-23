@@ -146,6 +146,109 @@ class TestWorkspaceExists:
         assert not wm.workspace_exists("ghost")
 
 
+class TestCreateWorkspaceTemplates:
+    """Tests for workspace creation with named templates."""
+
+    def test_create_workspace_sns_template(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("my-x-channel", template="sns")
+        claude_md = (ws_path / "CLAUDE.md").read_text()
+
+        assert "Social Media Agent" in claude_md
+        assert "my-x-channel" in claude_md
+        assert "chrome browser" in claude_md
+
+    def test_create_workspace_seo_template(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("site-seo", template="seo")
+        claude_md = (ws_path / "CLAUDE.md").read_text()
+
+        assert "SEO Agent" in claude_md
+        assert "Audit and optimize" in claude_md
+
+    def test_create_workspace_ad_template(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("google-ads", template="ad")
+        claude_md = (ws_path / "CLAUDE.md").read_text()
+
+        assert "Ad Campaign Agent" in claude_md
+        assert "maestro-embedding" in claude_md
+
+    def test_template_creates_knowledge_files_sns(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("sns-test", template="sns")
+
+        assert (ws_path / "knowledge" / "tone.md").exists()
+        assert (ws_path / "knowledge" / "strategy.md").exists()
+        assert (ws_path / "knowledge" / "guidelines.md").exists()
+
+    def test_template_creates_knowledge_files_seo(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("seo-test", template="seo")
+
+        assert (ws_path / "knowledge" / "strategy.md").exists()
+        assert (ws_path / "knowledge" / "guidelines.md").exists()
+        # seo template should NOT create tone.md
+        assert not (ws_path / "knowledge" / "tone.md").exists()
+
+    def test_template_creates_knowledge_files_ad(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("ad-test", template="ad")
+
+        assert (ws_path / "knowledge" / "strategy.md").exists()
+        assert (ws_path / "knowledge" / "guidelines.md").exists()
+        assert not (ws_path / "knowledge" / "tone.md").exists()
+
+    def test_default_template_no_knowledge_files(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("default-test", template="default")
+
+        # default template creates no knowledge files
+        knowledge_files = list((ws_path / "knowledge").iterdir())
+        assert knowledge_files == []
+
+    def test_template_creates_mcp_config_sns(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("sns-mcp", template="sns")
+        mcp = json.loads((ws_path / ".claude" / "mcp.json").read_text())
+
+        assert "maestro-store" in mcp["mcpServers"]
+        assert "chrome-browser" in mcp["mcpServers"]
+
+    def test_template_creates_mcp_config_seo(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("seo-mcp", template="seo")
+        mcp = json.loads((ws_path / ".claude" / "mcp.json").read_text())
+
+        assert "maestro-store" in mcp["mcpServers"]
+        assert "chrome-browser" not in mcp["mcpServers"]
+
+    def test_template_creates_mcp_config_ad(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace("ad-mcp", template="ad")
+        mcp = json.loads((ws_path / ".claude" / "mcp.json").read_text())
+
+        assert "maestro-store" in mcp["mcpServers"]
+        assert "maestro-embedding" in mcp["mcpServers"]
+        assert "chrome-browser" not in mcp["mcpServers"]
+
+    def test_unknown_template_raises_value_error(self, wm: WorkspaceManager) -> None:
+        with pytest.raises(ValueError, match="Unknown template"):
+            wm.create_workspace("bad", template="nonexistent")
+
+    def test_available_templates(self) -> None:
+        templates = WorkspaceManager.available_templates()
+        assert "default" in templates
+        assert "sns" in templates
+        assert "seo" in templates
+        assert "ad" in templates
+
+    def test_custom_claude_md_overrides_template(self, wm: WorkspaceManager) -> None:
+        ws_path = wm.create_workspace(
+            "override", template="sns", claude_md="# Custom\n"
+        )
+        assert (ws_path / "CLAUDE.md").read_text() == "# Custom\n"
+
+    def test_custom_mcp_json_overrides_template(self, wm: WorkspaceManager) -> None:
+        custom_mcp = {"mcpServers": {"my-tool": {"command": "node"}}}
+        ws_path = wm.create_workspace(
+            "override-mcp", template="sns", mcp_json=custom_mcp
+        )
+        mcp = json.loads((ws_path / ".claude" / "mcp.json").read_text())
+        assert "my-tool" in mcp["mcpServers"]
+        assert "chrome-browser" not in mcp["mcpServers"]
+
+
 class TestEnsureBaseKnowledge:
     """Tests for the _base/ shared knowledge setup."""
 

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from maestro.config import BudgetConfig, ConcurrencyConfig
+from maestro.resources import ResourceManager
 from maestro.store import Store
 
 
@@ -52,10 +53,12 @@ class Dispatcher:
         store: Store,
         concurrency: ConcurrencyConfig,
         budget: BudgetConfig,
+        resource_manager: ResourceManager | None = None,
     ) -> None:
         self._store = store
         self._concurrency = concurrency
         self._budget = budget
+        self._resource_manager = resource_manager
 
     async def get_dispatch_decisions(self) -> list[DispatchDecision]:
         """Return the set of tasks that should be dispatched right now.
@@ -111,6 +114,12 @@ class Dispatcher:
 
             if ws_running + ws_pending >= self._concurrency.max_per_workspace:
                 continue  # This workspace is full; try next candidate
+
+            # -- Resource availability check --
+            if self._resource_manager is not None:
+                required = self._resource_manager.get_workspace_resources(ws)
+                if required and not self._resource_manager.all_available(required):
+                    continue  # Required resources are locked; try next candidate
 
             # -- Budget check --
             projected_spend = daily_spend + budgeted_so_far + task.budget_usd

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "maestro-store": {
+      "command": "python",
+      "args": ["-m", "maestro.mcp_store"],
+      "env": {
+        "MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}"
+      }
+    },
+    "chrome-browser": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/claude-in-chrome-mcp@latest"],
+      "env": {}
+    }
+  }
+}

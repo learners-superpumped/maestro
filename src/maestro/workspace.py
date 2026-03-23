@@ -10,6 +10,34 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
+from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# MCP server definitions (shared across templates)
+# ---------------------------------------------------------------------------
+
+_MCP_MAESTRO_STORE = {
+    "command": "python",
+    "args": ["-m", "maestro.mcp_store"],
+    "env": {
+        "MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}",
+    },
+}
+
+_MCP_CHROME_BROWSER = {
+    "command": "npx",
+    "args": ["-y", "@anthropic/claude-in-chrome-mcp@latest"],
+    "env": {},
+}
+
+_MCP_MAESTRO_EMBEDDING = {
+    "command": "python",
+    "args": ["-m", "maestro.mcp_embedding"],
+    "env": {
+        "MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}",
+    },
+}
 
 
 # ---------------------------------------------------------------------------
@@ -41,15 +69,111 @@ _DEFAULT_CLAUDE_MD = textwrap.dedent("""\
     - Request approval via maestro_approval_submit for external actions
 """)
 
+_SNS_CLAUDE_MD = textwrap.dedent("""\
+    # {name} Social Media Agent
+
+    ## Role
+    Manage {name} social presence. Create, schedule, and manage posts
+    following brand voice guidelines and engagement strategies.
+
+    ## Knowledge
+    Read these files for context:
+    - ../_base/knowledge/product.md
+    - ../_base/knowledge/brand.md
+    - ./knowledge/tone.md
+    - ./knowledge/strategy.md
+    - ./knowledge/guidelines.md
+
+    ## Available Tools
+    - maestro-store: Task management, history search, approval workflow
+    - chrome browser: For interacting with the platform web interface
+
+    ## Workflow
+    1. Read the task instruction carefully
+    2. Check knowledge files for tone and strategy guidance
+    3. Draft content following brand guidelines
+    4. Submit draft for approval via maestro_approval_submit
+    5. Once approved, execute the action via the browser
+    6. Submit results via maestro_task_submit_result
+
+    ## Rules
+    - Follow the instruction precisely
+    - Always check tone.md before writing any content
+    - Submit drafts for human approval before posting
+    - Report results via maestro_task_submit_result
+    - Request approval via maestro_approval_submit for all external actions
+    - Never post without explicit approval
+""")
+
+_SEO_CLAUDE_MD = textwrap.dedent("""\
+    # SEO Agent
+
+    ## Role
+    Audit and optimize website SEO. Analyze site structure, content,
+    metadata, and search performance to provide actionable recommendations.
+
+    ## Knowledge
+    Read these files for context:
+    - ../_base/knowledge/product.md
+    - ./knowledge/strategy.md
+    - ./knowledge/guidelines.md
+
+    ## Available Tools
+    - maestro-store: Task management, history search, approval workflow
+
+    ## Workflow
+    1. Read the task instruction carefully
+    2. Consult SEO strategy and technical guidelines
+    3. Perform analysis or generate recommendations
+    4. Submit results via maestro_task_submit_result
+
+    ## Rules
+    - Follow the instruction precisely
+    - Base recommendations on current SEO best practices
+    - Provide data-driven insights when possible
+    - Report results via maestro_task_submit_result
+    - Request approval via maestro_approval_submit for external actions
+""")
+
+_AD_CLAUDE_MD = textwrap.dedent("""\
+    # Ad Campaign Agent
+
+    ## Role
+    Create and manage ad campaigns. Draft ad copy, select creative assets,
+    define targeting parameters, and track campaign performance.
+
+    ## Knowledge
+    Read these files for context:
+    - ../_base/knowledge/product.md
+    - ../_base/knowledge/brand.md
+    - ./knowledge/strategy.md
+    - ./knowledge/guidelines.md
+
+    ## Available Tools
+    - maestro-store: Task management, history search, approval workflow
+    - maestro-embedding: Search and retrieve creative assets
+
+    ## Workflow
+    1. Read the task instruction carefully
+    2. Consult ad strategy and platform guidelines
+    3. Search for relevant creative assets via maestro-embedding
+    4. Draft ad copy and campaign parameters
+    5. Submit draft for approval via maestro_approval_submit
+    6. Once approved, execute the campaign setup
+    7. Submit results via maestro_task_submit_result
+
+    ## Rules
+    - Follow the instruction precisely
+    - Always align ad copy with brand voice
+    - Submit campaign drafts for human approval
+    - Report results via maestro_task_submit_result
+    - Request approval via maestro_approval_submit for all external actions
+    - Never launch campaigns without explicit approval
+""")
+
 _DEFAULT_MCP_JSON = {
     "mcpServers": {
-        "maestro-store": {
-            "command": "python",
-            "args": ["-m", "maestro.mcp_store"],
-            "env": {
-                "MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}",
-            },
-        },
+        "maestro-store": _MCP_MAESTRO_STORE,
     },
 }
 
@@ -61,6 +185,54 @@ _DEFAULT_SETTINGS_JSON = {
             "Write(*)",
         ],
         "deny": [],
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Knowledge file templates
+# ---------------------------------------------------------------------------
+
+_KNOWLEDGE_TEMPLATES: dict[str, dict[str, str]] = {
+    "tone.md": "# Tone of Voice\n\nDefine the brand's tone of voice here.\n",
+    "strategy.md": "# Strategy\n\nDefine the strategy here.\n",
+    "guidelines.md": "# Guidelines\n\nDefine platform guidelines and rules here.\n",
+}
+
+
+# ---------------------------------------------------------------------------
+# Template registry
+# ---------------------------------------------------------------------------
+
+TEMPLATES: dict[str, dict[str, Any]] = {
+    "default": {
+        "claude_md": _DEFAULT_CLAUDE_MD,
+        "knowledge_files": [],
+        "mcp_servers": {
+            "maestro-store": _MCP_MAESTRO_STORE,
+        },
+    },
+    "sns": {
+        "claude_md": _SNS_CLAUDE_MD,
+        "knowledge_files": ["tone.md", "strategy.md", "guidelines.md"],
+        "mcp_servers": {
+            "maestro-store": _MCP_MAESTRO_STORE,
+            "chrome-browser": _MCP_CHROME_BROWSER,
+        },
+    },
+    "seo": {
+        "claude_md": _SEO_CLAUDE_MD,
+        "knowledge_files": ["strategy.md", "guidelines.md"],
+        "mcp_servers": {
+            "maestro-store": _MCP_MAESTRO_STORE,
+        },
+    },
+    "ad": {
+        "claude_md": _AD_CLAUDE_MD,
+        "knowledge_files": ["strategy.md", "guidelines.md"],
+        "mcp_servers": {
+            "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
+        },
     },
 }
 
@@ -121,6 +293,11 @@ class WorkspaceManager:
 
         return warnings
 
+    @staticmethod
+    def available_templates() -> list[str]:
+        """Return the list of available template names."""
+        return sorted(TEMPLATES.keys())
+
     def create_workspace(
         self,
         name: str,
@@ -133,16 +310,24 @@ class WorkspaceManager:
 
         Args:
             name: Workspace name (used as directory name).
-            template: Template name (currently only 'default').
-            claude_md: Custom CLAUDE.md content. If None, uses default template.
-            mcp_json: Custom .claude/mcp.json dict. If None, uses default.
+            template: Template name ('default', 'sns', 'seo', 'ad').
+            claude_md: Custom CLAUDE.md content. If None, uses template.
+            mcp_json: Custom .claude/mcp.json dict. If None, uses template.
 
         Returns:
             Path to the created workspace directory.
 
         Raises:
             FileExistsError: If workspace already exists.
+            ValueError: If template name is unknown.
         """
+        if template not in TEMPLATES:
+            valid = ", ".join(sorted(TEMPLATES.keys()))
+            raise ValueError(
+                f"Unknown template: {template!r}. Valid templates: {valid}"
+            )
+
+        tmpl = TEMPLATES[template]
         ws_path = self._workspaces_dir / name
         if ws_path.exists():
             raise FileExistsError(f"Workspace already exists: {ws_path}")
@@ -155,11 +340,17 @@ class WorkspaceManager:
         (ws_path / ".claude").mkdir()
 
         # Write CLAUDE.md
-        content = claude_md if claude_md is not None else _DEFAULT_CLAUDE_MD.format(name=name)
+        if claude_md is not None:
+            content = claude_md
+        else:
+            content = tmpl["claude_md"].format(name=name)
         (ws_path / "CLAUDE.md").write_text(content, encoding="utf-8")
 
         # Write .claude/mcp.json
-        mcp = mcp_json if mcp_json is not None else _DEFAULT_MCP_JSON
+        if mcp_json is not None:
+            mcp = mcp_json
+        else:
+            mcp = {"mcpServers": dict(tmpl["mcp_servers"])}
         (ws_path / ".claude" / "mcp.json").write_text(
             json.dumps(mcp, indent=2) + "\n", encoding="utf-8"
         )
@@ -168,6 +359,13 @@ class WorkspaceManager:
         (ws_path / ".claude" / "settings.json").write_text(
             json.dumps(_DEFAULT_SETTINGS_JSON, indent=2) + "\n", encoding="utf-8"
         )
+
+        # Write knowledge files from template
+        for filename in tmpl["knowledge_files"]:
+            knowledge_content = _KNOWLEDGE_TEMPLATES.get(filename, f"# {filename}\n")
+            (ws_path / "knowledge" / filename).write_text(
+                knowledge_content, encoding="utf-8"
+            )
 
         return ws_path
 
