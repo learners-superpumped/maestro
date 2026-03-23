@@ -35,7 +35,9 @@ class EmbeddingClient:
         Returns a 768-dim zero vector when no API key is set.
         """
         if not self.available:
-            logger.debug("No GEMINI_API_KEY set; returning zero vector for text embedding")
+            logger.debug(
+                "No GEMINI_API_KEY set; returning zero vector for text embedding"
+            )
             return [0.0] * EMBEDDING_DIM
 
         return await self._call_gemini_text(text)
@@ -48,7 +50,9 @@ class EmbeddingClient:
         Returns a 768-dim zero vector when no API key is set.
         """
         if not self.available:
-            logger.debug("No GEMINI_API_KEY set; returning zero vector for file embedding")
+            logger.debug(
+                "No GEMINI_API_KEY set; returning zero vector for file embedding"
+            )
             return [0.0] * EMBEDDING_DIM
 
         suffix = path.suffix.lower()
@@ -59,7 +63,10 @@ class EmbeddingClient:
             return await self._call_gemini_text(text)
 
         # For images, video, PDFs — return zero vector placeholder
-        logger.info("File type %s not yet supported for embedding; returning zero vector", suffix)
+        logger.info(
+            "File type %s not yet supported for embedding; returning zero vector",
+            suffix,
+        )
         return [0.0] * EMBEDDING_DIM
 
     async def _call_gemini_text(self, text: str) -> list[float]:
@@ -69,8 +76,10 @@ class EmbeddingClient:
         Replace with actual API call when ready.
         """
         # TODO: Implement actual Gemini API call:
-        #   POST https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent
+        #   POST https://generativelanguage.googleapis.com/v1beta/models/
+        #        text-embedding-004:embedContent
         #   Headers: x-goog-api-key: {api_key}
-        #   Body: {"model": "models/text-embedding-004", "content": {"parts": [{"text": text}]}}
+        #   Body: {"model": "models/text-embedding-004",
+        #          "content": {"parts": [{"text": text}]}}
         logger.info("Gemini API call stubbed; returning zero vector")
         return [0.0] * EMBEDDING_DIM

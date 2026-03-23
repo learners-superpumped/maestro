@@ -34,13 +34,15 @@ class ApprovalManager:
         approval_id = uuid.uuid4().hex[:12]
         now = datetime.now(timezone.utc).isoformat()
 
-        await self._store.create_approval({
-            "id": approval_id,
-            "task_id": task_id,
-            "status": "pending",
-            "draft_json": draft_json,
-            "created_at": now,
-        })
+        await self._store.create_approval(
+            {
+                "id": approval_id,
+                "task_id": task_id,
+                "status": "pending",
+                "draft_json": draft_json,
+                "created_at": now,
+            }
+        )
 
         await self._store.update_task_status(task_id, TaskStatus.PAUSED)
 
@@ -103,7 +105,9 @@ class ApprovalManager:
 
         await self._store.update_approval(approval["id"], **update_kwargs)
         await self._store.update_task_status(task_id, TaskStatus.APPROVED)
-        logger.info("Revision requested for task %s (approval=%s)", task_id, approval["id"])
+        logger.info(
+            "Revision requested for task %s (approval=%s)", task_id, approval["id"]
+        )
 
     async def get_pending_approvals(self) -> list[dict[str, Any]]:
         """Get all pending approvals with task info."""

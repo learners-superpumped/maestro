@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -24,6 +24,7 @@ def _now() -> datetime:
 # ---------------------------------------------------------------------------
 # TaskStatus
 # ---------------------------------------------------------------------------
+
 
 class TaskStatus(str, enum.Enum):
     """All possible states a Task can be in."""
@@ -67,6 +68,7 @@ VALID_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
 # Exceptions
 # ---------------------------------------------------------------------------
 
+
 class InvalidTransitionError(Exception):
     """Raised when a Task.transition_to() call violates the state machine."""
 
@@ -81,6 +83,7 @@ class InvalidTransitionError(Exception):
 # ---------------------------------------------------------------------------
 # Task
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Task:
@@ -211,6 +214,7 @@ class Task:
 # ---------------------------------------------------------------------------
 # TaskResult
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TaskResult:

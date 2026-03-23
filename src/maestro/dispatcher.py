@@ -20,7 +20,6 @@ from maestro.config import BudgetConfig, ConcurrencyConfig
 from maestro.resources import ResourceManager
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # DispatchDecision
 # ---------------------------------------------------------------------------

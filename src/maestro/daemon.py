@@ -16,15 +16,14 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from aiohttp import web
 
 from maestro.api import create_api_app
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
-from maestro.integrations.slack import SlackNotifier
 from maestro.dispatcher import Dispatcher
+from maestro.integrations.slack import SlackNotifier
 from maestro.models import Task, TaskResult, TaskStatus
 from maestro.notifications import NotificationManager
 from maestro.planner import Planner, SignalCollector
@@ -58,9 +57,7 @@ class Daemon:
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
-        self._slack = SlackNotifier(
-            webhook_url=config.integrations.slack.webhook_url
-        )
+        self._slack = SlackNotifier(webhook_url=config.integrations.slack.webhook_url)
         self._budget_mgr = BudgetManager(store, config.budget)
         signal_collector = SignalCollector(store, config.goals)
         self._planner = Planner(store, config, signal_collector)
@@ -145,7 +142,8 @@ class Daemon:
         planner_interval_s = self._config.daemon.planner_interval_ms / 1_000.0
 
         logger.info(
-            "Main loop started (dispatch every %.1fs, reconcile every %.1fs, planner every %.1fs)",
+            "Main loop started (dispatch every %.1fs, reconcile every %.1fs,"
+            " planner every %.1fs)",
             interval_s,
             reconcile_interval_s,
             planner_interval_s,
@@ -177,9 +175,7 @@ class Daemon:
 
             # Wait for the next tick or shutdown signal
             try:
-                await asyncio.wait_for(
-                    self._shutdown.wait(), timeout=interval_s
-                )
+                await asyncio.wait_for(self._shutdown.wait(), timeout=interval_s)
                 break  # shutdown was set
             except asyncio.TimeoutError:
                 pass  # Normal — just means the interval elapsed
@@ -193,9 +189,7 @@ class Daemon:
         pending = await self._store.list_tasks(status=TaskStatus.PENDING)
         for task in pending:
             if task.needs_auto_approval():
-                await self._store.update_task_status(
-                    task.id, TaskStatus.APPROVED
-                )
+                await self._store.update_task_status(task.id, TaskStatus.APPROVED)
                 logger.info(
                     "Auto-approved task %s (level=%d)", task.id, task.approval_level
                 )
@@ -228,9 +222,7 @@ class Daemon:
     async def _dispatch_tick(self) -> None:
         """Ask the Dispatcher for decisions and spawn execution tasks."""
         # Clean up completed asyncio tasks
-        done_ids = [
-            tid for tid, atask in self._running_procs.items() if atask.done()
-        ]
+        done_ids = [tid for tid, atask in self._running_procs.items() if atask.done()]
         for tid in done_ids:
             del self._running_procs[tid]
 
@@ -238,7 +230,9 @@ class Daemon:
         for decision in decisions:
             task = await self._store.get_task(decision.task_id)
             if task is None:
-                logger.warning("Dispatch decision for missing task %s", decision.task_id)
+                logger.warning(
+                    "Dispatch decision for missing task %s", decision.task_id
+                )
                 continue
 
             # Transition to CLAIMED
@@ -256,7 +250,10 @@ class Daemon:
     # ------------------------------------------------------------------
 
     async def _resume_approved_tasks(self) -> None:
-        """Find tasks that were paused, now approved, and have a session_id. Resume them."""
+        """Find tasks that were paused, now approved, and have a session_id.
+
+        Resume them.
+        """
         approved = await self._store.list_tasks(status=TaskStatus.APPROVED)
         for task in approved:
             if task.session_id:  # Was paused and approved — resume
@@ -285,7 +282,8 @@ class Daemon:
         if not workspace_path.exists():
             logger.error(
                 "Workspace %s does not exist for resume of task %s",
-                workspace_path, task.id,
+                workspace_path,
+                task.id,
             )
             await self._store.update_task_status(
                 task.id,
@@ -309,7 +307,10 @@ class Daemon:
 
         try:
             result = await self._runner.resume(
-                task, task.session_id, instruction, workspace_path  # type: ignore[arg-type]
+                task,
+                task.session_id,
+                instruction,
+                workspace_path,  # type: ignore[arg-type]
             )
         except Exception as exc:
             logger.exception("Runner raised resuming task %s: %s", task.id, exc)
@@ -407,9 +408,7 @@ class Daemon:
                 today = now.strftime("%Y-%m-%d")
                 await self._store.record_spend(today, result.cost_usd)
 
-            logger.info(
-                "Task %s completed (cost=$%.4f)", task.id, result.cost_usd
-            )
+            logger.info("Task %s completed (cost=$%.4f)", task.id, result.cost_usd)
 
             # Level 1 post-notification
             if task.approval_level == 1:
@@ -433,7 +432,10 @@ class Daemon:
                 )
                 logger.info(
                     "Task %s retry queued (attempt %d/%d): %s",
-                    task.id, new_attempt, task.max_retries, result.error,
+                    task.id,
+                    new_attempt,
+                    task.max_retries,
+                    result.error,
                 )
             else:
                 now = datetime.now(timezone.utc)
@@ -447,5 +449,7 @@ class Daemon:
                 )
                 logger.warning(
                     "Task %s failed after %d attempts: %s",
-                    task.id, new_attempt, result.error,
+                    task.id,
+                    new_attempt,
+                    result.error,
                 )

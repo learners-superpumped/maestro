@@ -49,9 +49,7 @@ class SignalCollector:
             history = await self._store.search_history(
                 workspace=goal.workspace, limit=10
             )
-            last_action_at: str | None = (
-                history[0]["created_at"] if history else None
-            )
+            last_action_at: str | None = history[0]["created_at"] if history else None
 
             # Check pending/running tasks for this workspace (avoid duplicates)
             active_tasks = await self._store.list_tasks(workspace=goal.workspace)
@@ -172,7 +170,9 @@ class Planner:
         try:
             import anthropic  # noqa: F811
         except ImportError:
-            logger.warning("anthropic package not installed; falling back to rule-based planning")
+            logger.warning(
+                "anthropic package not installed; falling back to rule-based planning"
+            )
             return self._plan_from_signals(signals)
 
         try:
@@ -184,16 +184,17 @@ class Planner:
                 for g in self._config.goals
             )
             signals_text = "\n".join(
-                f"- [{s['goal_id']}] {s['type']}: {s['description']}"
-                for s in signals
+                f"- [{s['goal_id']}] {s['type']}: {s['description']}" for s in signals
             )
 
             prompt = (
                 "You are a task planner for an autonomous operations system.\n\n"
                 f"## Goals\n{goals_text}\n\n"
                 f"## Detected Signals\n{signals_text}\n\n"
-                "Create tasks to address these signals. Return a JSON array of task objects, "
-                "each with: workspace, type, title, instruction, priority (1-5), goal_id.\n"
+                "Create tasks to address these signals."
+                " Return a JSON array of task objects, "
+                "each with: workspace, type, title, instruction,"
+                " priority (1-5), goal_id.\n"
                 "Return ONLY the JSON array, no markdown."
             )
 

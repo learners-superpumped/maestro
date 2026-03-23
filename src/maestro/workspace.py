@@ -12,7 +12,6 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # MCP server definitions (shared across templates)
 # ---------------------------------------------------------------------------
@@ -248,6 +247,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # WorkspaceManager
 # ---------------------------------------------------------------------------
+
 
 class WorkspaceManager:
     """Manages workspace directories for Maestro agents."""

@@ -34,7 +34,8 @@ class BudgetManager:
             "spent_today": spent,
             "remaining": self._config.daily_limit_usd - spent,
             "can_spend": spent + additional_usd <= self._config.daily_limit_usd,
-            "alert": spent >= self._config.daily_limit_usd * self._config.alert_threshold_pct / 100,
+            "alert": spent
+            >= self._config.daily_limit_usd * self._config.alert_threshold_pct / 100,
         }
 
     async def record_cost(self, task_id: str, cost_usd: float) -> None:

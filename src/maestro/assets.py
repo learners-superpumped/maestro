@@ -12,7 +12,6 @@ from typing import Any, Optional
 
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # Type detection
 # ---------------------------------------------------------------------------
@@ -127,11 +126,13 @@ class AssetManager:
     ) -> None:
         """Record that an asset was used in a task on a platform."""
         action_id = uuid.uuid4().hex[:12]
-        await self._store.record_action({
-            "id": action_id,
-            "task_id": task_id,
-            "workspace": "",  # Filled by caller if needed
-            "action_type": "asset_usage",
-            "platform": platform,
-            "asset_ids": [asset_id],
-        })
+        await self._store.record_action(
+            {
+                "id": action_id,
+                "task_id": task_id,
+                "workspace": "",  # Filled by caller if needed
+                "action_type": "asset_usage",
+                "platform": platform,
+                "asset_ids": [asset_id],
+            }
+        )

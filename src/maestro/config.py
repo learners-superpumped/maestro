@@ -47,7 +47,9 @@ class BudgetConfig:
 
 @dataclass
 class AgentConfig:
-    default_allowed_tools: list[str] = field(default_factory=lambda: ["Read", "Write", "Bash"])
+    default_allowed_tools: list[str] = field(
+        default_factory=lambda: ["Read", "Write", "Bash"]
+    )
     default_max_turns: int = 20
     stall_timeout_ms: int = 300_000
     turn_timeout_ms: int = 3_600_000
@@ -176,7 +178,9 @@ def _parse_budget(data: dict[str, Any]) -> BudgetConfig:
 
 def _parse_agent(data: dict[str, Any]) -> AgentConfig:
     return AgentConfig(
-        default_allowed_tools=list(data.get("default_allowed_tools", ["Read", "Write", "Bash"])),
+        default_allowed_tools=list(
+            data.get("default_allowed_tools", ["Read", "Write", "Bash"])
+        ),
         default_max_turns=int(data.get("default_max_turns", 20)),
         stall_timeout_ms=int(data.get("stall_timeout_ms", 300_000)),
         turn_timeout_ms=int(data.get("turn_timeout_ms", 3_600_000)),

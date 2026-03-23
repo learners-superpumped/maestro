@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from maestro.store import Store
 
@@ -34,13 +34,15 @@ class NotificationManager:
         """
         notification_id = uuid.uuid4().hex[:12]
 
-        await self._store.create_notification({
-            "id": notification_id,
-            "type": type,
-            "task_id": task_id,
-            "message": message,
-            "channel": channel,
-        })
+        await self._store.create_notification(
+            {
+                "id": notification_id,
+                "type": type,
+                "task_id": task_id,
+                "message": message,
+                "channel": channel,
+            }
+        )
 
         logger.info("[%s] %s (task=%s)", type, message, task_id)
         return notification_id

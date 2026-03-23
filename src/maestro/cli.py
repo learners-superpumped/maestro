@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import os
 import pathlib
-import signal
 import shutil
+import signal
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -195,7 +195,10 @@ def status() -> None:
         click.echo(f"Maestro daemon is not running (stale PID file, PID {pid}).")
     except PermissionError:
         # Process exists but we can't signal it — still running
-        click.echo(f"Maestro daemon is running (PID {pid}, permission denied for signal check).")
+        click.echo(
+            f"Maestro daemon is running (PID {pid},"
+            " permission denied for signal check)."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -210,11 +213,17 @@ def task() -> None:
 
 @task.command("create")
 @click.option("--workspace", required=True, help="Target workspace name")
-@click.option("--type", "task_type", required=True, help="Task type (e.g. shell, claude)")
+@click.option(
+    "--type", "task_type", required=True, help="Task type (e.g. shell, claude)"
+)
 @click.option("--title", required=True, help="Human-readable title")
 @click.option("--instruction", required=True, help="Task instruction")
-@click.option("--approval-level", default=2, type=int, help="Approval level (0-2, default 2)")
-@click.option("--priority", default=3, type=int, help="Priority 1 (urgent) to 5 (low), default 3")
+@click.option(
+    "--approval-level", default=2, type=int, help="Approval level (0-2, default 2)"
+)
+@click.option(
+    "--priority", default=3, type=int, help="Priority 1 (urgent) to 5 (low), default 3"
+)
 def task_create(
     workspace: str,
     task_type: str,
@@ -286,7 +295,10 @@ def task_list(status_filter: str | None) -> None:
     click.echo(f"{'ID':<10} {'STATUS':<14} {'PRI':>3} {'WORKSPACE':<20} {'TITLE'}")
     click.echo("-" * 70)
     for t in tasks:
-        click.echo(f"{t.id:<10} {t.status.value:<14} {t.priority:>3} {t.workspace:<20} {t.title}")
+        click.echo(
+            f"{t.id:<10} {t.status.value:<14}"
+            f" {t.priority:>3} {t.workspace:<20} {t.title}"
+        )
 
 
 @task.command("get")
@@ -442,7 +454,11 @@ def revise(task_id: str, note: str, content: str | None) -> None:
             async with store._conn() as db:
                 await db.execute(
                     "UPDATE tasks SET instruction = ?, updated_at = ? WHERE id = ?",
-                    (updated_instruction, datetime.now(timezone.utc).isoformat(), task_id),
+                    (
+                        updated_instruction,
+                        datetime.now(timezone.utc).isoformat(),
+                        task_id,
+                    ),
                 )
                 await db.commit()
             await store.update_task_status(task_id, TaskStatus.APPROVED)
@@ -487,7 +503,9 @@ def approvals() -> None:
             click.echo(f"  Draft: {draft_preview}...")
 
 
-def _update_task_status(task_id: str, new_status: TaskStatus, action_label: str) -> None:
+def _update_task_status(
+    task_id: str, new_status: TaskStatus, action_label: str
+) -> None:
     """Helper to load config, check task exists, and update status."""
     config_file = _config_path()
     if not config_file.exists():
@@ -506,7 +524,9 @@ def _update_task_status(task_id: str, new_status: TaskStatus, action_label: str)
         sys.exit(1)
 
     asyncio.run(store.update_task_status(task_id, new_status))
-    click.echo(f"Task {task_id}: {action_label} ({t.status.value} -> {new_status.value})")
+    click.echo(
+        f"Task {task_id}: {action_label} ({t.status.value} -> {new_status.value})"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -615,9 +635,17 @@ def asset() -> None:
 @click.argument("path")
 @click.option("--title", required=True, help="Asset title")
 @click.option("--tags", default=None, help="Comma-separated tags")
-@click.option("--type", "asset_type", default=None, help="Asset type (auto-detected if omitted)")
+@click.option(
+    "--type", "asset_type", default=None, help="Asset type (auto-detected if omitted)"
+)
 @click.option("--description", default=None, help="Asset description")
-def asset_add(path: str, title: str, tags: str | None, asset_type: str | None, description: str | None) -> None:
+def asset_add(
+    path: str,
+    title: str,
+    tags: str | None,
+    asset_type: str | None,
+    description: str | None,
+) -> None:
     """Register a new asset."""
     config_file = _config_path()
     if not config_file.exists():
@@ -634,13 +662,15 @@ def asset_add(path: str, title: str, tags: str | None, asset_type: str | None, d
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
-    asset_id = asyncio.run(mgr.register_asset(
-        path=path,
-        title=title,
-        asset_type=asset_type,
-        tags=tag_list,
-        description=description,
-    ))
+    asset_id = asyncio.run(
+        mgr.register_asset(
+            path=path,
+            title=title,
+            asset_type=asset_type,
+            tags=tag_list,
+            description=description,
+        )
+    )
     click.echo(f"Asset registered: {asset_id}")
     click.echo(f"  Title: {title}")
     click.echo(f"  Path:  {path}")

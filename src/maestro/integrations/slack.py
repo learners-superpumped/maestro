@@ -37,17 +37,13 @@ class SlackNotifier:
                 async with session.post(self._webhook_url, json=payload) as resp:  # type: ignore[arg-type]
                     ok = resp.status == 200
                     if not ok:
-                        logger.warning(
-                            "Slack webhook returned status %d", resp.status
-                        )
+                        logger.warning("Slack webhook returned status %d", resp.status)
                     return ok
         except Exception:
             logger.exception("Failed to send Slack notification")
             return False
 
-    async def send_approval_request(
-        self, task_id: str, title: str, draft: str
-    ) -> bool:
+    async def send_approval_request(self, task_id: str, title: str, draft: str) -> bool:
         """Send a formatted approval request."""
         message = (
             "\U0001f514 *Approval Required*\n"
@@ -60,9 +56,5 @@ class SlackNotifier:
 
     async def send_completion(self, task_id: str, title: str) -> bool:
         """Send task completion notification."""
-        message = (
-            "\u2705 *Task Completed*\n"
-            f"*Task:* {title}\n"
-            f"*ID:* `{task_id}`"
-        )
+        message = f"\u2705 *Task Completed*\n*Task:* {title}\n*ID:* `{task_id}`"
         return await self.send(message)

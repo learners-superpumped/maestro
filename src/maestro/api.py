@@ -46,25 +46,27 @@ async def task_get_handler(request: web.Request) -> web.Response:
     if task is None:
         raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
 
-    return web.json_response({
-        "id": task.id,
-        "type": task.type,
-        "workspace": task.workspace,
-        "title": task.title,
-        "instruction": task.instruction,
-        "status": task.status.value,
-        "priority": task.priority,
-        "approval_level": task.approval_level,
-        "attempt": task.attempt,
-        "max_retries": task.max_retries,
-        "budget_usd": task.budget_usd,
-        "cost_usd": task.cost_usd,
-        "result_json": task.result_json,
-        "error": task.error,
-        "session_id": task.session_id,
-        "created_at": task.created_at.isoformat() if task.created_at else None,
-        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
-    })
+    return web.json_response(
+        {
+            "id": task.id,
+            "type": task.type,
+            "workspace": task.workspace,
+            "title": task.title,
+            "instruction": task.instruction,
+            "status": task.status.value,
+            "priority": task.priority,
+            "approval_level": task.approval_level,
+            "attempt": task.attempt,
+            "max_retries": task.max_retries,
+            "budget_usd": task.budget_usd,
+            "cost_usd": task.cost_usd,
+            "result_json": task.result_json,
+            "error": task.error,
+            "session_id": task.session_id,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+        }
+    )
 
 
 async def task_update_handler(request: web.Request) -> web.Response:
@@ -91,8 +93,15 @@ async def task_update_handler(request: web.Request) -> web.Response:
 
     # Any extra keys (session_id, attempt, error, etc.) are passed through.
     allowed_extra = {
-        "session_id", "attempt", "error", "cost_usd", "result_json",
-        "started_at", "completed_at", "timeout_at", "scheduled_at",
+        "session_id",
+        "attempt",
+        "error",
+        "cost_usd",
+        "result_json",
+        "started_at",
+        "completed_at",
+        "timeout_at",
+        "scheduled_at",
     }
     extra = {k: v for k, v in body.items() if k in allowed_extra}
 
@@ -357,14 +366,16 @@ async def stats_handler(request: web.Request) -> web.Response:
     for t in all_tasks:
         status_counts[t.status.value] = status_counts.get(t.status.value, 0) + 1
 
-    return web.json_response({
-        "running": running_count,
-        "pending_approvals": len(pending_approvals),
-        "today_spend_usd": daily_spend,
-        "total_tasks": len(all_tasks),
-        "status_counts": status_counts,
-        "date": today,
-    })
+    return web.json_response(
+        {
+            "running": running_count,
+            "pending_approvals": len(pending_approvals),
+            "today_spend_usd": daily_spend,
+            "total_tasks": len(all_tasks),
+            "status_counts": status_counts,
+            "date": today,
+        }
+    )
 
 
 async def task_approve_handler(request: web.Request) -> web.Response:

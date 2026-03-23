@@ -21,7 +21,6 @@ import json
 import logging
 import os
 import sys
-from pathlib import Path
 from typing import Any
 
 from maestro.store import Store
@@ -33,6 +32,7 @@ logger = logging.getLogger("maestro.mcp_embedding")
 # Store access (read-only via WAL)
 # ---------------------------------------------------------------------------
 
+
 def _store() -> Store:
     """Return a Store instance using the configured DB path."""
     db_path = os.environ.get("MAESTRO_DB_PATH", "./store/maestro.db")
@@ -42,6 +42,7 @@ def _store() -> Store:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 async def maestro_asset_search(
     query: str,
@@ -157,6 +158,7 @@ TOOLS: dict[str, dict[str, Any]] = {
 # Tool dispatcher
 # ---------------------------------------------------------------------------
 
+
 async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
     """Dispatch a tool call to the appropriate handler."""
     if name == "maestro_asset_search":
@@ -181,6 +183,7 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
 # JSON-RPC 2.0 over stdin/stdout
 # ---------------------------------------------------------------------------
 
+
 def _make_response(id: Any, result: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": id, "result": result}
 
@@ -196,19 +199,20 @@ async def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
     params = msg.get("params", {})
 
     if method == "initialize":
-        return _make_response(msg_id, {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "maestro-embedding", "version": "0.1.0"},
-        })
+        return _make_response(
+            msg_id,
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "maestro-embedding", "version": "0.1.0"},
+            },
+        )
 
     elif method == "notifications/initialized":
         return None
 
     elif method == "tools/list":
-        tool_list = [
-            {"name": name, **info} for name, info in TOOLS.items()
-        ]
+        tool_list = [{"name": name, **info} for name, info in TOOLS.items()]
         return _make_response(msg_id, {"tools": tool_list})
 
     elif method == "tools/call":
@@ -216,14 +220,24 @@ async def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
         arguments = params.get("arguments", {})
         try:
             result = await dispatch_tool(tool_name, arguments)
-            return _make_response(msg_id, {
-                "content": [{"type": "text", "text": json.dumps(result, default=str)}],
-            })
+            return _make_response(
+                msg_id,
+                {
+                    "content": [
+                        {"type": "text", "text": json.dumps(result, default=str)}
+                    ],
+                },
+            )
         except Exception as exc:
-            return _make_response(msg_id, {
-                "content": [{"type": "text", "text": json.dumps({"error": str(exc)})}],
-                "isError": True,
-            })
+            return _make_response(
+                msg_id,
+                {
+                    "content": [
+                        {"type": "text", "text": json.dumps({"error": str(exc)})}
+                    ],
+                    "isError": True,
+                },
+            )
 
     elif method == "ping":
         return _make_response(msg_id, {})

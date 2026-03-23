@@ -17,7 +17,6 @@ import aiosqlite
 
 from maestro.models import Task, TaskStatus
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -122,6 +121,7 @@ def _row_to_action(d: dict[str, Any]) -> dict[str, Any]:
 # Store
 # ---------------------------------------------------------------------------
 
+
 class Store:
     """Async SQLite store for Maestro tasks and related entities."""
 
@@ -194,7 +194,9 @@ class Store:
                     "attempt": task.attempt,
                     "max_retries": task.max_retries,
                     "budget_usd": task.budget_usd,
-                    "result_json": json.dumps(task.result_json) if task.result_json is not None else None,
+                    "result_json": json.dumps(task.result_json)
+                    if task.result_json is not None
+                    else None,
                     "error": task.error,
                     "cost_usd": task.cost_usd,
                     "created_at": _dt_to_iso(task.created_at),
@@ -210,9 +212,7 @@ class Store:
     async def get_task(self, task_id: str) -> Optional[Task]:
         """Return the Task with *task_id*, or None if not found."""
         async with self._conn() as db:
-            cursor = await db.execute(
-                "SELECT * FROM tasks WHERE id = ?", (task_id,)
-            )
+            cursor = await db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
             row = await cursor.fetchone()
         if row is None:
             return None
@@ -231,10 +231,21 @@ class Store:
         correspond to valid column names in the tasks table.
         """
         allowed_extra = {
-            "session_id", "attempt", "error", "cost_usd", "result_json",
-            "started_at", "completed_at", "timeout_at", "scheduled_at",
+            "session_id",
+            "attempt",
+            "error",
+            "cost_usd",
+            "result_json",
+            "started_at",
+            "completed_at",
+            "timeout_at",
+            "scheduled_at",
         }
-        params: dict[str, Any] = {"status": status.value, "updated_at": _now_iso(), "id": task_id}
+        params: dict[str, Any] = {
+            "status": status.value,
+            "updated_at": _now_iso(),
+            "id": task_id,
+        }
         set_clauses = ["status = :status", "updated_at = :updated_at"]
 
         for key, value in kwargs.items():
@@ -376,9 +387,7 @@ class Store:
     async def get_asset(self, asset_id: str) -> Optional[dict[str, Any]]:
         """Return asset dict or None."""
         async with self._conn() as db:
-            cursor = await db.execute(
-                "SELECT * FROM assets WHERE id = ?", (asset_id,)
-            )
+            cursor = await db.execute("SELECT * FROM assets WHERE id = ?", (asset_id,))
             row = await cursor.fetchone()
         if row is None:
             return None
@@ -420,8 +429,14 @@ class Store:
     async def update_asset(self, asset_id: str, **kwargs: Any) -> None:
         """Update asset fields."""
         allowed = {
-            "title", "description", "tags", "embedding_model",
-            "embedded_at", "platforms_published", "type", "path",
+            "title",
+            "description",
+            "tags",
+            "embedding_model",
+            "embedded_at",
+            "platforms_published",
+            "type",
+            "path",
         }
         params: dict[str, Any] = {"updated_at": _now_iso(), "id": asset_id}
         set_clauses = ["updated_at = :updated_at"]
@@ -474,9 +489,7 @@ class Store:
                     ),
                     "result_url": action.get("result_url"),
                     "metrics": (
-                        json.dumps(action["metrics"])
-                        if action.get("metrics")
-                        else None
+                        json.dumps(action["metrics"]) if action.get("metrics") else None
                     ),
                     "created_at": action.get("created_at", now),
                 },
@@ -547,7 +560,8 @@ class Store:
         """Return the latest approval record for a task, or None."""
         async with self._conn() as db:
             cursor = await db.execute(
-                "SELECT * FROM approvals WHERE task_id = ? ORDER BY created_at DESC LIMIT 1",
+                "SELECT * FROM approvals"
+                " WHERE task_id = ? ORDER BY created_at DESC LIMIT 1",
                 (task_id,),
             )
             row = await cursor.fetchone()
@@ -555,7 +569,9 @@ class Store:
             return None
         return dict(row)
 
-    async def list_approvals(self, status: Optional[str] = None) -> list[dict[str, Any]]:
+    async def list_approvals(
+        self, status: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         """Return approval records, optionally filtered by status."""
         if status is not None:
             sql = "SELECT * FROM approvals WHERE status = ? ORDER BY created_at DESC"
@@ -572,7 +588,10 @@ class Store:
     async def update_approval(self, approval_id: str, **kwargs: Any) -> None:
         """Update fields on an approval record."""
         allowed = {
-            "status", "reviewer_note", "revised_content", "reviewed_at",
+            "status",
+            "reviewer_note",
+            "revised_content",
+            "reviewed_at",
         }
         params: dict[str, Any] = {"id": approval_id}
         set_clauses: list[str] = []
@@ -685,7 +704,9 @@ class Store:
     async def update_goal_state(self, goal_id: str, **kwargs: Any) -> None:
         """Upsert goal state.  Creates the row if it doesn't exist yet."""
         allowed = {
-            "last_evaluated_at", "current_gap", "last_task_created_at",
+            "last_evaluated_at",
+            "current_gap",
+            "last_task_created_at",
         }
         now = _now_iso()
 

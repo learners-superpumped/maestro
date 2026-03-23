@@ -28,6 +28,7 @@ logger = logging.getLogger("maestro.mcp_store")
 # Daemon HTTP client
 # ---------------------------------------------------------------------------
 
+
 def _daemon_base_url() -> str:
     """Return the base URL for the Maestro daemon's internal API."""
     port = os.environ.get("MAESTRO_DAEMON_PORT", "0")
@@ -56,6 +57,7 @@ async def _daemon_post(path: str, body: dict[str, Any]) -> dict[str, Any]:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 async def maestro_task_get(task_id: str) -> dict[str, Any]:
     """Fetch task details from the daemon."""
     return await _daemon_get(f"/api/internal/task/{task_id}")
@@ -63,10 +65,13 @@ async def maestro_task_get(task_id: str) -> dict[str, Any]:
 
 async def maestro_task_update_status(task_id: str, status: str) -> dict[str, Any]:
     """Update task status."""
-    return await _daemon_post("/api/internal/task/update", {
-        "task_id": task_id,
-        "status": status,
-    })
+    return await _daemon_post(
+        "/api/internal/task/update",
+        {
+            "task_id": task_id,
+            "status": status,
+        },
+    )
 
 
 async def maestro_task_submit_result(
@@ -75,11 +80,14 @@ async def maestro_task_submit_result(
     cost_usd: float = 0.0,
 ) -> dict[str, Any]:
     """Submit task result and mark as completed."""
-    return await _daemon_post("/api/internal/task/result", {
-        "task_id": task_id,
-        "result_json": result_json,
-        "cost_usd": cost_usd,
-    })
+    return await _daemon_post(
+        "/api/internal/task/result",
+        {
+            "task_id": task_id,
+            "result_json": result_json,
+            "cost_usd": cost_usd,
+        },
+    )
 
 
 async def maestro_history_search(
@@ -127,10 +135,13 @@ async def maestro_approval_submit(
     draft_json: Any,
 ) -> dict[str, Any]:
     """Submit a draft for approval, pausing the task."""
-    return await _daemon_post("/api/internal/approval/submit", {
-        "task_id": task_id,
-        "draft_json": draft_json,
-    })
+    return await _daemon_post(
+        "/api/internal/approval/submit",
+        {
+            "task_id": task_id,
+            "draft_json": draft_json,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +167,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "task_id": {"type": "string", "description": "Task ID"},
                 "status": {
                     "type": "string",
-                    "description": "New status (pending, approved, running, paused, completed, failed, cancelled)",
+                    "description": (
+                        "New status (pending, approved, running,"
+                        " paused, completed, failed, cancelled)"
+                    ),
                 },
             },
             "required": ["task_id", "status"],
@@ -235,6 +249,7 @@ TOOLS: dict[str, dict[str, Any]] = {
 # Tool dispatcher
 # ---------------------------------------------------------------------------
 
+
 async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
     """Dispatch a tool call to the appropriate handler."""
     if name == "maestro_task_get":
@@ -271,6 +286,7 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
 # JSON-RPC 2.0 over stdin/stdout
 # ---------------------------------------------------------------------------
 
+
 def _make_response(id: Any, result: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": id, "result": result}
 
@@ -286,20 +302,21 @@ async def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
     params = msg.get("params", {})
 
     if method == "initialize":
-        return _make_response(msg_id, {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "maestro-store", "version": "0.1.0"},
-        })
+        return _make_response(
+            msg_id,
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "maestro-store", "version": "0.1.0"},
+            },
+        )
 
     elif method == "notifications/initialized":
         # Client acknowledgement — no response needed
         return None
 
     elif method == "tools/list":
-        tool_list = [
-            {"name": name, **info} for name, info in TOOLS.items()
-        ]
+        tool_list = [{"name": name, **info} for name, info in TOOLS.items()]
         return _make_response(msg_id, {"tools": tool_list})
 
     elif method == "tools/call":
@@ -307,14 +324,22 @@ async def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
         arguments = params.get("arguments", {})
         try:
             result = await dispatch_tool(tool_name, arguments)
-            return _make_response(msg_id, {
-                "content": [{"type": "text", "text": json.dumps(result)}],
-            })
+            return _make_response(
+                msg_id,
+                {
+                    "content": [{"type": "text", "text": json.dumps(result)}],
+                },
+            )
         except Exception as exc:
-            return _make_response(msg_id, {
-                "content": [{"type": "text", "text": json.dumps({"error": str(exc)})}],
-                "isError": True,
-            })
+            return _make_response(
+                msg_id,
+                {
+                    "content": [
+                        {"type": "text", "text": json.dumps({"error": str(exc)})}
+                    ],
+                    "isError": True,
+                },
+            )
 
     elif method == "ping":
         return _make_response(msg_id, {})

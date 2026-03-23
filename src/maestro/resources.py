@@ -24,7 +24,9 @@ class ResourceManager:
     required resources are already in use.
     """
 
-    def __init__(self, config: MaestroConfig, workspaces_dir: Path | None = None) -> None:
+    def __init__(
+        self, config: MaestroConfig, workspaces_dir: Path | None = None
+    ) -> None:
         self._locks: dict[str, asyncio.Lock] = {}
         self._acquired: dict[str, bool] = {}
         self._resources = config.resources  # dict[type, dict[profile, ResourceProfile]]

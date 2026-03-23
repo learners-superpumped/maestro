@@ -57,10 +57,12 @@ class LinearClient:
         """Fetch issues from Linear project.
 
         Args:
-            states: Optional list of state names to filter by (e.g. ["Todo", "In Progress"]).
+            states: Optional list of state names to filter by
+                (e.g. ["Todo", "In Progress"]).
 
         Returns:
-            List of issue dicts with keys: id, identifier, title, description, state, priority.
+            List of issue dicts with keys:
+            id, identifier, title, description, state, priority.
         """
         if not self.available:
             return []
@@ -68,7 +70,7 @@ class LinearClient:
         state_filter = ""
         if states:
             state_list = ", ".join(f'"{s}"' for s in states)
-            state_filter = f', filter: {{state: {{name: {{in: [{state_list}]}}}}}}'
+            state_filter = f", filter: {{state: {{name: {{in: [{state_list}]}}}}}}"
 
         query = f"""
         query($slug: String!) {{
@@ -110,9 +112,7 @@ class LinearClient:
             for n in nodes
         ]
 
-    async def update_issue_state(
-        self, issue_id: str, state_name: str
-    ) -> bool:
+    async def update_issue_state(self, issue_id: str, state_name: str) -> bool:
         """Update an issue's state in Linear.
 
         Args:
@@ -142,6 +142,4 @@ class LinearClient:
             logger.exception("Failed to update Linear issue state")
             return False
 
-        return bool(
-            data.get("data", {}).get("issueUpdate", {}).get("success")
-        )
+        return bool(data.get("data", {}).get("issueUpdate", {}).get("success"))

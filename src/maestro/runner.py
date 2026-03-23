@@ -84,12 +84,17 @@ class AgentRunner:
         """
         return [
             "claude",
-            "-p", task.instruction,
-            "--output-format", "stream-json",
+            "-p",
+            task.instruction,
+            "--output-format",
+            "stream-json",
             "--verbose",
-            "--allowedTools", ",".join(allowed_tools),
-            "--max-turns", str(max_turns),
-            "--max-budget-usd", str(task.budget_usd),
+            "--allowedTools",
+            ",".join(allowed_tools),
+            "--max-turns",
+            str(max_turns),
+            "--max-budget-usd",
+            str(task.budget_usd),
         ]
 
     def _build_resume_args(self, session_id: str, instruction: str) -> list[str]:
@@ -109,9 +114,12 @@ class AgentRunner:
         """
         return [
             "claude",
-            "--resume", session_id,
-            "-p", instruction,
-            "--output-format", "stream-json",
+            "--resume",
+            session_id,
+            "-p",
+            instruction,
+            "--output-format",
+            "stream-json",
             "--verbose",
         ]
 
@@ -195,7 +203,10 @@ class AgentRunner:
             if proc.returncode != 0 and not success:
                 stderr_bytes = await proc.stderr.read() if proc.stderr else b""
                 stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
-                error = error or f"Process exited with code {proc.returncode}: {stderr_text}"
+                error = (
+                    error
+                    or f"Process exited with code {proc.returncode}: {stderr_text}"
+                )
                 success = False
 
         except Exception as exc:  # noqa: BLE001

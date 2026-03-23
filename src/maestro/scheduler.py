@@ -7,7 +7,7 @@ supporting both cron-based and interval-based schedules.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from croniter import croniter
@@ -57,7 +57,9 @@ class Scheduler:
                 continue
 
             # croniter works with naive datetimes; strip tzinfo for comparison.
-            since_naive = since.replace(tzinfo=None) if since.tzinfo is not None else since
+            since_naive = (
+                since.replace(tzinfo=None) if since.tzinfo is not None else since
+            )
             now_naive = now.replace(tzinfo=None) if now.tzinfo is not None else now
 
             cron = croniter(entry.cron, since_naive)
