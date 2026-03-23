@@ -154,50 +154,65 @@ class AgentRunner:
         result_json: Optional[object] = None
 
         try:
-            # Use create_subprocess_exec (not shell=True) to avoid injection.
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                limit=1024 * 1024,  # 1MB readline buffer (default 64KB too small for resume)
                 cwd=str(workspace_path),
             )
 
             assert proc.stdout is not None  # PIPE guarantees this
 
-            async for raw_line in proc.stdout:
-                line = raw_line.decode("utf-8", errors="replace")
+            # Read raw chunks and split by newline manually.
+            # This avoids asyncio's readline buffer limit (default 64KB)
+            # which can be exceeded by large stream-json events
+            # (e.g. web page snapshots, resume context).
+            buffer = b""
+            while True:
+                chunk = await proc.stdout.read(65536)
+                if not chunk:
+                    break
+                buffer += chunk
+                while b"\n" in buffer:
+                    raw_line, buffer = buffer.split(b"\n", 1)
+                    line = raw_line.decode("utf-8", errors="replace")
+                    event = parse_stream_event(line)
+                    if event is None:
+                        continue
+
+                    event_type = event.get("type")
+
+                    if event_type == "system":
+                        if "session_id" in event:
+                            session_id = event["session_id"]
+                            logger.debug("Captured session_id=%s", session_id)
+
+                    elif event_type == "result":
+                        cost_usd = float(event.get("total_cost_usd", 0.0))
+                        is_error = event.get("is_error", False)
+                        success = not is_error
+                        if is_error:
+                            error = event.get("result", "CLI error")
+                        result_json = event.get("result")
+                        if not session_id and "session_id" in event:
+                            session_id = event["session_id"]
+
+            # Process any remaining data in buffer
+            if buffer:
+                line = buffer.decode("utf-8", errors="replace")
                 event = parse_stream_event(line)
-                if event is None:
-                    continue
-
-                event_type = event.get("type")
-
-                if event_type == "system":
-                    if "session_id" in event:
-                        session_id = event["session_id"]
-                        logger.debug("Captured session_id=%s", session_id)
-
-                elif event_type == "result":
-                    # Stream-json result event fields (from Claude CLI):
-                    #   type: "result"
-                    #   subtype: "success" | "error"
-                    #   is_error: bool
-                    #   total_cost_usd: float
-                    #   session_id: str
-                    #   result: str (assistant's final text)
-                    #   num_turns: int
-                    #   duration_ms: int
-                    #   usage: { input_tokens, output_tokens, ... }
-                    cost_usd = float(event.get("total_cost_usd", 0.0))
-                    is_error = event.get("is_error", False)
-                    success = not is_error
-                    if is_error:
-                        error = event.get("result", "CLI error")
-                    result_json = event.get("result")
-                    if not session_id and "session_id" in event:
-                        session_id = event["session_id"]
+                if event is not None:
+                    event_type = event.get("type")
+                    if event_type == "result":
+                        cost_usd = float(event.get("total_cost_usd", 0.0))
+                        is_error = event.get("is_error", False)
+                        success = not is_error
+                        if is_error:
+                            error = event.get("result", "CLI error")
+                        result_json = event.get("result")
+                        if not session_id and "session_id" in event:
+                            session_id = event["session_id"]
 
             await proc.wait()
 
