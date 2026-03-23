@@ -328,3 +328,29 @@ async def test_handle_result_level1_sends_notification(
     assert len(notifications) == 1
     assert notifications[0]["type"] == "task_completed"
     assert "Level 1 Task" in notifications[0]["message"]
+
+
+# ---------------------------------------------------------------------------
+# _extract_json tests
+# ---------------------------------------------------------------------------
+
+
+def test_extract_json_raw_list():
+    result = Daemon._extract_json([{"a": 1}])
+    assert result == [{"a": 1}]
+
+
+def test_extract_json_string():
+    result = Daemon._extract_json('[{"a": 1}]')
+    assert result == [{"a": 1}]
+
+
+def test_extract_json_markdown_wrapped():
+    text = '```json\n[{"a": 1}]\n```'
+    result = Daemon._extract_json(text)
+    assert result == [{"a": 1}]
+
+
+def test_extract_json_invalid():
+    result = Daemon._extract_json("not json")
+    assert result is None

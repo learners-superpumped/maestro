@@ -14,12 +14,15 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from aiohttp import web
 
 from maestro.api import create_api_app
+from maestro.approval import ApprovalManager
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
 from maestro.dispatcher import Dispatcher
@@ -31,8 +34,13 @@ from maestro.reconciler import Reconciler
 from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
 from maestro.store import Store
+from maestro.workspace import WorkspaceManager
 
 logger = logging.getLogger("maestro.daemon")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class Daemon:
@@ -61,10 +69,19 @@ class Daemon:
         self._budget_mgr = BudgetManager(store, config.budget)
         signal_collector = SignalCollector(store, config.goals)
         self._planner = Planner(store, config, signal_collector)
+        self._approval_manager = ApprovalManager(store)
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick: float = 0.0
         self._last_reconcile: float = 0.0
+        self._last_scheduler_tick: float = 0.0
+
+        # Bootstrap planner and reviewer workspaces
+        wm = WorkspaceManager(self._base_path)
+        if not wm.workspace_exists("_planner"):
+            wm.create_workspace("_planner", template="planner")
+        if not wm.workspace_exists("_reviewer"):
+            wm.create_workspace("_reviewer", template="reviewer")
 
     # ------------------------------------------------------------------
     # Public interface
@@ -103,8 +120,17 @@ class Daemon:
         pid_file.write_text(str(os.getpid()))
         logger.info("PID %d written to %s", os.getpid(), pid_file)
 
+        # 5. Restore scheduler state from DB
+        schedule_names = [s.name for s in self._config.schedules]
+        restored: dict[str, str] = {}
+        for name in schedule_names:
+            last = await self._store.get_schedule_last_run(name)
+            if last:
+                restored[name] = last
+        self._scheduler.restore_last_triggered(restored)
+
         try:
-            # 5. Run main loop
+            # 6. Run main loop
             await self._main_loop()
         finally:
             # 6. Cleanup
@@ -140,18 +166,21 @@ class Daemon:
         interval_s = self._config.daemon.dispatcher_interval_ms / 1_000.0
         reconcile_interval_s = self._config.daemon.reconcile_interval_ms / 1_000.0
         planner_interval_s = self._config.daemon.planner_interval_ms / 1_000.0
+        scheduler_interval_s = self._config.daemon.scheduler_interval_ms / 1_000.0
 
         logger.info(
             "Main loop started (dispatch every %.1fs, reconcile every %.1fs,"
-            " planner every %.1fs)",
+            " planner every %.1fs, scheduler every %.1fs)",
             interval_s,
             reconcile_interval_s,
             planner_interval_s,
+            scheduler_interval_s,
         )
 
         loop = asyncio.get_event_loop()
         self._last_reconcile = loop.time()
         self._last_planner_tick = loop.time()
+        self._last_scheduler_tick = loop.time()
 
         while not self._shutdown.is_set():
             try:
@@ -169,6 +198,11 @@ class Daemon:
                 if (now_mono - self._last_planner_tick) >= planner_interval_s:
                     await self._planner_tick()
                     self._last_planner_tick = now_mono
+
+                # Scheduler on schedule
+                if (now_mono - self._last_scheduler_tick) >= scheduler_interval_s:
+                    await self._scheduler_tick()
+                    self._last_scheduler_tick = now_mono
 
             except Exception:
                 logger.exception("Error in main loop tick")
@@ -201,18 +235,27 @@ class Daemon:
     async def _planner_tick(self) -> None:
         """Run the planner to create new tasks from goal signals."""
         task_specs = await self._planner.plan()
-        if task_specs:
-            ids = await self._planner.create_planned_tasks(task_specs)
-            logger.info("Planner created %d tasks: %s", len(ids), ids)
+        if not task_specs:
+            return
+        for spec in task_specs:
+            task = Task(
+                id=str(uuid.uuid4())[:8],
+                type=spec.get("type", "general"),
+                workspace=spec["workspace"],
+                title=spec["title"],
+                instruction=spec["instruction"],
+                priority=spec.get("priority", 3),
+                approval_level=spec.get("approval_level", 0),
+            )
+            await self._store.create_task(task)
 
-        # Update goal states for current signals
+        # goal_state 업데이트 유지
         signals = await self._planner.collector.collect_signals()
-        now = datetime.now(timezone.utc).isoformat()
         for signal in signals:
             await self._store.update_goal_state(
                 signal["goal_id"],
-                last_evaluated_at=now,
-                current_gap=json.dumps(signal),
+                last_evaluated_at=_now_iso(),
+                current_gap=signal["description"],
             )
 
     # ------------------------------------------------------------------
@@ -419,6 +462,10 @@ class Daemon:
                 )
                 if self._slack.available:
                     await self._slack.send_completion(task.id, task.title)
+
+            # Post-completion processing (planning results, review pipeline)
+            if result.success:
+                await self._on_task_completed(task, result)
         else:
             # Check retry eligibility
             new_attempt = task.attempt + 1
@@ -453,3 +500,167 @@ class Daemon:
                     new_attempt,
                     result.error,
                 )
+
+    # ------------------------------------------------------------------
+    # Scheduler
+    # ------------------------------------------------------------------
+
+    async def _scheduler_tick(self) -> None:
+        now = datetime.now(timezone.utc)
+        last_tick_iso = await self._store.get_scheduler_state("last_tick")
+        if last_tick_iso:
+            since = datetime.fromisoformat(last_tick_iso)
+        else:
+            since = now - timedelta(
+                seconds=self._config.daemon.scheduler_interval_ms / 1000
+            )
+
+        due = self._scheduler.get_due_schedules(now, since)
+        due += self._scheduler.get_due_intervals(now)
+
+        for entry in due:
+            if await self._has_active_task(entry):
+                continue
+            task = Task(
+                id=str(uuid.uuid4())[:8],
+                type=entry.task_type,
+                workspace=entry.workspace,
+                title=f"Scheduled: {entry.name}",
+                instruction=(
+                    f"스케줄 '{entry.name}' 실행. task_type: {entry.task_type}. "
+                    f"knowledge/ 파일을 읽고 적절한 액션을 수행하라."
+                ),
+                approval_level=entry.approval_level,
+            )
+            await self._store.create_task(task)
+            self._scheduler.mark_triggered(entry.name, now)
+            await self._store.set_schedule_last_run(entry.name, now.isoformat())
+
+        await self._store.set_scheduler_state("last_tick", now.isoformat())
+
+    async def _has_active_task(self, entry) -> bool:
+        tasks = await self._store.list_tasks(workspace=entry.workspace)
+        return any(
+            t.type == entry.task_type
+            and t.status.value not in ("completed", "failed", "cancelled")
+            for t in tasks
+        )
+
+    # ------------------------------------------------------------------
+    # Post-completion processing
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_json(text):
+        if isinstance(text, (list, dict)):
+            return text
+        if not isinstance(text, str):
+            return None
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            lines = stripped.split("\n")
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            stripped = "\n".join(lines)
+        try:
+            return json.loads(stripped)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    async def _on_task_completed(self, task: Task, result: TaskResult) -> None:
+        if task.type == "planning" and result.result_json:
+            parsed = self._extract_json(result.result_json)
+            if isinstance(parsed, list):
+                await self._planner.create_planned_tasks(parsed)
+            else:
+                logger.error(
+                    "Failed to parse planning result for task %s", task.id
+                )
+            return
+
+        if task.type == "review" and result.result_json:
+            await self._handle_review_result(task, result)
+            return
+
+        if task.approval_level >= 1 and result.success:
+            await self._create_review_task(task, result)
+
+    async def _create_review_task(
+        self, original_task: Task, result: TaskResult
+    ) -> None:
+        review_task = Task(
+            id=str(uuid.uuid4())[:8],
+            type="review",
+            workspace="_reviewer",
+            title=f"Review: {original_task.title}",
+            instruction=json.dumps(
+                {
+                    "original_task_id": original_task.parent_task_id
+                    or original_task.id,
+                    "original_workspace": original_task.workspace,
+                    "original_instruction": original_task.instruction,
+                    "result": result.result_json,
+                    "knowledge_path": f"../{original_task.workspace}/knowledge/",
+                },
+                ensure_ascii=False,
+            ),
+            approval_level=0,
+            priority=1,
+        )
+        await self._store.create_task(review_task)
+
+    async def _handle_review_result(
+        self, review_task: Task, result: TaskResult
+    ) -> None:
+        review_data = self._extract_json(result.result_json)
+        if not isinstance(review_data, dict):
+            logger.error(
+                "Review result not valid JSON for task %s", review_task.id
+            )
+            return
+
+        instruction_data = self._extract_json(review_task.instruction)
+        original_task_id = instruction_data["original_task_id"]
+        original_task = await self._store.get_task(original_task_id)
+
+        if review_data.get("verdict") == "pass":
+            await self._approval_manager.submit_draft(
+                original_task_id,
+                json.dumps(
+                    {
+                        "result": result.result_json,
+                        "review_summary": review_data.get("summary", ""),
+                    }
+                ),
+            )
+        elif original_task.review_count >= self._config.agent.max_review_rounds:
+            await self._approval_manager.submit_draft(
+                original_task_id,
+                json.dumps(
+                    {
+                        "result": result.result_json,
+                        "review_summary": f"자동 검증 {original_task.review_count}회 실패. 수동 검토 필요.",
+                        "issues": review_data.get("issues", []),
+                    }
+                ),
+            )
+        else:
+            await self._store.increment_review_count(original_task_id)
+            feedback = "\n".join(review_data.get("issues", []))
+            revision_task = Task(
+                id=str(uuid.uuid4())[:8],
+                type=original_task.type,
+                workspace=original_task.workspace,
+                title=f"Revision #{original_task.review_count + 1}: {original_task.title}",
+                instruction=(
+                    f"이전 실행의 리뷰어 피드백:\n{feedback}\n\n"
+                    f"원본 지시: {original_task.instruction}\n\n"
+                    f"위 피드백을 반영하여 수정하라."
+                ),
+                approval_level=original_task.approval_level,
+                priority=original_task.priority,
+                goal_id=original_task.goal_id,
+                parent_task_id=original_task_id,
+            )
+            await self._store.create_task(revision_task)
