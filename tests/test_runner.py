@@ -58,11 +58,11 @@ class TestParseStreamEvent:
         assert result["message"]["content"] == "Hello"
 
     def test_valid_json_result_event(self):
-        line = '{"type": "result", "cost_usd": 0.0042, "is_error": false}'
+        line = '{"type": "result", "total_cost_usd": 0.0042, "is_error": false, "session_id": "abc"}'
         result = parse_stream_event(line)
         assert result is not None
         assert result["type"] == "result"
-        assert result["cost_usd"] == pytest.approx(0.0042)
+        assert result["total_cost_usd"] == pytest.approx(0.0042)
 
     def test_invalid_json_returns_none(self):
         line = "not-valid-json"

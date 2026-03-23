@@ -171,19 +171,24 @@ class AgentRunner:
                         logger.debug("Captured session_id=%s", session_id)
 
                 elif event_type == "result":
-                    cost_usd = float(
-                        event.get("total_cost_usd")
-                        or event.get("cost_usd")
-                        or 0.0
-                    )
-                    is_error = bool(event.get("is_error", False))
+                    # Stream-json result event fields (from Claude CLI):
+                    #   type: "result"
+                    #   subtype: "success" | "error"
+                    #   is_error: bool
+                    #   total_cost_usd: float
+                    #   session_id: str
+                    #   result: str (assistant's final text)
+                    #   num_turns: int
+                    #   duration_ms: int
+                    #   usage: { input_tokens, output_tokens, ... }
+                    cost_usd = float(event.get("total_cost_usd", 0.0))
+                    is_error = event.get("is_error", False)
                     success = not is_error
                     if is_error:
-                        error = event.get("error") or "Unknown error from Claude CLI"
+                        error = event.get("result", "CLI error")
                     result_json = event.get("result")
-                    logger.debug(
-                        "Result event: success=%s cost_usd=%s", success, cost_usd
-                    )
+                    if not session_id and "session_id" in event:
+                        session_id = event["session_id"]
 
             await proc.wait()
 
