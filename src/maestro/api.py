@@ -146,9 +146,97 @@ async def approval_submit_handler(request: web.Request) -> web.Response:
 
 
 async def history_record_handler(request: web.Request) -> web.Response:
-    """POST /api/internal/history/record — placeholder for action history recording."""
-    # Body is accepted but not yet persisted; reserved for future implementation.
+    """POST /api/internal/history/record — record an action to history."""
+    store: Store = request.app["store"]
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    import uuid
+
+    action = {
+        "id": body.get("id", uuid.uuid4().hex[:12]),
+        "task_id": body.get("task_id", ""),
+        "workspace": body.get("workspace", ""),
+        "action_type": body.get("action_type", "unknown"),
+        "platform": body.get("platform", "unknown"),
+        "content": body.get("content"),
+        "target_url": body.get("target_url"),
+        "asset_ids": body.get("asset_ids"),
+        "result_url": body.get("result_url"),
+        "metrics": body.get("metrics"),
+    }
+
+    try:
+        await store.record_action(action)
+    except Exception as exc:
+        logger.warning("Failed to record action: %s", exc)
+
     return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Asset handlers
+# ---------------------------------------------------------------------------
+
+
+async def asset_register_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/asset/register — register a new asset."""
+    store: Store = request.app["store"]
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    path = body.get("path")
+    title = body.get("title")
+    if not path or not title:
+        raise web.HTTPBadRequest(reason="'path' and 'title' are required")
+
+    from maestro.assets import AssetManager
+
+    mgr = AssetManager(store, request.app.get("assets_dir", "."))
+
+    asset_id = await mgr.register_asset(
+        path=path,
+        title=title,
+        asset_type=body.get("type"),
+        tags=body.get("tags"),
+        description=body.get("description"),
+    )
+
+    return web.json_response({"ok": True, "asset_id": asset_id})
+
+
+async def asset_get_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/asset/{asset_id} — get asset details."""
+    store: Store = request.app["store"]
+    asset_id = request.match_info["asset_id"]
+
+    asset = await store.get_asset(asset_id)
+    if asset is None:
+        raise web.HTTPNotFound(reason=f"Asset not found: {asset_id}")
+
+    return web.json_response(asset, dumps=lambda obj: json.dumps(obj, default=str))
+
+
+async def asset_list_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/assets — list assets."""
+    store: Store = request.app["store"]
+
+    asset_type = request.query.get("type")
+    tags_str = request.query.get("tags")
+    tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
+
+    assets = await store.list_assets(asset_type=asset_type, tags_contain=tags)
+
+    return web.json_response(
+        {"assets": assets, "count": len(assets)},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -166,4 +254,7 @@ def create_api_app(store: Store) -> web.Application:
     app.router.add_post("/api/internal/task/result", task_result_handler)
     app.router.add_post("/api/internal/approval/submit", approval_submit_handler)
     app.router.add_post("/api/internal/history/record", history_record_handler)
+    app.router.add_post("/api/internal/asset/register", asset_register_handler)
+    app.router.add_get("/api/internal/asset/{asset_id}", asset_get_handler)
+    app.router.add_get("/api/internal/assets", asset_list_handler)
     return app

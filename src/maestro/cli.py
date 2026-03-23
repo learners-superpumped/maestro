@@ -492,5 +492,131 @@ def workspace_validate(name: str) -> None:
 main.add_command(workspace)
 
 
+# ---------------------------------------------------------------------------
+# asset group
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def asset() -> None:
+    """Manage assets."""
+
+
+@asset.command("add")
+@click.argument("path")
+@click.option("--title", required=True, help="Asset title")
+@click.option("--tags", default=None, help="Comma-separated tags")
+@click.option("--type", "asset_type", default=None, help="Asset type (auto-detected if omitted)")
+@click.option("--description", default=None, help="Asset description")
+def asset_add(path: str, title: str, tags: str | None, asset_type: str | None, description: str | None) -> None:
+    """Register a new asset."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.assets import AssetManager
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+    mgr = AssetManager(store, _project_root() / "assets")
+
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    asset_id = asyncio.run(mgr.register_asset(
+        path=path,
+        title=title,
+        asset_type=asset_type,
+        tags=tag_list,
+        description=description,
+    ))
+    click.echo(f"Asset registered: {asset_id}")
+    click.echo(f"  Title: {title}")
+    click.echo(f"  Path:  {path}")
+
+
+@asset.command("list")
+@click.option("--type", "asset_type", default=None, help="Filter by type")
+@click.option("--tags", default=None, help="Filter by comma-separated tags")
+def asset_list(asset_type: str | None, tags: str | None) -> None:
+    """List assets."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.assets import AssetManager
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+    mgr = AssetManager(store, _project_root() / "assets")
+
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    assets = asyncio.run(mgr.list_assets(asset_type=asset_type, tags=tag_list))
+
+    if not assets:
+        click.echo("No assets found.")
+        return
+
+    click.echo(f"{'ID':<14} {'TYPE':<10} {'TITLE':<30} {'TAGS'}")
+    click.echo("-" * 70)
+    for a in assets:
+        tag_str = ", ".join(a.get("tags") or [])
+        click.echo(f"{a['id']:<14} {a['type']:<10} {a['title']:<30} {tag_str}")
+
+
+@asset.command("search")
+@click.argument("query")
+@click.option("--type", "asset_type", default=None, help="Filter by type")
+@click.option("--limit", default=10, type=int, help="Max results")
+def asset_search(query: str, asset_type: str | None, limit: int) -> None:
+    """Search assets by text query."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+
+    # Simple text search — same logic as mcp_embedding
+    async def _search() -> list[dict]:
+        all_assets = await store.list_assets(asset_type=asset_type)
+        query_lower = query.lower()
+        matches = []
+        for a in all_assets:
+            title = (a.get("title") or "").lower()
+            desc = (a.get("description") or "").lower()
+            tag_text = " ".join(a.get("tags") or []).lower()
+            if query_lower in title or query_lower in desc or query_lower in tag_text:
+                matches.append(a)
+            if len(matches) >= limit:
+                break
+        return matches
+
+    results = asyncio.run(_search())
+
+    if not results:
+        click.echo(f"No assets matching '{query}'.")
+        return
+
+    click.echo(f"{'ID':<14} {'TYPE':<10} {'TITLE':<30} {'TAGS'}")
+    click.echo("-" * 70)
+    for a in results:
+        tag_str = ", ".join(a.get("tags") or [])
+        click.echo(f"{a['id']:<14} {a['type']:<10} {a['title']:<30} {tag_str}")
+
+
+main.add_command(asset)
+
+
 if __name__ == "__main__":
     main()
