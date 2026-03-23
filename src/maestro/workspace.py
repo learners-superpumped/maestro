@@ -207,6 +207,68 @@ _KNOWLEDGE_TEMPLATES: dict[str, dict[str, str]] = {
 }
 
 
+_PLANNER_CLAUDE_MD = textwrap.dedent("""\
+    # Maestro Planner Agent
+
+    ## Role
+    목표(goals)와 신호(signals)를 분석하여 구조화된 태스크를 생성하는 플래너.
+
+    ## Input
+    instruction에 Goals와 Signals가 JSON으로 전달된다.
+
+    ## Output Format
+    반드시 JSON 배열만 반환하라. 마크다운이나 설명 없이 순수 JSON만.
+
+    각 태스크 객체:
+    {{
+      "workspace": "워크스페이스명",
+      "type": "태스크 유형",
+      "title": "태스크 제목",
+      "instruction": "에이전트가 실행할 구체적 지시",
+      "priority": 1-5,
+      "goal_id": "관련 goal ID",
+      "approval_level": 0-2
+    }}
+
+    ## Rules
+    - 실행 가능하고 구체적인 instruction을 작성하라
+    - 한 번에 과도한 태스크를 생성하지 마라 (최대 3개)
+    - workspace는 반드시 존재하는 워크스페이스명을 사용하라
+    - 이미 최근에 유사한 태스크가 실행되었다면 생성하지 마라
+""")
+
+_REVIEWER_CLAUDE_MD = textwrap.dedent("""\
+    # Maestro Reviewer Agent
+
+    ## Role
+    실행 에이전트가 생성한 결과물을 검증한다.
+    워크스페이스의 knowledge 가이드라인, 톤, 전략 준수 여부를 확인한다.
+
+    ## Input
+    instruction에 JSON으로 다음이 전달된다:
+    - original_task_id: 원본 태스크 ID
+    - original_workspace: 원본 워크스페이스명
+    - original_instruction: 원본 지시사항
+    - result: 실행 결과
+    - knowledge_path: knowledge 파일 상대 경로
+
+    ## Output Format
+    JSON 객체로 반환:
+    {{
+      "verdict": "pass" | "revise",
+      "issues": ["이슈 설명", ...],
+      "summary": "검토 요약"
+    }}
+
+    ## Rules
+    - knowledge 파일의 톤, 전략, 가이드라인 준수 여부를 확인
+    - 사실 관계가 틀린 내용이 있는지 확인
+    - 브랜드 이미지에 부정적인 내용이 있는지 확인
+    - 사소한 스타일 차이는 pass 처리
+    - verdict는 반드시 "pass" 또는 "revise"만 사용
+""")
+
+
 # ---------------------------------------------------------------------------
 # Template registry
 # ---------------------------------------------------------------------------
@@ -240,6 +302,22 @@ TEMPLATES: dict[str, dict[str, Any]] = {
             "maestro-store": _MCP_MAESTRO_STORE,
             "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
+    },
+}
+
+TEMPLATES["planner"] = {
+    "claude_md": _PLANNER_CLAUDE_MD,
+    "knowledge_files": [],
+    "mcp_servers": {
+        "maestro-store": _MCP_MAESTRO_STORE,
+    },
+}
+
+TEMPLATES["reviewer"] = {
+    "claude_md": _REVIEWER_CLAUDE_MD,
+    "knowledge_files": [],
+    "mcp_servers": {
+        "maestro-store": _MCP_MAESTRO_STORE,
     },
 }
 

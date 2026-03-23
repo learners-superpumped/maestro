@@ -249,6 +249,33 @@ class TestCreateWorkspaceTemplates:
         assert "chrome-browser" not in mcp["mcpServers"]
 
 
+def test_create_planner_workspace(tmp_path):
+    wm = WorkspaceManager(tmp_path)
+    wm._workspaces_dir.mkdir(parents=True)
+    ws = wm.create_workspace("_planner", template="planner")
+    assert (ws / "CLAUDE.md").exists()
+    assert "Planner Agent" in (ws / "CLAUDE.md").read_text()
+    assert (ws / ".claude" / "mcp.json").exists()
+
+
+def test_create_reviewer_workspace(tmp_path):
+    wm = WorkspaceManager(tmp_path)
+    wm._workspaces_dir.mkdir(parents=True)
+    ws = wm.create_workspace("_reviewer", template="reviewer")
+    assert (ws / "CLAUDE.md").exists()
+    assert "Reviewer Agent" in (ws / "CLAUDE.md").read_text()
+
+
+def test_system_workspaces_excluded_from_list(tmp_path):
+    wm = WorkspaceManager(tmp_path)
+    wm._workspaces_dir.mkdir(parents=True)
+    wm.create_workspace("_planner", template="planner")
+    wm.create_workspace("user-ws", template="default")
+    listed = wm.list_workspaces()
+    assert "_planner" not in listed
+    assert "user-ws" in listed
+
+
 class TestEnsureBaseKnowledge:
     """Tests for the _base/ shared knowledge setup."""
 
