@@ -160,6 +160,7 @@ class AgentRunner:
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=1024 * 1024,  # 1MB readline buffer (default 64KB too small for resume)
                 cwd=str(workspace_path),
             )
 
