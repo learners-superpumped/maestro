@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import uuid
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -58,6 +59,20 @@ def _config(goals: list[GoalEntry] | None = None) -> MaestroConfig:
         logging=LoggingConfig(),
         goals=goals or [],
     )
+
+
+def mock_config_with_goals(goals: list[GoalEntry]) -> MaestroConfig:
+    return _config(goals=goals)
+
+
+@pytest.fixture
+def mock_store():
+    store = MagicMock(spec=Store)
+    store.search_history = AsyncMock(return_value=[])
+    store.list_tasks = AsyncMock(return_value=[])
+    store.get_goal_state = AsyncMock(return_value=None)
+    store.create_task = AsyncMock(return_value=None)
+    return store
 
 
 # ---------------------------------------------------------------------------
@@ -174,24 +189,26 @@ async def test_planner_skips_when_no_signals(db_path: pathlib.Path) -> None:
     assert specs == []
 
 
-async def test_plan_from_signals_creates_tasks(db_path: pathlib.Path) -> None:
-    """Rule-based planner creates task specs from signals (no API key)."""
-    store = Store(db_path)
-    goal = _goal(goal_id="g1", workspace="/ws/test", description="Post daily content")
+@pytest.mark.asyncio
+async def test_plan_creates_planning_task(mock_store):
+    """When signals exist, plan() returns a planning task spec for _planner workspace."""
+    goals = [GoalEntry(id="g1", description="Test goal", workspace="ws1")]
+    collector = SignalCollector(mock_store, goals)
+    planner = Planner(mock_store, mock_config_with_goals(goals), collector)
 
-    cfg = _config(goals=[goal])
-    collector = SignalCollector(store, [goal])
-    # Ensure no API key is set for rule-based path
-    planner = Planner(store, cfg, collector)
-    planner._api_key = None
+    mock_store.search_history.return_value = []
+    mock_store.list_tasks.return_value = []
+    mock_store.get_goal_state.return_value = None
 
-    specs = await planner.plan()
+    result = await planner.plan()
 
-    assert len(specs) == 1
-    assert specs[0]["workspace"] == "/ws/test"
-    assert specs[0]["goal_id"] == "g1"
-    assert "Post daily content" in specs[0]["instruction"]
-    assert specs[0]["priority"] == 3
+    assert len(result) == 1
+    task_spec = result[0]
+    assert task_spec["workspace"] == "_planner"
+    assert task_spec["type"] == "planning"
+    assert task_spec["approval_level"] == 0
+    assert "g1" in task_spec["instruction"]
+    assert "no_activity" in task_spec["instruction"]
 
 
 async def test_create_planned_tasks(db_path: pathlib.Path) -> None:
