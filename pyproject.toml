@@ -21,6 +21,8 @@ dev = [
     "pytest-asyncio>=0.23",
     "pytest-aiohttp>=1.0",
     "aioresponses>=0.7",
+    "ruff>=0.8",
+    "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -32,3 +34,16 @@ packages = ["src/maestro"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
