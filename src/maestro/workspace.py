@@ -99,16 +99,29 @@ _SNS_CLAUDE_MD = textwrap.dedent("""\
 
     패턴: snapshot → @ref 확인 → 액션 → snapshot으로 결과 확인
 
+    ## Approval Policy
+
+    태스크의 instruction에 명시된 지시를 따르되, 실행 범위는 다음 정책을 따른다:
+
+    - **approval_level=0**: 즉시 실행. 게시, 댓글, 좋아요를 바로 수행한다.
+    - **approval_level=1**: 실행 후 알림. 바로 수행하되 결과를 보고한다.
+    - **approval_level=2**: 초안 먼저. sessions/pending/에 초안을 저장하고 승인을 기다린다.
+
     ## Workflow
-    1. knowledge/ 파일 읽기 (톤, 전략)
+
+    ### approval_level=2 (승인 필요)
+    1. knowledge/ 파일 읽기
     2. agent-browser로 플랫폼 탐색
     3. 초안 작성 → sessions/pending/에 JSON 저장
-    4. 승인 필요 액션은 대기
-    5. 승인 후 agent-browser로 실행
-    6. 결과 보고
+    4. 승인 대기
+
+    ### approval_level=0 (즉시 실행)
+    1. knowledge/ 파일 읽기
+    2. instruction에 따라 즉시 실행
+    3. 결과를 sessions/pending/에 기록
 
     ## Rules
-    - 승인 없이 게시/댓글/좋아요 실행 금지
+    - approval_level에 따라 행동할 것 (위 정책 참조)
     - snapshot으로 확인한 @ref만 사용 (추측 금지)
     - 에러 시 screenshot 찍고 보고
 """)
