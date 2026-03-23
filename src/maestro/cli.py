@@ -400,6 +400,31 @@ def task_get(task_id: str, full: bool) -> None:
         if t.error:
             click.echo(f"Error:          {t.error}")
 
+        # Approval history
+        approval = await store.get_approval_by_task(t.id)
+        if approval:
+            click.echo(f"Approval:       {approval['status']}")
+            if approval.get("reviewer_note"):
+                click.echo(f"Reviewer Note:  {approval['reviewer_note']}")
+            if approval.get("reviewed_at"):
+                click.echo(f"Reviewed At:    {approval['reviewed_at']}")
+
+        # Review verdicts from children
+        review_children = [c for c in await store.list_children(t.id) if c.type == "review"]
+        if review_children:
+            click.echo("Reviews:")
+            for rc in review_children:
+                if rc.result_json:
+                    from maestro.daemon import Daemon
+                    parsed = Daemon._extract_json(rc.result_json)
+                    if isinstance(parsed, dict):
+                        verdict = parsed.get("verdict", "?")
+                        summary = parsed.get("summary", "")
+                        v_emoji = "✅" if verdict == "pass" else "🔄"
+                        click.echo(f"  {v_emoji} {verdict}: {summary[:100]}")
+                    else:
+                        click.echo(f"  {_status_str(rc.status.value)}")
+
         # Parent
         if t.parent_task_id:
             parent = await store.get_task(t.parent_task_id)
