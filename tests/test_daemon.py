@@ -330,6 +330,67 @@ async def test_handle_result_level1_sends_notification(
     assert "Level 1 Task" in notifications[0]["message"]
 
 
+@pytest.mark.asyncio
+async def test_no_review_after_approve(db_path: pathlib.Path, tmp_path: pathlib.Path) -> None:
+    """approve된 태스크가 resume 후 완료 → 리뷰에 재진입하지 않음."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    # 1. 태스크 생성 (approval_level=2 → 수동 승인 대상)
+    task = _make_task(task_id="approved-skip-review", approval_level=2)
+    await store.create_task(task)
+
+    # 2. approval "approved" 기록 생성
+    await store.create_approval({
+        "id": "appr-skip-1",
+        "task_id": "approved-skip-review",
+        "status": "approved",
+        "draft_json": '{"result": "done"}',
+    })
+
+    # 3. daemon._on_task_completed 호출
+    result = TaskResult(
+        task_id="approved-skip-review",
+        success=True,
+        result_json='{"output": "done"}',
+    )
+    await daemon._on_task_completed(task, result)
+
+    # 4. store.list_tasks()에서 review 태스크가 없어야 함
+    all_tasks = await store.list_tasks()
+    review_tasks = [t for t in all_tasks if t.type == "review"]
+    assert len(review_tasks) == 0
+
+
+@pytest.mark.asyncio
+async def test_review_created_on_first_run(db_path: pathlib.Path, tmp_path: pathlib.Path) -> None:
+    """첫 실행 완료 → 리뷰 태스크 생성됨, parent_task_id가 원본 태스크 ID와 일치."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    # 1. 태스크 생성 (approval_level=2)
+    task = _make_task(task_id="first-run-task", approval_level=2)
+    await store.create_task(task)
+
+    # 2. daemon._on_task_completed 호출 (approval 기록 없음 → 첫 실행)
+    result = TaskResult(
+        task_id="first-run-task",
+        success=True,
+        result_json='{"output": "first result"}',
+    )
+    await daemon._on_task_completed(task, result)
+
+    # 3. store.list_tasks()에서 review 태스크가 1개 있어야 함
+    all_tasks = await store.list_tasks()
+    review_tasks = [t for t in all_tasks if t.type == "review"]
+    assert len(review_tasks) == 1
+
+    # 4. review 태스크의 parent_task_id가 원본 태스크 ID와 일치해야 함
+    assert review_tasks[0].parent_task_id == "first-run-task"
+
+
 # ---------------------------------------------------------------------------
 # _extract_json tests
 # ---------------------------------------------------------------------------

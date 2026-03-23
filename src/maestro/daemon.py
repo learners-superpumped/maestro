@@ -583,21 +583,26 @@ class Daemon:
         return None
 
     async def _on_task_completed(self, task: Task, result: TaskResult) -> None:
+        # planning과 review는 자체 핸들러가 있으므로 approval 체크 불필요
         if task.type == "planning" and result.result_json:
             parsed = self._extract_json(result.result_json)
             if isinstance(parsed, list):
                 await self._planner.create_planned_tasks(parsed)
             else:
-                logger.error(
-                    "Failed to parse planning result for task %s", task.id
-                )
+                logger.error("Failed to parse planning result for task %s", task.id)
             return
 
         if task.type == "review" and result.result_json:
             await self._handle_review_result(task, result)
             return
 
-        if task.approval_level >= 1 and result.success:
+        # 일반 태스크: approve 후 resume 완료 → 리뷰 재진입 방지
+        approval = await self._store.get_approval_by_task(task.id)
+        if approval and approval["status"] == "approved":
+            return  # 최종 완료, 리뷰 스킵
+
+        # 첫 실행 완료 — 리뷰 필요 여부 확인
+        if task.approval_level >= 1:
             await self._create_review_task(task, result)
 
     async def _create_review_task(
@@ -621,6 +626,7 @@ class Daemon:
             ),
             approval_level=0,
             priority=1,
+            parent_task_id=original_task.id,  # track which task triggered this review
         )
         await self._store.create_task(review_task)
 
