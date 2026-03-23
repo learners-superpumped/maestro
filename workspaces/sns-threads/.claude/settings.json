@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "mcp__maestro-store__*",
+      "mcp__chrome-browser__*"
+    ],
+    "deny": []
+  }
+}

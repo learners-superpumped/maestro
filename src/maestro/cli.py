@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import click
 
 from maestro.models import Task, TaskStatus
+from maestro.workspace import WorkspaceManager
 
 
 def _short_id() -> str:
@@ -413,6 +414,82 @@ def _update_task_status(task_id: str, new_status: TaskStatus, action_label: str)
 # ---------------------------------------------------------------------------
 
 main.add_command(task)
+
+
+# ---------------------------------------------------------------------------
+# workspace group
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def workspace() -> None:
+    """Manage workspaces."""
+
+
+@workspace.command("create")
+@click.argument("name")
+@click.option("--template", default="default", help="Template to use (default: default)")
+def workspace_create(name: str, template: str) -> None:
+    """Create a new workspace."""
+    root = _project_root()
+    wm = WorkspaceManager(root)
+    wm.ensure_base_knowledge()
+
+    try:
+        ws_path = wm.create_workspace(name, template=template)
+    except FileExistsError:
+        click.echo(f"Error: workspace '{name}' already exists.", err=True)
+        sys.exit(1)
+
+    click.echo(f"Workspace created: {ws_path}")
+    warnings = wm.validate_workspace(name)
+    if warnings:
+        for w in warnings:
+            click.echo(f"  Warning: {w}")
+    else:
+        click.echo("  Status: valid")
+
+
+@workspace.command("list")
+def workspace_list() -> None:
+    """List workspaces."""
+    root = _project_root()
+    wm = WorkspaceManager(root)
+    names = wm.list_workspaces()
+
+    if not names:
+        click.echo("No workspaces found.")
+        return
+
+    click.echo(f"{'WORKSPACE':<30} {'STATUS'}")
+    click.echo("-" * 45)
+    for name in names:
+        warnings = wm.validate_workspace(name)
+        status = "valid" if not warnings else f"{len(warnings)} warning(s)"
+        click.echo(f"{name:<30} {status}")
+
+
+@workspace.command("validate")
+@click.argument("name")
+def workspace_validate(name: str) -> None:
+    """Validate a workspace."""
+    root = _project_root()
+    wm = WorkspaceManager(root)
+
+    if not wm.workspace_exists(name):
+        click.echo(f"Error: workspace '{name}' does not exist.", err=True)
+        sys.exit(1)
+
+    warnings = wm.validate_workspace(name)
+    if warnings:
+        click.echo(f"Workspace '{name}' has {len(warnings)} warning(s):")
+        for w in warnings:
+            click.echo(f"  - {w}")
+    else:
+        click.echo(f"Workspace '{name}' is valid.")
+
+
+main.add_command(workspace)
 
 
 if __name__ == "__main__":

@@ -33,6 +33,36 @@ async def health_handler(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+async def task_get_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/task/{task_id} — fetch task details."""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+
+    task = await store.get_task(task_id)
+    if task is None:
+        raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
+
+    return web.json_response({
+        "id": task.id,
+        "type": task.type,
+        "workspace": task.workspace,
+        "title": task.title,
+        "instruction": task.instruction,
+        "status": task.status.value,
+        "priority": task.priority,
+        "approval_level": task.approval_level,
+        "attempt": task.attempt,
+        "max_retries": task.max_retries,
+        "budget_usd": task.budget_usd,
+        "cost_usd": task.cost_usd,
+        "result_json": task.result_json,
+        "error": task.error,
+        "session_id": task.session_id,
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+    })
+
+
 async def task_update_handler(request: web.Request) -> web.Response:
     """POST /api/internal/task/update — change task status and optional fields."""
     store: Store = request.app["store"]
@@ -131,6 +161,7 @@ def create_api_app(store: Store) -> web.Application:
     app = web.Application()
     app["store"] = store
     app.router.add_get("/api/internal/health", health_handler)
+    app.router.add_get("/api/internal/task/{task_id}", task_get_handler)
     app.router.add_post("/api/internal/task/update", task_update_handler)
     app.router.add_post("/api/internal/task/result", task_result_handler)
     app.router.add_post("/api/internal/approval/submit", approval_submit_handler)
