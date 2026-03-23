@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from maestro.config import BudgetConfig, ConcurrencyConfig
+from maestro.models import TaskStatus
 from maestro.resources import ResourceManager
 from maestro.store import Store
 
@@ -97,8 +98,19 @@ class Dispatcher:
         # Track how many tasks we are dispatching per workspace this cycle
         ws_dispatched: dict[str, int] = {}
 
+        now = datetime.now(timezone.utc)
+
         for task in candidates:
             dispatched_count = len(decisions)
+
+            # -- Retry backoff check --
+            if task.status == TaskStatus.RETRY_QUEUED:
+                if task.updated_at is None:
+                    continue  # safety: skip if no updated_at
+                backoff_ms = task.retry_backoff_ms()
+                elapsed_ms = (now - task.updated_at).total_seconds() * 1000
+                if elapsed_ms < backoff_ms:
+                    continue  # still in backoff period
 
             # -- Global slot check --
             if total_running + dispatched_count >= self._concurrency.max_total_agents:

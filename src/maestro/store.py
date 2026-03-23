@@ -312,7 +312,7 @@ class Store:
         Return tasks that are ready to be dispatched.
 
         Criteria:
-          - status = 'approved'
+          - status IN ('approved', 'retry_queued')
           - scheduled_at IS NULL OR scheduled_at <= now (UTC ISO string)
 
         Ordered by: priority ASC, scheduled_at ASC (NULLs first), created_at ASC.
@@ -320,7 +320,7 @@ class Store:
         now = _now_iso()
         sql = """
             SELECT * FROM tasks
-            WHERE status = 'approved'
+            WHERE status IN ('approved', 'retry_queued')
               AND (scheduled_at IS NULL OR scheduled_at <= ?)
             ORDER BY priority ASC,
                      CASE WHEN scheduled_at IS NULL THEN 0 ELSE 1 END ASC,

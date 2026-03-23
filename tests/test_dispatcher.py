@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -351,3 +351,49 @@ def test_dispatch_decision_fields() -> None:
     d = DispatchDecision(task_id="abc", workspace="/ws/x")
     assert d.task_id == "abc"
     assert d.workspace == "/ws/x"
+
+
+# ---------------------------------------------------------------------------
+# retry_queued backoff
+# ---------------------------------------------------------------------------
+
+
+async def test_retry_queued_dispatched_after_backoff(db_path: pathlib.Path) -> None:
+    """A retry_queued task whose backoff period has elapsed is dispatched."""
+    store = Store(db_path)
+    now = datetime.now(timezone.utc)
+
+    # attempt=1 → retry_backoff_ms() = 10_000 ms (10s); updated_at 30s ago → elapsed > backoff
+    task = _task(
+        workspace="/ws/retry",
+        status=TaskStatus.RETRY_QUEUED,
+        attempt=1,
+        updated_at=now - timedelta(seconds=30),
+    )
+    await store.create_task(task)
+
+    dispatcher = _dispatcher(store)
+    decisions = await dispatcher.get_dispatch_decisions()
+
+    assert len(decisions) == 1
+    assert decisions[0].task_id == task.id
+
+
+async def test_retry_queued_skipped_during_backoff(db_path: pathlib.Path) -> None:
+    """A retry_queued task whose backoff period has not elapsed is skipped."""
+    store = Store(db_path)
+    now = datetime.now(timezone.utc)
+
+    # attempt=1 → retry_backoff_ms() = 10_000 ms (10s); updated_at=now → elapsed ≈ 0 < 10s
+    task = _task(
+        workspace="/ws/retry",
+        status=TaskStatus.RETRY_QUEUED,
+        attempt=1,
+        updated_at=now,
+    )
+    await store.create_task(task)
+
+    dispatcher = _dispatcher(store)
+    decisions = await dispatcher.get_dispatch_decisions()
+
+    assert len(decisions) == 0
