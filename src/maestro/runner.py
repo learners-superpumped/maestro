@@ -171,7 +171,11 @@ class AgentRunner:
                         logger.debug("Captured session_id=%s", session_id)
 
                 elif event_type == "result":
-                    cost_usd = float(event.get("cost_usd") or 0.0)
+                    cost_usd = float(
+                        event.get("total_cost_usd")
+                        or event.get("cost_usd")
+                        or 0.0
+                    )
                     is_error = bool(event.get("is_error", False))
                     success = not is_error
                     if is_error:
