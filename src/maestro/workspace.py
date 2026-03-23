@@ -25,11 +25,8 @@ _MCP_MAESTRO_STORE = {
     },
 }
 
-_MCP_CHROME_BROWSER = {
-    "command": "npx",
-    "args": ["-y", "@anthropic/claude-in-chrome-mcp@latest"],
-    "env": {},
-}
+# NOTE: SNS workspaces use agent-browser CLI via Bash, not an MCP server.
+# agent-browser is invoked directly by the Claude Code session.
 
 _MCP_MAESTRO_EMBEDDING = {
     "command": "python",
@@ -86,23 +83,35 @@ _SNS_CLAUDE_MD = textwrap.dedent("""\
 
     ## Available Tools
     - maestro-store: Task management, history search, approval workflow
-    - chrome browser: For interacting with the platform web interface
+    - agent-browser: Bash CLI로 브라우저 조작 (로그인 세션 유지됨)
+
+    ## Browser (agent-browser)
+    플랫폼 조작은 `agent-browser` CLI를 Bash 도구로 사용한다.
+
+    ```bash
+    agent-browser open <url>              # 페이지 이동
+    agent-browser snapshot --compact      # 페이지 구조 (AI용)
+    agent-browser click @<ref>            # 요소 클릭
+    agent-browser type @<ref> "텍스트"     # 텍스트 입력
+    agent-browser scroll down 500         # 스크롤
+    agent-browser screenshot              # 스크린샷
+    agent-browser wait 2000               # 대기
+    ```
+
+    패턴: snapshot → @ref 확인 → 액션 → snapshot으로 결과 확인
 
     ## Workflow
-    1. Read the task instruction carefully
-    2. Check knowledge files for tone and strategy guidance
-    3. Draft content following brand guidelines
-    4. Submit draft for approval via maestro_approval_submit
-    5. Once approved, execute the action via the browser
-    6. Submit results via maestro_task_submit_result
+    1. knowledge/ 파일 읽기 (톤, 전략)
+    2. agent-browser로 플랫폼 탐색
+    3. 초안 작성 → sessions/pending/에 JSON 저장
+    4. 승인 필요 액션은 대기
+    5. 승인 후 agent-browser로 실행
+    6. 결과 보고
 
     ## Rules
-    - Follow the instruction precisely
-    - Always check tone.md before writing any content
-    - Submit drafts for human approval before posting
-    - Report results via maestro_task_submit_result
-    - Request approval via maestro_approval_submit for all external actions
-    - Never post without explicit approval
+    - 승인 없이 게시/댓글/좋아요 실행 금지
+    - snapshot으로 확인한 @ref만 사용 (추측 금지)
+    - 에러 시 screenshot 찍고 보고
 """)
 
 _SEO_CLAUDE_MD = textwrap.dedent("""\
@@ -216,7 +225,6 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": ["tone.md", "strategy.md", "guidelines.md"],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
-            "chrome-browser": _MCP_CHROME_BROWSER,
         },
     },
     "seo": {

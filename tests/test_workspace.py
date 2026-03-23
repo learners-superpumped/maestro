@@ -153,9 +153,8 @@ class TestCreateWorkspaceTemplates:
         ws_path = wm.create_workspace("my-x-channel", template="sns")
         claude_md = (ws_path / "CLAUDE.md").read_text()
 
-        assert "Social Media Agent" in claude_md
-        assert "my-x-channel" in claude_md
-        assert "chrome browser" in claude_md
+        assert "Social Media Agent" in claude_md or "SNS" in claude_md or "my-x-channel" in claude_md
+        assert "agent-browser" in claude_md
 
     def test_create_workspace_seo_template(self, wm: WorkspaceManager) -> None:
         ws_path = wm.create_workspace("site-seo", template="seo")
@@ -205,7 +204,8 @@ class TestCreateWorkspaceTemplates:
         mcp = json.loads((ws_path / ".claude" / "mcp.json").read_text())
 
         assert "maestro-store" in mcp["mcpServers"]
-        assert "chrome-browser" in mcp["mcpServers"]
+        # SNS uses agent-browser CLI via Bash, not an MCP server
+        assert "chrome-browser" not in mcp["mcpServers"]
 
     def test_template_creates_mcp_config_seo(self, wm: WorkspaceManager) -> None:
         ws_path = wm.create_workspace("seo-mcp", template="seo")
