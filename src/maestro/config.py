@@ -30,6 +30,7 @@ class DaemonConfig:
     planner_interval_ms: int = 300_000
     dispatcher_interval_ms: int = 10_000
     reconcile_interval_ms: int = 30_000
+    scheduler_interval_ms: int = 10_000
 
 
 @dataclass
@@ -53,6 +54,7 @@ class AgentConfig:
     default_max_turns: int = 20
     stall_timeout_ms: int = 300_000
     turn_timeout_ms: int = 3_600_000
+    max_review_rounds: int = 3
 
 
 @dataclass
@@ -158,6 +160,7 @@ def _parse_daemon(data: dict[str, Any]) -> DaemonConfig:
         planner_interval_ms=data.get("planner_interval_ms", 300_000),
         dispatcher_interval_ms=data.get("dispatcher_interval_ms", 10_000),
         reconcile_interval_ms=data.get("reconcile_interval_ms", 30_000),
+        scheduler_interval_ms=data.get("scheduler_interval_ms", 10_000),
     )
 
 
@@ -184,6 +187,7 @@ def _parse_agent(data: dict[str, Any]) -> AgentConfig:
         default_max_turns=int(data.get("default_max_turns", 20)),
         stall_timeout_ms=int(data.get("stall_timeout_ms", 300_000)),
         turn_timeout_ms=int(data.get("turn_timeout_ms", 3_600_000)),
+        max_review_rounds=int(data.get("max_review_rounds", 3)),
     )
 
 
