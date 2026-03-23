@@ -236,3 +236,178 @@ async def test_history_record_returns_ok(aiohttp_client, app):
     assert resp.status == 200
     data = await resp.json()
     assert data["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# GET / — Dashboard
+# ---------------------------------------------------------------------------
+
+
+async def test_dashboard_serves_html(aiohttp_client, app):
+    client = await aiohttp_client(app)
+    resp = await client.get("/")
+    assert resp.status == 200
+    assert "text/html" in resp.content_type
+    text = await resp.text()
+    assert "Maestro" in text
+
+
+# ---------------------------------------------------------------------------
+# GET /api/internal/tasks — List tasks
+# ---------------------------------------------------------------------------
+
+
+async def test_tasks_list_returns_all(aiohttp_client, app, store):
+    await store.create_task(_make_task("tl-1", status=TaskStatus.RUNNING))
+    await store.create_task(_make_task("tl-2", status=TaskStatus.COMPLETED))
+
+    client = await aiohttp_client(app)
+    resp = await client.get("/api/internal/tasks")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["count"] >= 2
+    ids = [t["id"] for t in data["tasks"]]
+    assert "tl-1" in ids
+    assert "tl-2" in ids
+
+
+async def test_tasks_list_filters_by_status(aiohttp_client, app, store):
+    await store.create_task(_make_task("tl-f1", status=TaskStatus.RUNNING))
+    await store.create_task(_make_task("tl-f2", status=TaskStatus.COMPLETED))
+
+    client = await aiohttp_client(app)
+    resp = await client.get("/api/internal/tasks?status=running")
+    assert resp.status == 200
+    data = await resp.json()
+    for t in data["tasks"]:
+        assert t["status"] == "running"
+
+
+async def test_tasks_list_invalid_status_returns_400(aiohttp_client, app):
+    client = await aiohttp_client(app)
+    resp = await client.get("/api/internal/tasks?status=bogus")
+    assert resp.status == 400
+
+
+# ---------------------------------------------------------------------------
+# GET /api/internal/stats — Summary stats
+# ---------------------------------------------------------------------------
+
+
+async def test_stats_returns_summary(aiohttp_client, app, store):
+    await store.create_task(_make_task("st-1", status=TaskStatus.RUNNING))
+    await store.create_task(_make_task("st-2", status=TaskStatus.COMPLETED))
+
+    client = await aiohttp_client(app)
+    resp = await client.get("/api/internal/stats")
+    assert resp.status == 200
+    data = await resp.json()
+    assert "running" in data
+    assert "pending_approvals" in data
+    assert "today_spend_usd" in data
+    assert "total_tasks" in data
+    assert "status_counts" in data
+    assert data["running"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# POST /api/internal/task/{id}/approve
+# ---------------------------------------------------------------------------
+
+
+async def test_task_approve_endpoint(aiohttp_client, app, store):
+    # Create a running task, submit a draft (pauses it), then approve via endpoint
+    task = _make_task("ta-1", status=TaskStatus.RUNNING)
+    await store.create_task(task)
+
+    client = await aiohttp_client(app)
+
+    # Submit approval draft (pauses the task)
+    resp = await client.post(
+        "/api/internal/approval/submit",
+        json={"task_id": "ta-1", "draft_json": {"text": "hello"}},
+    )
+    assert resp.status == 200
+
+    # Approve
+    resp = await client.post("/api/internal/task/ta-1/approve", json={})
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["ok"] is True
+
+    updated = await store.get_task("ta-1")
+    assert updated is not None
+    assert updated.status == TaskStatus.APPROVED
+
+
+# ---------------------------------------------------------------------------
+# POST /api/internal/task/{id}/reject
+# ---------------------------------------------------------------------------
+
+
+async def test_task_reject_endpoint(aiohttp_client, app, store):
+    task = _make_task("tr-1", status=TaskStatus.RUNNING)
+    await store.create_task(task)
+
+    client = await aiohttp_client(app)
+
+    # Submit draft
+    await client.post(
+        "/api/internal/approval/submit",
+        json={"task_id": "tr-1", "draft_json": {"text": "draft"}},
+    )
+
+    # Reject
+    resp = await client.post(
+        "/api/internal/task/tr-1/reject",
+        json={"note": "not good enough"},
+    )
+    assert resp.status == 200
+
+    updated = await store.get_task("tr-1")
+    assert updated is not None
+    assert updated.status == TaskStatus.CANCELLED
+
+
+# ---------------------------------------------------------------------------
+# POST /api/internal/task/{id}/revise
+# ---------------------------------------------------------------------------
+
+
+async def test_task_revise_endpoint(aiohttp_client, app, store):
+    task = _make_task("tv-1", status=TaskStatus.RUNNING)
+    await store.create_task(task)
+
+    client = await aiohttp_client(app)
+
+    # Submit draft
+    await client.post(
+        "/api/internal/approval/submit",
+        json={"task_id": "tv-1", "draft_json": {"text": "draft"}},
+    )
+
+    # Revise
+    resp = await client.post(
+        "/api/internal/task/tv-1/revise",
+        json={"note": "please fix the intro"},
+    )
+    assert resp.status == 200
+
+    updated = await store.get_task("tv-1")
+    assert updated is not None
+    assert updated.status == TaskStatus.APPROVED
+
+
+async def test_task_revise_without_note_returns_400(aiohttp_client, app, store):
+    task = _make_task("tv-2", status=TaskStatus.RUNNING)
+    await store.create_task(task)
+
+    client = await aiohttp_client(app)
+
+    await client.post(
+        "/api/internal/approval/submit",
+        json={"task_id": "tv-2", "draft_json": {}},
+    )
+
+    resp = await client.post("/api/internal/task/tv-2/revise", json={})
+    assert resp.status == 400

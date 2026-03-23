@@ -7,12 +7,14 @@ Exposes lightweight endpoints for worker agents and internal tooling to:
 - Submit task results (including cost tracking)
 - Submit approval drafts (pauses a task)
 - Record action history (placeholder)
+- Serve the web dashboard
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import pathlib
 from datetime import datetime, timezone
 
 from aiohttp import web
@@ -21,6 +23,8 @@ from maestro.models import TaskStatus
 from maestro.store import Store
 
 logger = logging.getLogger(__name__)
+
+_DASHBOARD_HTML = pathlib.Path(__file__).resolve().parent / "dashboard.html"
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +278,155 @@ async def asset_list_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Dashboard & new read endpoints
+# ---------------------------------------------------------------------------
+
+
+async def dashboard_handler(request: web.Request) -> web.Response:
+    """GET / — serve the single-page dashboard HTML."""
+    if not _DASHBOARD_HTML.exists():
+        raise web.HTTPNotFound(reason="dashboard.html not found")
+    html = _DASHBOARD_HTML.read_text(encoding="utf-8")
+    return web.Response(text=html, content_type="text/html")
+
+
+async def tasks_list_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/tasks — list all tasks with optional filters."""
+    store: Store = request.app["store"]
+
+    status_str = request.query.get("status")
+    workspace = request.query.get("workspace")
+
+    status = None
+    if status_str:
+        try:
+            status = TaskStatus(status_str)
+        except ValueError:
+            raise web.HTTPBadRequest(reason=f"Unknown status: '{status_str}'")
+
+    tasks = await store.list_tasks(status=status, workspace=workspace)
+
+    return web.json_response(
+        {
+            "tasks": [
+                {
+                    "id": t.id,
+                    "type": t.type,
+                    "workspace": t.workspace,
+                    "title": t.title,
+                    "status": t.status.value,
+                    "priority": t.priority,
+                    "approval_level": t.approval_level,
+                    "attempt": t.attempt,
+                    "max_retries": t.max_retries,
+                    "budget_usd": t.budget_usd,
+                    "cost_usd": t.cost_usd,
+                    "error": t.error,
+                    "session_id": t.session_id,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                }
+                for t in tasks
+            ],
+            "count": len(tasks),
+        },
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def stats_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/stats — summary statistics for the dashboard."""
+    store: Store = request.app["store"]
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    running_count = await store.count_running()
+    pending_approvals = await store.list_approvals(status="pending")
+    daily_spend = await store.get_daily_spend(today)
+
+    # Count tasks by status
+    all_tasks = await store.list_tasks()
+    status_counts: dict[str, int] = {}
+    for t in all_tasks:
+        status_counts[t.status.value] = status_counts.get(t.status.value, 0) + 1
+
+    return web.json_response({
+        "running": running_count,
+        "pending_approvals": len(pending_approvals),
+        "today_spend_usd": daily_spend,
+        "total_tasks": len(all_tasks),
+        "status_counts": status_counts,
+        "date": today,
+    })
+
+
+async def task_approve_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/task/{task_id}/approve — approve a pending task."""
+    from maestro.approval import ApprovalManager
+
+    store: Store = request.app["store"]
+    mgr = ApprovalManager(store)
+    task_id = request.match_info["task_id"]
+
+    try:
+        await mgr.approve(task_id)
+    except ValueError as exc:
+        raise web.HTTPNotFound(reason=str(exc)) from exc
+
+    return web.json_response({"ok": True})
+
+
+async def task_reject_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/task/{task_id}/reject — reject a pending task."""
+    from maestro.approval import ApprovalManager
+
+    store: Store = request.app["store"]
+    mgr = ApprovalManager(store)
+    task_id = request.match_info["task_id"]
+
+    note = None
+    try:
+        body = await request.json()
+        note = body.get("note")
+    except (json.JSONDecodeError, ValueError):
+        pass  # No body is fine
+
+    try:
+        await mgr.reject(task_id, note=note)
+    except ValueError as exc:
+        raise web.HTTPNotFound(reason=str(exc)) from exc
+
+    return web.json_response({"ok": True})
+
+
+async def task_revise_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/task/{task_id}/revise — request revision on a task."""
+    from maestro.approval import ApprovalManager
+
+    store: Store = request.app["store"]
+    mgr = ApprovalManager(store)
+    task_id = request.match_info["task_id"]
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    note = body.get("note")
+    if not note:
+        raise web.HTTPBadRequest(reason="'note' is required for revision")
+
+    revised_content = body.get("revised_content")
+
+    try:
+        await mgr.revise(task_id, note=note, revised_content=revised_content)
+    except ValueError as exc:
+        raise web.HTTPNotFound(reason=str(exc)) from exc
+
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
@@ -282,15 +435,38 @@ def create_api_app(store: Store) -> web.Application:
     """Create and configure the aiohttp Application."""
     app = web.Application()
     app["store"] = store
+
+    # Dashboard
+    app.router.add_get("/", dashboard_handler)
+
+    # Health
     app.router.add_get("/api/internal/health", health_handler)
+
+    # Tasks — list & detail
+    app.router.add_get("/api/internal/tasks", tasks_list_handler)
     app.router.add_get("/api/internal/task/{task_id}", task_get_handler)
+
+    # Tasks — mutations
     app.router.add_post("/api/internal/task/update", task_update_handler)
     app.router.add_post("/api/internal/task/result", task_result_handler)
+    app.router.add_post("/api/internal/task/{task_id}/approve", task_approve_handler)
+    app.router.add_post("/api/internal/task/{task_id}/reject", task_reject_handler)
+    app.router.add_post("/api/internal/task/{task_id}/revise", task_revise_handler)
+
+    # Stats
+    app.router.add_get("/api/internal/stats", stats_handler)
+
+    # Approvals
     app.router.add_post("/api/internal/approval/submit", approval_submit_handler)
     app.router.add_get("/api/internal/approval/{task_id}", approval_get_handler)
     app.router.add_get("/api/internal/approvals/pending", approvals_pending_handler)
+
+    # History
     app.router.add_post("/api/internal/history/record", history_record_handler)
+
+    # Assets
     app.router.add_post("/api/internal/asset/register", asset_register_handler)
     app.router.add_get("/api/internal/asset/{asset_id}", asset_get_handler)
     app.router.add_get("/api/internal/assets", asset_list_handler)
+
     return app
