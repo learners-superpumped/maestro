@@ -53,6 +53,17 @@ def _config_path() -> pathlib.Path:
     return _project_root() / "maestro.yaml"
 
 
+def _load_config():
+    """Load config from the default maestro.yaml path, exiting on error."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.config import load_config
+    return load_config(config_file)
+
+
 # ---------------------------------------------------------------------------
 # Top-level group
 # ---------------------------------------------------------------------------
@@ -415,6 +426,53 @@ def task_get(task_id: str, full: bool) -> None:
                 click.echo("                (truncated, use --full for complete output)")
             else:
                 click.echo(f"Result:         {result_str}")
+
+    asyncio.run(_run())
+
+
+@task.command("tree")
+@click.argument("task_id")
+def task_tree(task_id: str) -> None:
+    """Show full task tree from root."""
+    config = _load_config()
+
+    from maestro.store import Store
+
+    store = Store(config.project.store_path)
+
+    async def _run():
+        await store.init_db()
+        root_id = await store.find_root_task_id(task_id)
+        tree_tasks = await store.get_task_tree(root_id)
+
+        if not tree_tasks:
+            click.echo(f"Task not found: {task_id}")
+            return
+
+        # Build children map
+        children_map: dict[str, list] = {}
+        for t in tree_tasks:
+            if t.parent_task_id:
+                children_map.setdefault(t.parent_task_id, []).append(t)
+
+        total_cost = sum(t.cost_usd for t in tree_tasks)
+
+        def _render(t, prefix="", is_last=True, is_root=True):
+            connector = "" if is_root else ("└─ " if is_last else "├─ ")
+            cost_str = f" (${t.cost_usd:.2f})" if t.cost_usd > 0 else ""
+            emoji = _STATUS_EMOJI.get(t.status.value, "")
+            click.echo(
+                f"{prefix}{connector}{t.id} {emoji} {t.type:<12} "
+                f"{t.title}{cost_str}"
+            )
+            kids = children_map.get(t.id, [])
+            for i, child in enumerate(kids):
+                child_prefix = prefix + ("   " if (is_root or is_last) else "│  ")
+                _render(child, child_prefix, i == len(kids) - 1, is_root=False)
+
+        root = tree_tasks[0]
+        _render(root)
+        click.echo(f"\nTotal cost: ${total_cost:.2f}")
 
     asyncio.run(_run())
 
