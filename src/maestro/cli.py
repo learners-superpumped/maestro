@@ -280,8 +280,10 @@ def task_create(
 
 
 @task.command("list")
-@click.option("--status", "status_filter", default=None, help="Filter by status")
-def task_list(status_filter: str | None) -> None:
+@click.option("--status", "filter_status", default=None, help="Filter by status")
+@click.option("--workspace", "filter_workspace", default=None, help="Filter by workspace")
+@click.option("--flat", is_flag=True, help="Flat list without tree indentation")
+def task_list(filter_status, filter_workspace, flat):
     """List tasks."""
     config_file = _config_path()
     if not config_file.exists():
@@ -294,29 +296,55 @@ def task_list(status_filter: str | None) -> None:
     cfg = load_config(config_file)
     store = Store(cfg.project.store_path)
 
-    ts = None
-    if status_filter:
-        try:
-            ts = TaskStatus(status_filter)
-        except ValueError:
-            valid = ", ".join(s.value for s in TaskStatus)
-            click.echo(f"Invalid status: {status_filter!r}. Valid: {valid}", err=True)
-            sys.exit(1)
+    async def _run():
+        await store.init_db()
+        ts = None
+        if filter_status:
+            try:
+                ts = TaskStatus(filter_status)
+            except ValueError:
+                valid = ", ".join(s.value for s in TaskStatus)
+                click.echo(f"Invalid status: {filter_status}. Valid: {valid}")
+                return
 
-    tasks = asyncio.run(store.list_tasks(status=ts))
+        tasks = await store.list_tasks(status=ts, workspace=filter_workspace)
 
-    if not tasks:
-        click.echo("No tasks found.")
-        return
+        if not tasks:
+            click.echo("No tasks found.")
+            return
 
-    # Table header
-    click.echo(f"{'ID':<10} {'STATUS':<14} {'PRI':>3} {'WORKSPACE':<20} {'TITLE'}")
-    click.echo("-" * 70)
-    for t in tasks:
-        click.echo(
-            f"{t.id:<10} {t.status.value:<14}"
-            f" {t.priority:>3} {t.workspace:<20} {t.title}"
-        )
+        if flat or not any(t.parent_task_id for t in tasks):
+            # Flat output
+            for t in tasks:
+                emoji = _STATUS_EMOJI.get(t.status.value, " ")
+                click.echo(
+                    f"{emoji} {t.id:<10} {t.status.value:<14}"
+                    f" {t.priority:>3} {t.workspace:<20} {t.title}"
+                )
+        else:
+            # Tree output
+            task_map = {t.id: t for t in tasks}
+            roots = [t for t in tasks
+                     if t.parent_task_id is None
+                     or t.parent_task_id not in task_map]
+            children_map: dict[str, list] = {}
+            for t in tasks:
+                if t.parent_task_id and t.parent_task_id in task_map:
+                    children_map.setdefault(t.parent_task_id, []).append(t)
+
+            def _print_tree(task, indent=""):
+                emoji = _STATUS_EMOJI.get(task.status.value, " ")
+                click.echo(
+                    f"{indent}{emoji} {task.id:<10} {task.status.value:<14}"
+                    f" {task.priority:>3} {task.workspace:<20} {task.title}"
+                )
+                for child in children_map.get(task.id, []):
+                    _print_tree(child, indent + "   ")
+
+            for root in roots:
+                _print_tree(root)
+
+    asyncio.run(_run())
 
 
 @task.command("get")
