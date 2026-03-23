@@ -378,8 +378,8 @@ def task_get(task_id: str, full: bool) -> None:
         await store.init_db()
         t = await store.get_task(task_id)
         if t is None:
-            click.echo(f"Task not found: {task_id}")
-            return
+            click.echo(f"Task not found: {task_id}", err=True)
+            raise SystemExit(1)
 
         click.echo(f"ID:             {t.id}")
         click.echo(f"Type:           {t.type}")
