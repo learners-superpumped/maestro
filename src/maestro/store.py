@@ -76,6 +76,48 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
     )
 
 
+def _row_to_asset(d: dict[str, Any]) -> dict[str, Any]:
+    """Convert a raw asset row dict, deserializing JSON fields."""
+    if d.get("tags") and isinstance(d["tags"], str):
+        try:
+            d["tags"] = json.loads(d["tags"])
+        except (json.JSONDecodeError, TypeError):
+            d["tags"] = []
+    elif not d.get("tags"):
+        d["tags"] = []
+
+    if d.get("platforms_published") and isinstance(d["platforms_published"], str):
+        try:
+            d["platforms_published"] = json.loads(d["platforms_published"])
+        except (json.JSONDecodeError, TypeError):
+            d["platforms_published"] = []
+    elif not d.get("platforms_published"):
+        d["platforms_published"] = []
+
+    return d
+
+
+def _row_to_action(d: dict[str, Any]) -> dict[str, Any]:
+    """Convert a raw action_history row dict, deserializing JSON fields."""
+    if d.get("asset_ids") and isinstance(d["asset_ids"], str):
+        try:
+            d["asset_ids"] = json.loads(d["asset_ids"])
+        except (json.JSONDecodeError, TypeError):
+            d["asset_ids"] = []
+    elif not d.get("asset_ids"):
+        d["asset_ids"] = []
+
+    if d.get("metrics") and isinstance(d["metrics"], str):
+        try:
+            d["metrics"] = json.loads(d["metrics"])
+        except (json.JSONDecodeError, TypeError):
+            d["metrics"] = {}
+    elif not d.get("metrics"):
+        d["metrics"] = {}
+
+    return d
+
+
 # ---------------------------------------------------------------------------
 # Store
 # ---------------------------------------------------------------------------
@@ -290,6 +332,183 @@ class Store:
             )
             row = await cursor.fetchone()
         return row[0] if row else 0.0
+
+    # ------------------------------------------------------------------
+    # Asset CRUD
+    # ------------------------------------------------------------------
+
+    async def create_asset(self, asset: dict[str, Any]) -> None:
+        """Insert a new asset row."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO assets (
+                    id, type, path, title, description, tags,
+                    embedding_model, embedded_at, platforms_published,
+                    created_at, updated_at
+                ) VALUES (
+                    :id, :type, :path, :title, :description, :tags,
+                    :embedding_model, :embedded_at, :platforms_published,
+                    :created_at, :updated_at
+                )
+                """,
+                {
+                    "id": asset["id"],
+                    "type": asset["type"],
+                    "path": asset["path"],
+                    "title": asset["title"],
+                    "description": asset.get("description"),
+                    "tags": json.dumps(asset["tags"]) if asset.get("tags") else None,
+                    "embedding_model": asset.get("embedding_model"),
+                    "embedded_at": asset.get("embedded_at"),
+                    "platforms_published": (
+                        json.dumps(asset["platforms_published"])
+                        if asset.get("platforms_published")
+                        else None
+                    ),
+                    "created_at": asset.get("created_at", now),
+                    "updated_at": asset.get("updated_at", now),
+                },
+            )
+            await db.commit()
+
+    async def get_asset(self, asset_id: str) -> Optional[dict[str, Any]]:
+        """Return asset dict or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM assets WHERE id = ?", (asset_id,)
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return _row_to_asset(dict(row))
+
+    async def list_assets(
+        self,
+        asset_type: Optional[str] = None,
+        tags_contain: Optional[list[str]] = None,
+    ) -> list[dict[str, Any]]:
+        """Return assets optionally filtered by type and/or tags."""
+        clauses: list[str] = []
+        params: list[Any] = []
+
+        if asset_type is not None:
+            clauses.append("type = ?")
+            params.append(asset_type)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT * FROM assets {where} ORDER BY created_at DESC"
+
+        async with self._conn() as db:
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
+
+        results = [_row_to_asset(dict(r)) for r in rows]
+
+        # Filter by tags in Python (JSON array stored as text)
+        if tags_contain:
+            filtered = []
+            for a in results:
+                asset_tags = a.get("tags") or []
+                if any(t in asset_tags for t in tags_contain):
+                    filtered.append(a)
+            results = filtered
+
+        return results
+
+    async def update_asset(self, asset_id: str, **kwargs: Any) -> None:
+        """Update asset fields."""
+        allowed = {
+            "title", "description", "tags", "embedding_model",
+            "embedded_at", "platforms_published", "type", "path",
+        }
+        params: dict[str, Any] = {"updated_at": _now_iso(), "id": asset_id}
+        set_clauses = ["updated_at = :updated_at"]
+
+        for key, value in kwargs.items():
+            if key not in allowed:
+                raise ValueError(f"update_asset: unknown field '{key}'")
+            if key in ("tags", "platforms_published") and isinstance(value, list):
+                value = json.dumps(value)
+            params[key] = value
+            set_clauses.append(f"{key} = :{key}")
+
+        sql = f"UPDATE assets SET {', '.join(set_clauses)} WHERE id = :id"
+        async with self._conn() as db:
+            await db.execute(sql, params)
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # Action History
+    # ------------------------------------------------------------------
+
+    async def record_action(self, action: dict[str, Any]) -> None:
+        """Insert an action history record."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO action_history (
+                    id, task_id, workspace, action_type, platform,
+                    content, target_url, asset_ids, result_url, metrics,
+                    created_at
+                ) VALUES (
+                    :id, :task_id, :workspace, :action_type, :platform,
+                    :content, :target_url, :asset_ids, :result_url, :metrics,
+                    :created_at
+                )
+                """,
+                {
+                    "id": action["id"],
+                    "task_id": action["task_id"],
+                    "workspace": action["workspace"],
+                    "action_type": action["action_type"],
+                    "platform": action["platform"],
+                    "content": action.get("content"),
+                    "target_url": action.get("target_url"),
+                    "asset_ids": (
+                        json.dumps(action["asset_ids"])
+                        if action.get("asset_ids")
+                        else None
+                    ),
+                    "result_url": action.get("result_url"),
+                    "metrics": (
+                        json.dumps(action["metrics"])
+                        if action.get("metrics")
+                        else None
+                    ),
+                    "created_at": action.get("created_at", now),
+                },
+            )
+            await db.commit()
+
+    async def search_history(
+        self,
+        workspace: Optional[str] = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return recent action history, optionally filtered by workspace."""
+        clauses: list[str] = []
+        params: list[Any] = []
+
+        if workspace is not None:
+            clauses.append("workspace = ?")
+            params.append(workspace)
+
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        sql = f"SELECT * FROM action_history {where} ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        async with self._conn() as db:
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
+
+        return [_row_to_action(dict(r)) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Budget
+    # ------------------------------------------------------------------
 
     async def record_spend(self, date: str, amount: float) -> None:
         """

@@ -259,3 +259,164 @@ async def test_record_spend_accumulation(db_path: pathlib.Path) -> None:
     await store.record_spend("2026-03-24", 0.10)
     assert await store.get_daily_spend(date) == pytest.approx(3.75)
     assert await store.get_daily_spend("2026-03-24") == pytest.approx(0.10)
+
+
+# ---------------------------------------------------------------------------
+# Asset CRUD
+# ---------------------------------------------------------------------------
+
+def _asset(**kwargs) -> dict:
+    """Create a minimal asset dict with sensible defaults."""
+    defaults = dict(
+        id=str(uuid.uuid4()),
+        type="image",
+        path="/assets/test.png",
+        title="Test Asset",
+        description="A test image",
+        tags=["test", "image"],
+    )
+    defaults.update(kwargs)
+    return defaults
+
+
+async def test_create_and_get_asset(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    asset = _asset()
+
+    await store.create_asset(asset)
+    fetched = await store.get_asset(asset["id"])
+
+    assert fetched is not None
+    assert fetched["id"] == asset["id"]
+    assert fetched["title"] == asset["title"]
+    assert fetched["type"] == asset["type"]
+    assert fetched["path"] == asset["path"]
+    assert fetched["tags"] == ["test", "image"]
+
+
+async def test_get_nonexistent_asset_returns_none(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    result = await store.get_asset("does-not-exist")
+    assert result is None
+
+
+async def test_list_assets_by_type(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+
+    img = _asset(type="image", title="Image")
+    vid = _asset(type="video", title="Video")
+    doc = _asset(type="document", title="Doc")
+
+    for a in (img, vid, doc):
+        await store.create_asset(a)
+
+    images = await store.list_assets(asset_type="image")
+    assert len(images) == 1
+    assert images[0]["title"] == "Image"
+
+    videos = await store.list_assets(asset_type="video")
+    assert len(videos) == 1
+    assert videos[0]["title"] == "Video"
+
+    all_assets = await store.list_assets()
+    assert len(all_assets) == 3
+
+
+async def test_list_assets_by_tags(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+
+    a1 = _asset(tags=["promo", "summer"], title="Summer Promo")
+    a2 = _asset(tags=["promo", "winter"], title="Winter Promo")
+    a3 = _asset(tags=["internal"], title="Internal Doc")
+
+    for a in (a1, a2, a3):
+        await store.create_asset(a)
+
+    promo = await store.list_assets(tags_contain=["promo"])
+    assert len(promo) == 2
+
+    winter = await store.list_assets(tags_contain=["winter"])
+    assert len(winter) == 1
+    assert winter[0]["title"] == "Winter Promo"
+
+    none_found = await store.list_assets(tags_contain=["nonexistent"])
+    assert len(none_found) == 0
+
+
+async def test_update_asset(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    asset = _asset()
+    await store.create_asset(asset)
+
+    await store.update_asset(asset["id"], title="Updated Title", tags=["new"])
+
+    fetched = await store.get_asset(asset["id"])
+    assert fetched is not None
+    assert fetched["title"] == "Updated Title"
+    assert fetched["tags"] == ["new"]
+
+
+# ---------------------------------------------------------------------------
+# Action History
+# ---------------------------------------------------------------------------
+
+def _action(**kwargs) -> dict:
+    """Create a minimal action dict."""
+    defaults = dict(
+        id=str(uuid.uuid4()),
+        task_id="task-001",
+        workspace="/ws/test",
+        action_type="post",
+        platform="twitter",
+    )
+    defaults.update(kwargs)
+    return defaults
+
+
+async def test_record_action(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+
+    # Need a task for FK constraint
+    task = _task(id="task-001")
+    await store.create_task(task)
+
+    action = _action(content="Hello world", asset_ids=["a1", "a2"])
+    await store.record_action(action)
+
+    history = await store.search_history()
+    assert len(history) == 1
+    assert history[0]["action_type"] == "post"
+    assert history[0]["platform"] == "twitter"
+    assert history[0]["asset_ids"] == ["a1", "a2"]
+
+
+async def test_search_history(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+
+    # Create tasks for FK
+    task_a = _task(id="task-a")
+    task_b = _task(id="task-b")
+    await store.create_task(task_a)
+    await store.create_task(task_b)
+
+    a1 = _action(task_id="task-a", workspace="/ws/alpha", platform="twitter")
+    a2 = _action(task_id="task-b", workspace="/ws/beta", platform="instagram")
+    a3 = _action(task_id="task-a", workspace="/ws/alpha", platform="facebook")
+
+    for a in (a1, a2, a3):
+        await store.record_action(a)
+
+    # Filter by workspace
+    alpha = await store.search_history(workspace="/ws/alpha")
+    assert len(alpha) == 2
+
+    beta = await store.search_history(workspace="/ws/beta")
+    assert len(beta) == 1
+
+    # Limit
+    limited = await store.search_history(limit=1)
+    assert len(limited) == 1
+
+    # All
+    all_actions = await store.search_history()
+    assert len(all_actions) == 3
