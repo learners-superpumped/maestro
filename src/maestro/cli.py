@@ -17,6 +17,24 @@ from maestro.models import Task, TaskStatus
 from maestro.workspace import WorkspaceManager
 
 
+_STATUS_EMOJI = {
+    "pending": "⏳",
+    "approved": "👍",
+    "claimed": "🔒",
+    "running": "🔄",
+    "paused": "⏸️",
+    "retry_queued": "🔁",
+    "completed": "✅",
+    "failed": "❌",
+    "cancelled": "🚫",
+}
+
+
+def _status_str(status_value: str) -> str:
+    emoji = _STATUS_EMOJI.get(status_value, "")
+    return f"{emoji} {status_value}"
+
+
 def _short_id() -> str:
     """Generate a short 8-char hex ID."""
     return uuid.uuid4().hex[:8]
@@ -303,8 +321,9 @@ def task_list(status_filter: str | None) -> None:
 
 @task.command("get")
 @click.argument("task_id")
-def task_get(task_id: str) -> None:
-    """Show task details."""
+@click.option("--full", is_flag=True, help="Show full result without truncation")
+def task_get(task_id: str, full: bool) -> None:
+    """Show details of a single task."""
     config_file = _config_path()
     if not config_file.exists():
         click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
@@ -316,30 +335,60 @@ def task_get(task_id: str) -> None:
     cfg = load_config(config_file)
     store = Store(cfg.project.store_path)
 
-    t = asyncio.run(store.get_task(task_id))
-    if t is None:
-        click.echo(f"Task not found: {task_id}", err=True)
-        sys.exit(1)
+    async def _run():
+        await store.init_db()
+        t = await store.get_task(task_id)
+        if t is None:
+            click.echo(f"Task not found: {task_id}")
+            return
 
-    click.echo(f"ID:             {t.id}")
-    click.echo(f"Type:           {t.type}")
-    click.echo(f"Workspace:      {t.workspace}")
-    click.echo(f"Title:          {t.title}")
-    click.echo(f"Instruction:    {t.instruction}")
-    click.echo(f"Status:         {t.status.value}")
-    click.echo(f"Priority:       {t.priority}")
-    click.echo(f"Approval Level: {t.approval_level}")
-    click.echo(f"Attempt:        {t.attempt}/{t.max_retries}")
-    click.echo(f"Budget:         ${t.budget_usd:.2f}")
-    click.echo(f"Cost:           ${t.cost_usd:.2f}")
-    click.echo(f"Created:        {t.created_at.isoformat()}")
-    click.echo(f"Updated:        {t.updated_at.isoformat()}")
-    if t.session_id:
-        click.echo(f"Session ID:     {t.session_id}")
-    if t.error:
-        click.echo(f"Error:          {t.error}")
-    if t.result_json:
-        click.echo(f"Result:         {t.result_json}")
+        click.echo(f"ID:             {t.id}")
+        click.echo(f"Type:           {t.type}")
+        click.echo(f"Workspace:      {t.workspace}")
+        click.echo(f"Title:          {t.title}")
+        click.echo(f"Instruction:    {t.instruction}")
+        click.echo(f"Status:         {_status_str(t.status.value)}")
+        click.echo(f"Priority:       {t.priority}")
+        click.echo(f"Approval Level: {t.approval_level}")
+        click.echo(f"Attempt:        {t.attempt}/{t.max_retries}")
+        click.echo(f"Budget:         ${t.budget_usd:.2f}")
+        click.echo(f"Cost:           ${t.cost_usd:.2f}")
+        click.echo(f"Created:        {t.created_at}")
+        if t.updated_at:
+            click.echo(f"Updated:        {t.updated_at}")
+        if t.session_id:
+            click.echo(f"Session ID:     {t.session_id}")
+        if t.error:
+            click.echo(f"Error:          {t.error}")
+
+        # Parent
+        if t.parent_task_id:
+            parent = await store.get_task(t.parent_task_id)
+            if parent:
+                click.echo(f"Parent:         {parent.id} ({parent.title})")
+            else:
+                click.echo(f"Parent:         {t.parent_task_id}")
+
+        # Children
+        children = await store.list_children(t.id)
+        if children:
+            click.echo("Children:")
+            for child in children:
+                click.echo(
+                    f"  └─ {child.id}  {_status_str(child.status.value):<20} "
+                    f"{child.type:<12} {child.title}"
+                )
+
+        # Result
+        if t.result_json is not None:
+            result_str = str(t.result_json)
+            if not full and len(result_str) > 500:
+                click.echo(f"Result:         {result_str[:500]}...")
+                click.echo("                (truncated, use --full for complete output)")
+            else:
+                click.echo(f"Result:         {result_str}")
+
+    asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------
