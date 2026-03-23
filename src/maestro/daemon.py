@@ -439,6 +439,8 @@ class Daemon:
 
         if result.success:
             now = datetime.now(timezone.utc)
+            if result.result_json is not None:
+                extra_fields["result_json"] = result.result_json
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.COMPLETED,
@@ -557,16 +559,28 @@ class Daemon:
         if not isinstance(text, str):
             return None
         stripped = text.strip()
-        if stripped.startswith("```"):
-            lines = stripped.split("\n")
-            lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            stripped = "\n".join(lines)
+        # Try direct parse first
         try:
             return json.loads(stripped)
         except (json.JSONDecodeError, TypeError):
-            return None
+            pass
+        # Try extracting from markdown code block (```json ... ```)
+        import re
+        match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", stripped)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Try finding first { or [ and parsing from there
+        for i, ch in enumerate(stripped):
+            if ch in "{[":
+                try:
+                    return json.loads(stripped[i:])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                break
+        return None
 
     async def _on_task_completed(self, task: Task, result: TaskResult) -> None:
         if task.type == "planning" and result.result_json:

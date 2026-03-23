@@ -43,6 +43,16 @@ def _iso_to_dt(s: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _safe_json_loads(s: Optional[str]) -> object:
+    """Safely parse JSON, returning raw string if not valid JSON."""
+    if not s:
+        return None
+    try:
+        return json.loads(s)
+    except (json.JSONDecodeError, TypeError):
+        return s  # Return raw string if not valid JSON
+
+
 def _row_to_task(row: aiosqlite.Row) -> Task:
     """Convert a sqlite3.Row (from tasks table) into a Task dataclass."""
     d: dict[str, Any] = dict(row)
@@ -63,7 +73,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         attempt=d.get("attempt", 0),
         max_retries=d.get("max_retries", 3),
         budget_usd=d.get("budget_usd", 5.0),
-        result_json=json.loads(d["result_json"]) if d.get("result_json") else None,
+        result_json=_safe_json_loads(d.get("result_json")),
         error=d.get("error"),
         cost_usd=d.get("cost_usd", 0.0),
         review_count=d.get("review_count", 0),
