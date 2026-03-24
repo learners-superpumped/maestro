@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import pathlib
+import secrets
+import struct
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
@@ -131,6 +133,19 @@ def _row_to_action(d: dict[str, Any]) -> dict[str, Any]:
         d["metrics"] = {}
 
     return d
+
+
+def _has_tags(asset: dict, required_tags: list[str]) -> bool:
+    """Check if an asset has all required tags."""
+    asset_tags = asset.get("tags")
+    if not asset_tags:
+        return False
+    if isinstance(asset_tags, str):
+        try:
+            asset_tags = json.loads(asset_tags)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    return all(t in asset_tags for t in required_tags)
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +559,122 @@ class Store:
         sql = f"UPDATE assets SET {', '.join(set_clauses)} WHERE id = :id"
         async with self._conn() as db:
             await db.execute(sql, params)
+            await db.commit()
+
+    async def list_assets_filtered(
+        self,
+        *,
+        workspace: str | None = None,
+        asset_type: str | None = None,
+        tags: list[str] | None = None,
+        task_id: str | None = None,
+        archived: int = 0,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List assets with filters. Includes _shared when workspace specified."""
+        conditions = ["archived = ?"]
+        params: list = [archived]
+        if workspace:
+            conditions.append("workspace IN (?, '_shared')")
+            params.append(workspace)
+        if asset_type:
+            conditions.append("asset_type = ?")
+            params.append(asset_type)
+        if task_id:
+            conditions.append("task_id = ?")
+            params.append(task_id)
+        where = " AND ".join(conditions)
+        where += " AND (expires_at IS NULL OR expires_at > datetime('now'))"
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                f"SELECT * FROM assets WHERE {where} ORDER BY created_at DESC LIMIT ?",
+                params + [limit],
+            )
+            rows = await cursor.fetchall()
+        results = [_row_to_asset(dict(r)) for r in rows]
+        if tags:
+            results = [r for r in results if _has_tags(r, tags)]
+        return results
+
+    async def store_embedding(self, asset_id: str, embedding: list[float]) -> None:
+        """Store embedding vector in assets_vec."""
+        blob = struct.pack(f"{len(embedding)}f", *embedding)
+        async with self._conn() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO assets_vec (asset_id, embedding) VALUES (?, ?)",
+                (asset_id, blob),
+            )
+            await db.execute(
+                "UPDATE assets SET embedded_at = datetime('now') WHERE id = ?",
+                (asset_id,),
+            )
+            await db.commit()
+
+    async def vec_search(
+        self,
+        query_embedding: list[float],
+        candidate_ids: list[str] | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Vector similarity search via sqlite-vec."""
+        blob = struct.pack(f"{len(query_embedding)}f", *query_embedding)
+        async with self._conn() as db:
+            if candidate_ids and len(candidate_ids) <= 1000:
+                placeholders = ",".join("?" for _ in candidate_ids)
+                cursor = await db.execute(
+                    f"""SELECT asset_id, distance FROM assets_vec
+                        WHERE asset_id IN ({placeholders})
+                        AND embedding MATCH ?
+                        ORDER BY distance LIMIT ?""",
+                    candidate_ids + [blob, limit],
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT asset_id, distance FROM assets_vec
+                       WHERE embedding MATCH ?
+                       ORDER BY distance LIMIT ?""",
+                    (blob, limit),
+                )
+            return [{"asset_id": r[0], "distance": r[1]} for r in await cursor.fetchall()]
+
+    async def archive_expired_assets(self) -> int:
+        """Archive assets whose expires_at has passed."""
+        async with self._conn() as db:
+            cursor = await db.execute("""
+                UPDATE assets SET archived = 1, updated_at = datetime('now')
+                WHERE expires_at IS NOT NULL AND expires_at < datetime('now')
+                AND archived = 0
+            """)
+            count = cursor.rowcount
+            if count:
+                await db.execute("""
+                    DELETE FROM assets_vec WHERE asset_id IN (
+                        SELECT id FROM assets WHERE archived = 1
+                    )
+                """)
+            await db.commit()
+            return count
+
+    async def purge_archived_assets(self, grace_days: int = 30) -> int:
+        """Permanently delete archived assets older than grace_days."""
+        async with self._conn() as db:
+            cursor = await db.execute("""
+                DELETE FROM assets WHERE archived = 1
+                AND updated_at < datetime('now', ? || ' days')
+            """, (f"-{grace_days}",))
+            await db.commit()
+            return cursor.rowcount
+
+    async def record_asset_usage(
+        self, asset_id: str, task_id: str, usage_type: str = "reference"
+    ) -> None:
+        """Record asset usage in asset_usage table."""
+        async with self._conn() as db:
+            await db.execute("""
+                INSERT INTO asset_usage (id, asset_id, task_id, usage_type, used_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+            """, (secrets.token_hex(6), asset_id, task_id, usage_type))
             await db.commit()
 
     # ------------------------------------------------------------------

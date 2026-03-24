@@ -92,8 +92,8 @@ async def test_store_satisfies_asset_repository(store: Store) -> None:
     # create_asset
     asset = {
         "id": "a-1",
-        "type": "image",
-        "path": "/tmp/test.png",
+        "asset_type": "image",
+        "file_path": "/tmp/test.png",
         "title": "Test Image",
         "tags": ["test"],
     }
@@ -109,7 +109,7 @@ async def test_store_satisfies_asset_repository(store: Store) -> None:
     assert len(assets) >= 1
 
     assets_typed = await store.list_assets(asset_type="image")
-    assert all(a["type"] == "image" for a in assets_typed)
+    assert all(a["asset_type"] == "image" for a in assets_typed)
 
     assets_tagged = await store.list_assets(tags_contain=["test"])
     assert len(assets_tagged) >= 1

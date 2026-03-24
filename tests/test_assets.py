@@ -62,7 +62,7 @@ async def test_register_asset(db_path: pathlib.Path, tmp_path: pathlib.Path) -> 
     fetched = await mgr.get_asset(asset_id)
     assert fetched is not None
     assert fetched["title"] == "Hero Image"
-    assert fetched["type"] == "image"  # auto-detected from .png
+    assert fetched["asset_type"] == "image"  # auto-detected from .png
     assert fetched["tags"] == ["promo", "hero"]
     assert fetched["description"] == "Main hero image for campaign"
 
@@ -79,7 +79,7 @@ async def test_register_asset_explicit_type(db_path: pathlib.Path, tmp_path: pat
 
     fetched = await mgr.get_asset(asset_id)
     assert fetched is not None
-    assert fetched["type"] == "custom"
+    assert fetched["asset_type"] == "custom"
 
 
 async def test_list_assets(db_path: pathlib.Path, tmp_path: pathlib.Path) -> None:

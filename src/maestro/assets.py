@@ -77,8 +77,8 @@ class AssetManager:
 
         asset = {
             "id": asset_id,
-            "type": asset_type,
-            "path": path,
+            "asset_type": asset_type,
+            "file_path": path,
             "title": title,
             "description": description,
             "tags": tags or [],
