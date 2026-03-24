@@ -241,11 +241,17 @@ async def test_history_record_returns_ok(aiohttp_client, app):
 # ---------------------------------------------------------------------------
 
 
-async def test_dashboard_returns_404_without_dist(aiohttp_client, app):
-    """When web/dist/ does not exist, GET / returns 404."""
+async def test_dashboard_root(aiohttp_client, app):
+    """GET / returns 200 if web/dist exists, 404 otherwise."""
+    import pathlib
+
+    web_dist = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
     client = await aiohttp_client(app)
     resp = await client.get("/")
-    assert resp.status == 404
+    if web_dist.exists():
+        assert resp.status == 200
+    else:
+        assert resp.status == 404
 
 
 # ---------------------------------------------------------------------------
