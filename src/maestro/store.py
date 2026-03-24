@@ -186,11 +186,12 @@ class Store:
 
     async def init_db(self) -> None:
         """Apply schema.sql to the database (idempotent)."""
+        # Migrate FIRST so old tables are dropped before schema.sql runs
+        await self._migrate()
         schema_sql = _SCHEMA_PATH.read_text()
         async with self._conn() as db:
             await db.executescript(schema_sql)
             await db.commit()
-        await self._migrate()
         # Create vector table for embeddings (requires sqlite-vec extension)
         try:
             async with self._conn() as db:
