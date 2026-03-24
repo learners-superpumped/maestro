@@ -7,7 +7,6 @@ Uses pytest-aiohttp's test client to exercise each endpoint against a real
 
 from __future__ import annotations
 
-import json
 import pathlib
 
 import pytest
@@ -15,7 +14,6 @@ import pytest
 from maestro.api import create_api_app
 from maestro.models import Task, TaskStatus
 from maestro.store import Store
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -243,13 +241,11 @@ async def test_history_record_returns_ok(aiohttp_client, app):
 # ---------------------------------------------------------------------------
 
 
-async def test_dashboard_serves_html(aiohttp_client, app):
+async def test_dashboard_returns_404_without_dist(aiohttp_client, app):
+    """When web/dist/ does not exist, GET / returns 404."""
     client = await aiohttp_client(app)
     resp = await client.get("/")
-    assert resp.status == 200
-    assert "text/html" in resp.content_type
-    text = await resp.text()
-    assert "Maestro" in text
+    assert resp.status == 404
 
 
 # ---------------------------------------------------------------------------

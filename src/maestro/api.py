@@ -24,7 +24,20 @@ from maestro.store import Store
 
 logger = logging.getLogger(__name__)
 
-_DASHBOARD_HTML = pathlib.Path(__file__).resolve().parent / "dashboard.html"
+_WEB_DIST = pathlib.Path(__file__).resolve().parent.parent.parent / "web" / "dist"
+
+
+@web.middleware
+async def spa_fallback_middleware(request, handler):
+    """Serve index.html for non-API, non-WS routes (SPA routing)."""
+    try:
+        return await handler(request)
+    except web.HTTPNotFound:
+        if not request.path.startswith(("/api/", "/ws")):
+            index = _WEB_DIST / "index.html"
+            if index.exists():
+                return web.FileResponse(index)
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -327,14 +340,6 @@ async def asset_list_handler(request: web.Request) -> web.Response:
 # ---------------------------------------------------------------------------
 # Dashboard & new read endpoints
 # ---------------------------------------------------------------------------
-
-
-async def dashboard_handler(request: web.Request) -> web.Response:
-    """GET / — serve the single-page dashboard HTML."""
-    if not _DASHBOARD_HTML.exists():
-        raise web.HTTPNotFound(reason="dashboard.html not found")
-    html = _DASHBOARD_HTML.read_text(encoding="utf-8")
-    return web.Response(text=html, content_type="text/html")
 
 
 async def tasks_list_handler(request: web.Request) -> web.Response:
@@ -747,13 +752,15 @@ def create_api_app(store: Store, slack: object | None = None) -> web.Application
         store: The data store instance.
         slack: Optional SlackNotifier instance for sending notifications.
     """
-    app = web.Application()
+    app = web.Application(middlewares=[spa_fallback_middleware])
     app["store"] = store
     if slack is not None:
         app["slack"] = slack
 
-    # Dashboard
-    app.router.add_get("/", dashboard_handler)
+    # SPA static assets
+    if _WEB_DIST.exists():
+        app.router.add_static("/assets", _WEB_DIST / "assets", follow_symlinks=True)
+        app.router.add_get("/", lambda r: web.FileResponse(_WEB_DIST / "index.html"))
 
     # Health
     app.router.add_get("/api/internal/health", health_handler)
