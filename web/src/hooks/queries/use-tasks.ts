@@ -82,3 +82,24 @@ export function useReviseTask() {
     onError: (err: Error) => toast.error(err.message),
   })
 }
+
+export function useTaskTree(id: string) {
+  return useQuery({
+    queryKey: ["task-tree", id],
+    queryFn: async () => {
+      const root = await api.tasks.get(id)
+      async function fetchChildren(taskId: string): Promise<any[]> {
+        const { children } = await api.tasks.children(taskId)
+        if (!children?.length) return []
+        return Promise.all(
+          children.map(async (child: any) => ({
+            ...child,
+            children: await fetchChildren(child.id),
+          }))
+        )
+      }
+      return { ...root, children: await fetchChildren(id) }
+    },
+    enabled: !!id,
+  })
+}

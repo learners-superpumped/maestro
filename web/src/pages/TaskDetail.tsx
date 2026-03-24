@@ -6,7 +6,9 @@ import {
   useApproveTask,
   useRejectTask,
   useReviseTask,
+  useTaskTree,
 } from "@/hooks/queries/use-tasks"
+import { TaskTree } from "@/components/TaskTree"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +37,7 @@ import {
   Check,
   X,
   PenLine,
+  Network,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -64,6 +67,9 @@ export function TaskDetail() {
   const [reviseOpen, setReviseOpen] = useState(false)
   const [reviseNote, setReviseNote] = useState("")
   const [resultExpanded, setResultExpanded] = useState(false)
+  const [showTree, setShowTree] = useState(false)
+
+  const { data: treeData, isLoading: treeLoading } = useTaskTree(showTree ? id : "")
 
   const children: any[] = childrenData?.children ?? []
 
@@ -107,47 +113,54 @@ export function TaskDetail() {
       </div>
 
       {/* Action buttons */}
-      {(canApprove || canReject || canRevise) && (
-        <div className="flex gap-2">
-          {canApprove && (
-            <Button
-              size="sm"
-              onClick={() => approve.mutate(id)}
-              disabled={approve.isPending}
-              className="bg-green-600 hover:bg-green-500 text-white"
-            >
-              {approve.isPending ? (
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              ) : (
-                <Check className="h-3 w-3 mr-1" />
-              )}
-              Approve
-            </Button>
-          )}
-          {canReject && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setRejectOpen(true)}
-              className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-            >
-              <X className="h-3 w-3 mr-1" />
-              Reject
-            </Button>
-          )}
-          {canRevise && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setReviseOpen(true)}
-              className="border-gray-700 text-gray-400 hover:bg-gray-800"
-            >
-              <PenLine className="h-3 w-3 mr-1" />
-              Revise
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="flex gap-2 flex-wrap">
+        {canApprove && (
+          <Button
+            size="sm"
+            onClick={() => approve.mutate(id)}
+            disabled={approve.isPending}
+            className="bg-green-600 hover:bg-green-500 text-white"
+          >
+            {approve.isPending ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Check className="h-3 w-3 mr-1" />
+            )}
+            Approve
+          </Button>
+        )}
+        {canReject && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setRejectOpen(true)}
+            className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+          >
+            <X className="h-3 w-3 mr-1" />
+            Reject
+          </Button>
+        )}
+        {canRevise && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setReviseOpen(true)}
+            className="border-gray-700 text-gray-400 hover:bg-gray-800"
+          >
+            <PenLine className="h-3 w-3 mr-1" />
+            Revise
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShowTree((v) => !v)}
+          className="border-gray-700 text-gray-400 hover:bg-gray-800"
+        >
+          <Network className="h-3 w-3 mr-1" />
+          {showTree ? "Hide Tree" : "Show Tree"}
+        </Button>
+      </div>
 
       {/* Main info card */}
       <Card className="bg-gray-900 border-gray-800">
@@ -249,6 +262,22 @@ export function TaskDetail() {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Task Tree */}
+      {showTree && (
+        <Card className="bg-gray-900 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-sm text-gray-400">Task Tree</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {treeLoading ? (
+              <Skeleton className="h-20 bg-gray-800" />
+            ) : treeData ? (
+              <TaskTree tree={treeData} />
+            ) : null}
           </CardContent>
         </Card>
       )}
