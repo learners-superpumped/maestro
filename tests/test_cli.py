@@ -303,10 +303,16 @@ class TestTaskCommands:
 
     def test_task_list_tree_limit(self) -> None:
         """Tree mode applies limit to root tasks, children always included."""
+        import asyncio
+
+        from maestro.config import load_config
+        from maestro.models import Task, TaskStatus
+        from maestro.store import Store
+
         runner = CliRunner()
         with runner.isolated_filesystem():
             self._init_project()
-            # Create 3 root tasks
+            # Create 3 root tasks via CLI
             root_ids = []
             for i in range(3):
                 r = runner.invoke(main, [
@@ -318,17 +324,28 @@ class TestTaskCommands:
                 ])
                 root_ids.append(r.output.split("Task created: ")[1].split("\n")[0].strip())
 
-            # Create child for first root
-            runner.invoke(main, [
-                "task", "create",
-                "--workspace", "ws1",
-                "--type", "shell",
-                "--title", "Child-0",
-                "--instruction", "child",
-                "--parent", root_ids[0],
-            ])
+            # Create a child task via store directly (CLI has no --parent flag)
+            cfg = load_config(Path("maestro.yaml"))
+            store = Store(cfg.project.store_path)
 
-            # Limit to 2 roots — should still show child of included root
+            async def _add_child() -> None:
+                await store.init_db()
+                child = Task(
+                    id="child-001",
+                    type="shell",
+                    status=TaskStatus.PENDING,
+                    workspace="ws1",
+                    title="Child-0",
+                    instruction="child task",
+                    parent_task_id=root_ids[-1],  # newest root, shown within limit
+                )
+                await store.create_task(child)
+
+            asyncio.run(_add_child())
+
+            # List with limit=2 — tree mode should activate
             result = runner.invoke(main, ["task", "list", "--limit", "2"])
             assert result.exit_code == 0
-            assert "root tasks" in result.output.lower() or "Use --limit" in result.output
+            # Child must appear even though limit cuts root count
+            assert "Child-0" in result.output
+            assert "root tasks" in result.output.lower()
