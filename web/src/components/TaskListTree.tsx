@@ -2,6 +2,7 @@ import { Fragment, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useTaskChildren } from "@/hooks/queries/use-tasks"
 import { StatusBadge } from "@/components/StatusBadge"
+import { TaskTypeBadge } from "@/components/TaskTypeBadge"
 import { ProgressIndicator } from "@/components/ProgressIndicator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -57,7 +58,7 @@ function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
                 <span className="text-[14px] text-[#787774] truncate">{child.title}</span>
               </div>
             </TableCell>
-            <TableCell className="text-[13px] font-mono text-[#787774]">{child.type}</TableCell>
+            <TableCell><TaskTypeBadge type={child.type} /></TableCell>
             <TableCell className="text-[14px] text-[#787774]">{child.workspace}</TableCell>
             <TableCell />
             <TableCell className="text-[13px] font-mono text-[#787774]">
@@ -127,7 +128,7 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
                         <span className="text-[14px] text-[#37352f] truncate max-w-xs">{task.title}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-[13px] font-mono text-[#787774]">{task.type}</TableCell>
+                    <TableCell><TaskTypeBadge type={task.type} /></TableCell>
                     <TableCell className="text-[14px] text-[#787774]">{task.workspace}</TableCell>
                     <TableCell>
                       {task.children_summary && (

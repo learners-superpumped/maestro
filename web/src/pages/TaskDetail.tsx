@@ -36,6 +36,7 @@ import Markdown from "react-markdown"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { cn } from "@/lib/utils"
+import { TaskTypeBadge, getTaskTypeLabel } from "@/components/TaskTypeBadge"
 import { CheckCircle2, XCircle, Eye } from "lucide-react"
 
 function parseReviewVerdict(resultJson: any): { verdict: string | null; summary: string | null } {
@@ -220,11 +221,10 @@ export function TaskDetail() {
           <div className="flex items-center gap-2">
             <h1 className="text-[20px] font-semibold text-[#37352f]">{task.title}</h1>
             <StatusBadge status={task.status} />
+            <TaskTypeBadge type={task.type} />
           </div>
           <div className="flex items-center gap-2 mt-0.5 text-[12px] text-[#9b9a97]">
             <span>{task.workspace}</span>
-            <span>·</span>
-            <span>{task.type}</span>
             {task.cost_usd > 0 && (
               <>
                 <span>·</span>
@@ -334,7 +334,7 @@ export function TaskDetail() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[14px] text-[#37352f]">{child.title}</span>
-                      <span className="text-[12px] text-[#9b9a97] font-mono">{child.type}</span>
+                      <TaskTypeBadge type={child.type} />
                       {child.cost_usd > 0 && (
                         <span className="text-[12px] text-[#9b9a97] font-mono">${Number(child.cost_usd).toFixed(4)}</span>
                       )}
@@ -387,7 +387,7 @@ export function TaskDetail() {
       <CollapsibleSection title="Properties">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
           <Field label="Workspace" value={task.workspace} />
-          <Field label="Type" value={task.type} />
+          <Field label="Type" value={getTaskTypeLabel(task.type)} />
           <Field label="Status" value={task.status} />
           <Field label="Priority" value={task.priority} />
           <Field label="Approval Level" value={task.approval_level} />
