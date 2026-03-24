@@ -48,6 +48,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ note }),
       }),
+    dismiss: (id: string) =>
+      request<any>("/api/internal/task/update", {
+        method: "POST",
+        body: JSON.stringify({ task_id: id, status: "cancelled" }),
+      }),
     events: (id: string) => request<any>(`/api/internal/task/${id}/events`),
     logs: (id: string) => request<any>(`/api/internal/task/${id}/logs`),
     log: (id: string, logId: number) => request<any>(`/api/internal/task/${id}/logs/${logId}`),

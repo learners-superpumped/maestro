@@ -257,6 +257,8 @@ export function TaskDetail() {
                     priority: task.priority,
                     approval_level: task.approval_level,
                   })
+                  // Dismiss the old failed task
+                  await api.tasks.dismiss(id)
                   navigate({ to: "/tasks" })
                 }}
                 disabled={createTask.isPending}

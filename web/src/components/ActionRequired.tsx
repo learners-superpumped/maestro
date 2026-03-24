@@ -122,6 +122,8 @@ function ApprovalCard({ task }: { task: any }) {
                     title: task.title, instruction: task.instruction,
                     priority: task.priority, approval_level: task.approval_level,
                   })
+                  // Dismiss old failed task
+                  await api.tasks.dismiss(task.id)
                 }}
                   disabled={retryTask.isPending}
                   className="bg-[#2383e2] hover:bg-[#1a73cc] text-white h-[28px] text-[12px] rounded px-2.5">
