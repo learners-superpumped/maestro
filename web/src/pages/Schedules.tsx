@@ -9,6 +9,7 @@ import {
   useDeleteSchedule,
   useToggleSchedule,
 } from "@/hooks/queries/use-schedules"
+import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,6 +38,14 @@ import {
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 
+const TASK_TYPES = [
+  { value: "claude", label: "Claude (AI Agent)" },
+  { value: "content_creation", label: "Content Creation" },
+  { value: "content_strategy", label: "Content Strategy" },
+  { value: "planning", label: "Planning" },
+  { value: "review", label: "Review" },
+]
+
 const scheduleSchema = z.object({
   name: z.string().min(1, "Required"),
   workspace: z.string().min(1, "Required"),
@@ -55,6 +64,9 @@ export function Schedules() {
   const createSchedule = useCreateSchedule()
   const deleteSchedule = useDeleteSchedule()
   const toggleSchedule = useToggleSchedule()
+
+  const { data: wsData } = useWorkspaces()
+  const workspaces: any[] = wsData?.workspaces ?? []
 
   const {
     register,
@@ -120,11 +132,18 @@ export function Schedules() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Input
-                    {...register("workspace")}
-                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                    placeholder="default"
-                  />
+                  <Select onValueChange={(v) => setValue("workspace", v)}>
+                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
+                      <SelectValue placeholder="Select workspace" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-[#e8e5df]">
+                      {workspaces.map((ws: any) => (
+                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                          {ws.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {errors.workspace && (
                     <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
                   )}
@@ -133,10 +152,18 @@ export function Schedules() {
 
               <div className="space-y-1">
                 <Label className="text-[12px] text-[#9b9a97]">Task Type *</Label>
-                <Input
-                  {...register("task_type")}
-                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                />
+                <Select onValueChange={(v) => setValue("task_type", v)}>
+                  <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
+                    <SelectValue placeholder="Select task type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-[#e8e5df]">
+                    {TASK_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {errors.task_type && (
                   <p className="text-[12px] text-[#eb5757]">{errors.task_type.message}</p>
                 )}

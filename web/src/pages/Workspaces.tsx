@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -26,6 +33,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 
 const namePattern = /^[a-zA-Z0-9_-]+$/
+
+const WORKSPACE_TEMPLATES = [
+  { value: "default", label: "Default" },
+  { value: "sns", label: "SNS" },
+  { value: "content", label: "Content" },
+  { value: "research", label: "Research" },
+]
 
 export function Workspaces() {
   const [open, setOpen] = useState(false)
@@ -97,12 +111,18 @@ export function Workspaces() {
               </div>
               <div className="space-y-1">
                 <Label className="text-[12px] text-[#9b9a97]">Template</Label>
-                <Input
-                  value={template}
-                  onChange={(e) => setTemplate(e.target.value)}
-                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                  placeholder="default"
-                />
+                <Select value={template} onValueChange={setTemplate}>
+                  <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-[#e8e5df]">
+                    {WORKSPACE_TEMPLATES.map((t) => (
+                      <SelectItem key={t.value} value={t.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button

@@ -11,10 +11,18 @@ import {
   useCleanupAssets,
   useSearchAssets,
 } from "@/hooks/queries/use-assets"
+import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -31,6 +39,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
+
+const ASSET_TYPES = [
+  { value: "post", label: "Post" },
+  { value: "document", label: "Document" },
+  { value: "image", label: "Image" },
+  { value: "video", label: "Video" },
+  { value: "audio", label: "Audio" },
+  { value: "engage", label: "Engage" },
+  { value: "research", label: "Research" },
+]
 
 const assetSchema = z.object({
   title: z.string().min(1, "Required"),
@@ -53,6 +71,9 @@ export function Assets() {
   const [cleanupOpen, setCleanupOpen] = useState(false)
   const [graceDays, setGraceDays] = useState("7")
 
+  const { data: wsData } = useWorkspaces()
+  const workspaces: any[] = wsData?.workspaces ?? []
+
   const { data, isLoading } = useAssets({
     type: typeFilter || undefined,
     workspace: workspaceFilter || undefined,
@@ -68,6 +89,7 @@ export function Assets() {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<AssetFormValues>({
     resolver: zodResolver(assetSchema),
@@ -144,11 +166,18 @@ export function Assets() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[12px] text-[#9b9a97]">Asset Type *</Label>
-                    <Input
-                      {...register("asset_type")}
-                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                      placeholder="document, config..."
-                    />
+                    <Select onValueChange={(v) => setValue("asset_type", v)}>
+                      <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-[#e8e5df]">
+                        {ASSET_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.asset_type && (
                       <p className="text-[12px] text-[#eb5757]">{errors.asset_type.message}</p>
                     )}
@@ -158,11 +187,18 @@ export function Assets() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                    <Input
-                      {...register("workspace")}
-                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                      placeholder="default"
-                    />
+                    <Select onValueChange={(v) => setValue("workspace", v)}>
+                      <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
+                        <SelectValue placeholder="Select workspace" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-[#e8e5df]">
+                        {workspaces.map((ws: any) => (
+                          <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                            {ws.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.workspace && (
                       <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
                     )}
@@ -234,18 +270,34 @@ export function Assets() {
 
       {/* Filters */}
       <div className="flex gap-3 items-center">
-        <Input
-          placeholder="Filter by type..."
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="w-44 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[14px] rounded placeholder:text-[#9b9a97]"
-        />
-        <Input
-          placeholder="Filter by workspace..."
-          value={workspaceFilter}
-          onChange={(e) => setWorkspaceFilter(e.target.value)}
-          className="w-52 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[14px] rounded placeholder:text-[#9b9a97]"
-        />
+        <Select value={typeFilter || "all"} onValueChange={(v) => setTypeFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent className="bg-white border-[#e8e5df]">
+            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All types</SelectItem>
+            {ASSET_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-52 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
+            <SelectValue placeholder="All workspaces" />
+          </SelectTrigger>
+          <SelectContent className="bg-white border-[#e8e5df]">
+            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
+            {workspaces.map((ws: any) => (
+              <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
+                {ws.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Input
           placeholder="Semantic search..."
           value={searchQuery}

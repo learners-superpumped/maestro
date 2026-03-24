@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { useRootTasks, useCreateTask } from "@/hooks/queries/use-tasks"
+import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { ActionRequired } from "@/components/ActionRequired"
 import { TaskBoard } from "@/components/TaskBoard"
 import { TaskListTree } from "@/components/TaskListTree"
@@ -47,6 +48,20 @@ const APPROVAL_LEVELS = [
   { value: "2", label: "Pre-approve (2)" },
 ]
 
+const TASK_TYPES = [
+  { value: "claude", label: "Claude (AI Agent)" },
+  { value: "content_creation", label: "Content Creation" },
+  { value: "content_strategy", label: "Content Strategy" },
+  { value: "planning", label: "Planning" },
+  { value: "review", label: "Review" },
+]
+
+const PRIORITY_PRESETS = [
+  { value: "1", label: "High (1)" },
+  { value: "3", label: "Medium (3)" },
+  { value: "5", label: "Low (5)" },
+]
+
 type TaskFormValues = z.infer<typeof taskSchema>
 
 export function Tasks() {
@@ -62,6 +77,9 @@ export function Tasks() {
     workspace: workspaceFilter || undefined,
   })
 
+  const { data: wsData } = useWorkspaces()
+  const workspaces: any[] = wsData?.workspaces ?? []
+
   const createTask = useCreateTask()
 
   const {
@@ -72,7 +90,7 @@ export function Tasks() {
     formState: { errors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
-    defaultValues: { priority: 50, approval_level: 2 },
+    defaultValues: { priority: 3, approval_level: 2 },
   })
 
   const onSubmit = handleSubmit(async (values) => {
@@ -127,22 +145,36 @@ export function Tasks() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Input
-                    {...register("workspace")}
-                    className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
-                    placeholder="default"
-                  />
+                  <Select onValueChange={(v) => setValue("workspace", v)}>
+                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
+                      <SelectValue placeholder="Select workspace" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-[#e8e5df]">
+                      {workspaces.map((ws: any) => (
+                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                          {ws.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {errors.workspace && (
                     <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
                   )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Type *</Label>
-                  <Input
-                    {...register("type")}
-                    className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
-                    placeholder="task_type"
-                  />
+                  <Select defaultValue="claude" onValueChange={(v) => setValue("type", v)}>
+                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-[#e8e5df]">
+                      {TASK_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {errors.type && (
                     <p className="text-[12px] text-[#eb5757]">{errors.type.message}</p>
                   )}
@@ -173,12 +205,19 @@ export function Tasks() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Priority (0-100)</Label>
-                  <Input
-                    type="number"
-                    {...register("priority", { valueAsNumber: true })}
-                    className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
-                  />
+                  <Label className="text-[12px] text-[#9b9a97]">Priority</Label>
+                  <Select defaultValue="3" onValueChange={(v) => setValue("priority", Number(v))}>
+                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-[#e8e5df]">
+                      {PRIORITY_PRESETS.map((p) => (
+                        <SelectItem key={p.value} value={p.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Approval Level</Label>
@@ -318,12 +357,19 @@ export function Tasks() {
           </SelectContent>
         </Select>
 
-        <Input
-          placeholder="Workspace..."
-          value={workspaceFilter}
-          onChange={(e) => setWorkspaceFilter(e.target.value)}
-          className="w-40 bg-white border-[#e8e5df] text-[#37352f] placeholder:text-[#9b9a97] text-[13px] h-[32px]"
-        />
+        <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
+            <SelectValue placeholder="All workspaces" />
+          </SelectTrigger>
+          <SelectContent className="bg-white border-[#e8e5df]">
+            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
+            {workspaces.map((ws: any) => (
+              <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
+                {ws.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="flex items-center gap-2">
           <Switch checked={showSystem} onCheckedChange={setShowSystem} />
