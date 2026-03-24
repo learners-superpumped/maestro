@@ -131,6 +131,7 @@ class AgentRunner:
         self,
         args: list[str],
         workspace_path: Path,
+        on_event: Optional[callable] = None,
     ) -> TaskResult:
         """Spawn a subprocess, stream its stdout, and collect results.
 
@@ -181,6 +182,12 @@ class AgentRunner:
                     if event is None:
                         continue
 
+                    if on_event is not None:
+                        try:
+                            await on_event(event)
+                        except Exception:
+                            logger.debug("on_event callback failed", exc_info=True)
+
                     event_type = event.get("type")
 
                     if event_type == "system":
@@ -203,6 +210,12 @@ class AgentRunner:
                 line = buffer.decode("utf-8", errors="replace")
                 event = parse_stream_event(line)
                 if event is not None:
+                    if on_event is not None:
+                        try:
+                            await on_event(event)
+                        except Exception:
+                            logger.debug("on_event callback failed", exc_info=True)
+
                     event_type = event.get("type")
                     if event_type == "result":
                         cost_usd = float(event.get("total_cost_usd", 0.0))
@@ -249,6 +262,7 @@ class AgentRunner:
         workspace_path: Path,
         allowed_tools: Optional[list[str]] = None,
         max_turns: int = 20,
+        on_event: Optional[callable] = None,
     ) -> TaskResult:
         """Execute a task from scratch using the Claude CLI.
 
@@ -273,7 +287,7 @@ class AgentRunner:
         args = self._build_execute_args(task, allowed_tools, max_turns)
         logger.info("Executing task %s: %s", task.id, args)
 
-        result = await self._stream(args, workspace_path)
+        result = await self._stream(args, workspace_path, on_event=on_event)
         result.task_id = task.id
         return result
 
@@ -283,6 +297,7 @@ class AgentRunner:
         session_id: str,
         instruction: str,
         workspace_path: Path,
+        on_event: Optional[callable] = None,
     ) -> TaskResult:
         """Resume an existing Claude CLI session for a task.
 
@@ -304,6 +319,6 @@ class AgentRunner:
         args = self._build_resume_args(session_id, instruction)
         logger.info("Resuming task %s (session=%s): %s", task.id, session_id, args)
 
-        result = await self._stream(args, workspace_path)
+        result = await self._stream(args, workspace_path, on_event=on_event)
         result.task_id = task.id
         return result
