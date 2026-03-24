@@ -39,14 +39,14 @@ export function useCreateTask() {
 }
 
 export function useApproveTask() {
-  const queryClient = useQueryClient()
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => api.tasks.approve(id),
-    onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", id] })
-      queryClient.invalidateQueries({ queryKey: ["tasks"] })
-      queryClient.invalidateQueries({ queryKey: ["approvals"] })
-      queryClient.invalidateQueries({ queryKey: ["stats"] })
+    mutationFn: ({ id, note }: { id: string; note?: string }) =>
+      api.tasks.approve(id, note),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] })
+      qc.invalidateQueries({ queryKey: ["approvals"] })
+      qc.invalidateQueries({ queryKey: ["stats"] })
       toast.success("Task approved")
     },
     onError: (err: Error) => toast.error(err.message),

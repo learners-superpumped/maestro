@@ -81,7 +81,7 @@ export function Approvals() {
                           variant="ghost"
                           onClick={(e) => {
                             e.stopPropagation()
-                            approve.mutate(String(item.task_id))
+                            approve.mutate({ id: String(item.task_id) })
                           }}
                           disabled={approve.isPending}
                           className="h-7 w-7 text-gray-500 hover:text-green-400"

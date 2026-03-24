@@ -62,6 +62,8 @@ export function TaskDetail() {
   const reject = useRejectTask()
   const revise = useReviseTask()
 
+  const [approveOpen, setApproveOpen] = useState(false)
+  const [approveNote, setApproveNote] = useState("")
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectNote, setRejectNote] = useState("")
   const [reviseOpen, setReviseOpen] = useState(false)
@@ -117,15 +119,10 @@ export function TaskDetail() {
         {canApprove && (
           <Button
             size="sm"
-            onClick={() => approve.mutate(id)}
-            disabled={approve.isPending}
+            onClick={() => setApproveOpen(true)}
             className="bg-green-600 hover:bg-green-500 text-white"
           >
-            {approve.isPending ? (
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            ) : (
-              <Check className="h-3 w-3 mr-1" />
-            )}
+            <Check className="h-3 w-3 mr-1" />
             Approve
           </Button>
         )}
@@ -281,6 +278,43 @@ export function TaskDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* Approve dialog */}
+      <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
+        <DialogContent className="bg-gray-900 border-gray-800 text-gray-50">
+          <DialogHeader>
+            <DialogTitle>Approve Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="space-y-1">
+              <Label className="text-gray-400 text-xs">Note (optional)</Label>
+              <Textarea
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-gray-50"
+                placeholder="Instructions for the agent..."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setApproveOpen(false)} className="text-gray-400">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  approve.mutate({ id, note: approveNote || undefined })
+                  setApproveOpen(false)
+                  setApproveNote("")
+                }}
+                disabled={approve.isPending}
+                className="bg-green-600 hover:bg-green-500 text-white"
+              >
+                {approve.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Approve
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Reject dialog */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
