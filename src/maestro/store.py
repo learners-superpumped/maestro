@@ -405,8 +405,14 @@ class Store:
         status: Optional[TaskStatus] = None,
         workspace: Optional[str] = None,
         limit: int | None = None,
-    ) -> list[Task]:
-        """Return tasks optionally filtered by status and/or workspace."""
+        root_only: bool = False,
+    ) -> list[Task] | list[dict]:
+        """Return tasks optionally filtered by status and/or workspace.
+
+        When *root_only* is True, only top-level tasks (those without a
+        parent) are returned, and each result dict includes a
+        ``children_summary`` key with ``total`` and ``completed`` counts.
+        """
         clauses: list[str] = []
         params: list[Any] = []
 
@@ -416,9 +422,22 @@ class Store:
         if workspace is not None:
             clauses.append("workspace = ?")
             params.append(workspace)
+        if root_only:
+            clauses.append("(parent_task_id IS NULL OR parent_task_id = '')")
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = f"SELECT * FROM tasks {where} ORDER BY created_at DESC"
+
+        if root_only:
+            sql = f"""
+                SELECT t.*,
+                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id) as children_total,
+                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.status = 'completed') as children_completed
+                FROM tasks t {where}
+                ORDER BY t.created_at DESC
+            """
+        else:
+            sql = f"SELECT * FROM tasks {where} ORDER BY created_at DESC"
+
         if limit is not None:
             sql += " LIMIT ?"
             params.append(limit)
@@ -426,6 +445,17 @@ class Store:
         async with self._conn() as db:
             cursor = await db.execute(sql, params)
             rows = await cursor.fetchall()
+
+        if root_only:
+            results: list[dict] = []
+            for r in rows:
+                d: dict[str, Any] = dict(r)
+                d["children_summary"] = {
+                    "total": d.pop("children_total", 0),
+                    "completed": d.pop("children_completed", 0),
+                }
+                results.append(d)
+            return results
 
         return [_row_to_task(r) for r in rows]
 
@@ -1328,3 +1358,153 @@ class Store:
                 (workspace, task_type),
             )
             await db.commit()
+
+    # ------------------------------------------------------------------
+    # Task Events
+    # ------------------------------------------------------------------
+
+    async def record_task_event(
+        self,
+        task_id: str,
+        event_type: str,
+        actor: str,
+        detail_json: Any = None,
+    ) -> str:
+        """Insert a task event row and return the new event_id."""
+        event_id = uuid.uuid4().hex[:12]
+        now = _now_iso()
+        detail_str = json.dumps(detail_json) if detail_json is not None else None
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO task_events (id, task_id, event_type, actor, detail_json, created_at)
+                VALUES (:id, :task_id, :event_type, :actor, :detail_json, :created_at)
+                """,
+                {
+                    "id": event_id,
+                    "task_id": task_id,
+                    "event_type": event_type,
+                    "actor": actor,
+                    "detail_json": detail_str,
+                    "created_at": now,
+                },
+            )
+            await db.commit()
+        return event_id
+
+    async def get_task_events(
+        self, task_id: str, include_children: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return events for a task (and optionally its children), ordered by created_at ASC."""
+        if include_children:
+            sql = """
+                SELECT e.* FROM task_events e
+                WHERE e.task_id = :tid
+                   OR e.task_id IN (SELECT id FROM tasks WHERE parent_task_id = :tid)
+                ORDER BY e.created_at ASC
+            """
+        else:
+            sql = """
+                SELECT e.* FROM task_events e
+                WHERE e.task_id = :tid
+                ORDER BY e.created_at ASC
+            """
+        async with self._conn() as db:
+            cursor = await db.execute(sql, {"tid": task_id})
+            rows = await cursor.fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            if d.get("detail_json") and isinstance(d["detail_json"], str):
+                try:
+                    d["detail_json"] = json.loads(d["detail_json"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            result.append(d)
+        return result
+
+    # ------------------------------------------------------------------
+    # Task Logs
+    # ------------------------------------------------------------------
+
+    async def record_task_log(
+        self,
+        task_id: str,
+        log_type: str,
+        summary: str,
+        content: Optional[str] = None,
+        tool_name: Optional[str] = None,
+    ) -> int:
+        """Insert a task log row with auto-incrementing seq and return the new log_id (INTEGER)."""
+        now = _now_iso()
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_logs WHERE task_id = :tid",
+                {"tid": task_id},
+            )
+            row = await cursor.fetchone()
+            seq = row[0] if row else 1
+            cursor = await db.execute(
+                """
+                INSERT INTO task_logs (task_id, seq, log_type, tool_name, summary, content, created_at)
+                VALUES (:task_id, :seq, :log_type, :tool_name, :summary, :content, :created_at)
+                """,
+                {
+                    "task_id": task_id,
+                    "seq": seq,
+                    "log_type": log_type,
+                    "tool_name": tool_name,
+                    "summary": summary,
+                    "content": content,
+                    "created_at": now,
+                },
+            )
+            log_id = cursor.lastrowid
+            await db.commit()
+        return log_id
+
+    async def get_task_logs(self, task_id: str) -> list[dict[str, Any]]:
+        """Return all logs for a task (summary only, with has_content boolean), ordered by seq ASC."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """
+                SELECT id, task_id, seq, log_type, tool_name, summary,
+                       (content IS NOT NULL) as has_content, created_at
+                FROM task_logs WHERE task_id = :tid ORDER BY seq ASC
+                """,
+                {"tid": task_id},
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_task_log(self, task_id: str, log_id: str) -> Optional[dict[str, Any]]:
+        """Return a single log entry with full content."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM task_logs WHERE task_id = :task_id AND id = :log_id",
+                {"task_id": task_id, "log_id": log_id},
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def cleanup_logs(self, older_than_days: int) -> int:
+        """Delete task logs older than *older_than_days* days and return the count deleted."""
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        cutoff_iso = cutoff.isoformat()
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM task_logs WHERE created_at < :cutoff",
+                {"cutoff": cutoff_iso},
+            )
+            row = await cursor.fetchone()
+            count = row[0] if row else 0
+            await db.execute(
+                "DELETE FROM task_logs WHERE created_at < :cutoff",
+                {"cutoff": cutoff_iso},
+            )
+            await db.commit()
+        return count
