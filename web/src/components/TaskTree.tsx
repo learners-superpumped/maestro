@@ -17,15 +17,15 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
     <div>
       <div
         className={cn(
-          "flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-800/50 cursor-pointer text-sm",
+          "flex items-center gap-2 py-1.5 px-2 rounded hover:bg-[#f7f6f3] cursor-pointer",
           depth === 0 && "font-medium"
         )}
         style={{ paddingLeft: `${depth * 20 + 8}px` }}
         onClick={() => navigate({ to: "/tasks/$id", params: { id: node.id } })}
       >
         <StatusBadge status={node.status} />
-        <span className="text-gray-50 truncate">{node.title}</span>
-        <span className="text-gray-500 text-xs font-mono ml-auto shrink-0">
+        <span className="text-[14px] text-[#37352f] truncate">{node.title}</span>
+        <span className="text-[12px] text-[#9b9a97] font-mono ml-auto shrink-0">
           {node.cost_usd != null ? `$${Number(node.cost_usd).toFixed(4)}` : ""}
         </span>
       </div>
@@ -47,7 +47,7 @@ export function TaskTree({ tree }: { tree: TreeNode }) {
     <div className="space-y-2">
       <TreeItem node={tree} />
       {total > 0 && (
-        <p className="text-xs text-gray-500 px-2 pt-2 border-t border-gray-800">
+        <p className="text-[12px] text-[#9b9a97] px-2 pt-2 border-t border-[#e8e5df]">
           Total cost: ${total.toFixed(4)}
         </p>
       )}

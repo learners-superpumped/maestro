@@ -16,9 +16,9 @@ export function AgentLogPanel({ taskId, taskStatus }: AgentLogPanelProps) {
 
   if (isError) {
     return (
-      <Card className="bg-gray-900 border-gray-800">
+      <Card className="bg-white border border-[#e8e5df] rounded">
         <CardContent className="py-4">
-          <p className="text-sm text-gray-500">Could not load agent logs</p>
+          <p className="text-[14px] text-[#9b9a97]">Could not load agent logs</p>
         </CardContent>
       </Card>
     )
@@ -26,9 +26,9 @@ export function AgentLogPanel({ taskId, taskStatus }: AgentLogPanelProps) {
 
   if (isLoading) {
     return (
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader><CardTitle className="text-sm text-gray-400">Agent Log</CardTitle></CardHeader>
-        <CardContent><Skeleton className="h-20 bg-gray-800" /></CardContent>
+      <Card className="bg-white border border-[#e8e5df] rounded">
+        <CardHeader><CardTitle className="text-[14px] font-semibold text-[#37352f]">Agent Log</CardTitle></CardHeader>
+        <CardContent><Skeleton className="h-20 bg-[#f7f6f3]" /></CardContent>
       </Card>
     )
   }
@@ -36,10 +36,10 @@ export function AgentLogPanel({ taskId, taskStatus }: AgentLogPanelProps) {
   if (logs.length === 0) return null
 
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card className="bg-white border border-[#e8e5df] rounded">
       <CardHeader>
-        <CardTitle className="text-sm text-gray-400 flex items-center gap-2">
-          {isLive && <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />}
+        <CardTitle className="text-[14px] font-semibold text-[#37352f] flex items-center gap-2">
+          {isLive && <span className="h-2 w-2 rounded-full bg-[#4dab9a] animate-pulse" />}
           {isLive ? "Agent Log — Live" : "Agent Log"}
         </CardTitle>
       </CardHeader>

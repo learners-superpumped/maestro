@@ -12,12 +12,12 @@ export function LogContentView({ logType, toolName, content }: LogContentProps) 
     try {
       const parsed = JSON.parse(content)
       return (
-        <div className="mt-1 rounded bg-gray-950 border border-gray-800 p-3 text-xs font-mono overflow-auto max-h-64">
+        <div className="mt-1 rounded bg-[#f7f6f3] border border-[#e8e5df] p-3 text-[13px] font-mono overflow-auto max-h-64">
           {parsed.old_string && (
-            <div className="text-red-400">- {parsed.old_string}</div>
+            <div className="text-[#eb5757]">- {parsed.old_string}</div>
           )}
           {parsed.new_string && (
-            <div className="text-green-400">+ {parsed.new_string}</div>
+            <div className="text-[#4dab9a]">+ {parsed.new_string}</div>
           )}
         </div>
       )
@@ -29,7 +29,7 @@ export function LogContentView({ logType, toolName, content }: LogContentProps) 
     try {
       const parsed = JSON.parse(content)
       return (
-        <div className="mt-1 rounded bg-gray-950 border border-gray-800 p-3 text-xs font-mono overflow-auto max-h-64 text-gray-300">
+        <div className="mt-1 rounded bg-[#f7f6f3] border border-[#e8e5df] p-3 text-[13px] font-mono overflow-auto max-h-64 text-[#37352f]">
           $ {parsed.command}
         </div>
       )
@@ -38,7 +38,7 @@ export function LogContentView({ logType, toolName, content }: LogContentProps) 
 
   // tool_result or other — show as code block
   return (
-    <div className="mt-1 rounded bg-gray-950 border border-gray-800 p-3 text-xs font-mono overflow-auto max-h-64 text-gray-300 whitespace-pre-wrap">
+    <div className="mt-1 rounded bg-[#f7f6f3] border border-[#e8e5df] p-3 text-[13px] font-mono overflow-auto max-h-64 text-[#37352f] whitespace-pre-wrap">
       {content.length > 5000 ? content.slice(0, 5000) + "\n... (truncated)" : content}
     </div>
   )

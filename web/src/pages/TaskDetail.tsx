@@ -24,14 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   ArrowLeft,
   ChevronDown,
   ChevronUp,
@@ -75,8 +67,8 @@ function Field({ label, value, mono }: { label: string; value?: any; mono?: bool
   if (value == null || value === "") return null
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-      <p className={cn("text-sm text-gray-200", mono && "font-mono")}>{String(value)}</p>
+      <p className="text-[12px] text-[#9b9a97] mb-0.5">{label}</p>
+      <p className={cn("text-[14px] text-[#37352f]", mono && "text-[13px] font-mono text-[#787774]")}>{String(value)}</p>
     </div>
   )
 }
@@ -121,15 +113,15 @@ export function TaskDetail() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-8 w-48 bg-gray-800" />
-        <Skeleton className="h-64 bg-gray-800" />
+        <Skeleton className="h-8 w-48 bg-[#f7f6f3]" />
+        <Skeleton className="h-64 bg-[#f7f6f3]" />
       </div>
     )
   }
 
   if (!task) {
     return (
-      <div className="text-gray-400">
+      <div className="text-[14px] text-[#9b9a97]">
         Task not found.
       </div>
     )
@@ -142,13 +134,13 @@ export function TaskDetail() {
           variant="ghost"
           size="icon"
           onClick={() => navigate({ to: "/tasks" })}
-          className="text-gray-400 hover:text-gray-50"
+          className="text-[#9b9a97] hover:text-[#37352f] hover:bg-[#f7f6f3]"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-xl font-semibold text-gray-50">{task.title}</h1>
-          <p className="text-xs font-mono text-gray-500 mt-0.5">{task.id}</p>
+          <h1 className="text-[20px] font-semibold text-[#37352f]">{task.title}</h1>
+          <p className="text-[12px] font-mono text-[#9b9a97] mt-0.5">{task.id}</p>
         </div>
         <StatusBadge status={task.status} className="ml-2" />
       </div>
@@ -159,7 +151,7 @@ export function TaskDetail() {
           <Button
             size="sm"
             onClick={() => setApproveOpen(true)}
-            className="bg-green-600 hover:bg-green-500 text-white"
+            className="h-[28px] text-[13px] rounded bg-[#4dab9a] hover:bg-[#3d9b8b] text-white px-3"
           >
             <Check className="h-3 w-3 mr-1" />
             Approve
@@ -170,7 +162,7 @@ export function TaskDetail() {
             size="sm"
             variant="outline"
             onClick={() => setRejectOpen(true)}
-            className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+            className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#eb5757] hover:bg-red-50 px-3"
           >
             <X className="h-3 w-3 mr-1" />
             Reject
@@ -181,7 +173,7 @@ export function TaskDetail() {
             size="sm"
             variant="outline"
             onClick={() => setReviseOpen(true)}
-            className="border-gray-700 text-gray-400 hover:bg-gray-800"
+            className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
           >
             <PenLine className="h-3 w-3 mr-1" />
             Revise
@@ -191,7 +183,7 @@ export function TaskDetail() {
           size="sm"
           variant="outline"
           onClick={() => setShowTree((v) => !v)}
-          className="border-gray-700 text-gray-400 hover:bg-gray-800"
+          className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
         >
           <Network className="h-3 w-3 mr-1" />
           {showTree ? "Hide Tree" : "Show Tree"}
@@ -199,9 +191,9 @@ export function TaskDetail() {
       </div>
 
       {/* Main info card */}
-      <Card className="bg-gray-900 border-gray-800">
+      <Card className="bg-white border border-[#e8e5df] rounded">
         <CardHeader>
-          <CardTitle className="text-sm text-gray-400">Details</CardTitle>
+          <CardTitle className="text-[12px] text-[#9b9a97]">Details</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <Field label="Workspace" value={task.workspace} />
@@ -222,31 +214,31 @@ export function TaskDetail() {
       {/* Review Summary (for paused tasks with approval) */}
       {approvalInfo.reviewSummary && (
         <Card className={cn(
-          "border",
-          approvalInfo.verdict === "pass" ? "bg-green-500/5 border-green-500/20" :
-          approvalInfo.verdict === "fail" ? "bg-red-500/5 border-red-500/20" :
-          "bg-gray-800/50 border-gray-700"
+          "border rounded",
+          approvalInfo.verdict === "pass" ? "bg-[#4dab9a]/5 border-[#4dab9a]/20" :
+          approvalInfo.verdict === "fail" ? "bg-[#eb5757]/5 border-[#eb5757]/20" :
+          "bg-[#f7f6f3] border-[#e8e5df]"
         )}>
           <CardContent className="py-4">
             <div className="flex items-start gap-2">
               {approvalInfo.verdict === "pass" ? (
-                <CheckCircle2 className="h-4 w-4 text-green-400 mt-0.5 shrink-0" />
+                <CheckCircle2 className="h-4 w-4 text-[#4dab9a] mt-0.5 shrink-0" />
               ) : approvalInfo.verdict === "fail" ? (
-                <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                <XCircle className="h-4 w-4 text-[#eb5757] mt-0.5 shrink-0" />
               ) : (
-                <Eye className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                <Eye className="h-4 w-4 text-[#9b9a97] mt-0.5 shrink-0" />
               )}
               <div>
                 <p className={cn(
-                  "text-sm font-medium mb-1",
-                  approvalInfo.verdict === "pass" ? "text-green-400" :
-                  approvalInfo.verdict === "fail" ? "text-red-400" : "text-gray-300"
+                  "text-[14px] font-medium mb-1",
+                  approvalInfo.verdict === "pass" ? "text-[#4dab9a]" :
+                  approvalInfo.verdict === "fail" ? "text-[#eb5757]" : "text-[#787774]"
                 )}>
                   {approvalInfo.verdict === "pass" ? "Review Passed" :
                    approvalInfo.verdict === "fail" ? "Review Failed" : "Review Complete"}
                   {" — Awaiting your approval"}
                 </p>
-                <p className="text-sm text-gray-400 leading-relaxed">{approvalInfo.reviewSummary}</p>
+                <p className="text-[14px] text-[#787774] leading-relaxed">{approvalInfo.reviewSummary}</p>
               </div>
             </div>
           </CardContent>
@@ -263,12 +255,12 @@ export function TaskDetail() {
 
       {/* Instruction */}
       {task.instruction && (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border border-[#e8e5df] rounded">
           <CardHeader>
-            <CardTitle className="text-sm text-gray-400">Instruction</CardTitle>
+            <CardTitle className="text-[12px] text-[#9b9a97]">Instruction</CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="text-sm text-gray-200 whitespace-pre-wrap font-mono">
+            <pre className="text-[14px] text-[#37352f] whitespace-pre-wrap font-mono">
               {task.instruction}
             </pre>
           </CardContent>
@@ -277,23 +269,23 @@ export function TaskDetail() {
 
       {/* Result */}
       {(task.result != null || task.result_json != null) && (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border border-[#e8e5df] rounded">
           <CardHeader
             className="cursor-pointer select-none"
             onClick={() => setResultExpanded((e) => !e)}
           >
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm text-gray-400">Result</CardTitle>
+              <CardTitle className="text-[12px] text-[#9b9a97]">Result</CardTitle>
               {resultExpanded ? (
-                <ChevronUp className="h-4 w-4 text-gray-400" />
+                <ChevronUp className="h-4 w-4 text-[#9b9a97]" />
               ) : (
-                <ChevronDown className="h-4 w-4 text-gray-400" />
+                <ChevronDown className="h-4 w-4 text-[#9b9a97]" />
               )}
             </div>
           </CardHeader>
           {resultExpanded && (
             <CardContent>
-              <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap overflow-auto max-h-96">
+              <pre className="text-[13px] font-mono text-[#787774] whitespace-pre-wrap overflow-auto max-h-96">
                 {typeof (task.result_json ?? task.result) === "string"
                   ? (task.result_json ?? task.result)
                   : JSON.stringify(task.result_json ?? task.result, null, 2)}
@@ -305,9 +297,9 @@ export function TaskDetail() {
 
       {/* Children */}
       {children.length > 0 && (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border border-[#e8e5df] rounded">
           <CardHeader>
-            <CardTitle className="text-sm text-gray-400">
+            <CardTitle className="text-[12px] text-[#9b9a97]">
               Child Tasks ({children.length})
             </CardTitle>
           </CardHeader>
@@ -317,33 +309,33 @@ export function TaskDetail() {
               return (
                 <div
                   key={child.id}
-                  className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-gray-800/40 hover:bg-gray-800/70 cursor-pointer transition-colors"
+                  className="flex items-start gap-3 px-3 py-2.5 rounded bg-[#f7f6f3] hover:bg-[#ebebea] cursor-pointer transition-colors"
                   onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
                 >
                   <StatusBadge status={child.status} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-100">{child.title}</span>
-                      <span className="text-xs text-gray-500 font-mono">{child.type}</span>
+                      <span className="text-[14px] text-[#37352f]">{child.title}</span>
+                      <span className="text-[12px] text-[#9b9a97] font-mono">{child.type}</span>
                       {child.cost_usd > 0 && (
-                        <span className="text-xs text-gray-500 font-mono">${Number(child.cost_usd).toFixed(4)}</span>
+                        <span className="text-[12px] text-[#9b9a97] font-mono">${Number(child.cost_usd).toFixed(4)}</span>
                       )}
                     </div>
                     {review?.verdict && (
                       <div className="flex items-center gap-1.5 mt-1">
                         {review.verdict === "pass" ? (
-                          <CheckCircle2 className="h-3 w-3 text-green-400" />
+                          <CheckCircle2 className="h-3 w-3 text-[#4dab9a]" />
                         ) : (
-                          <XCircle className="h-3 w-3 text-red-400" />
+                          <XCircle className="h-3 w-3 text-[#eb5757]" />
                         )}
                         <span className={cn(
-                          "text-xs",
-                          review.verdict === "pass" ? "text-green-400" : "text-red-400"
+                          "text-[12px]",
+                          review.verdict === "pass" ? "text-[#4dab9a]" : "text-[#eb5757]"
                         )}>
                           {review.verdict === "pass" ? "Passed" : "Failed"}
                         </span>
                         {review.summary && (
-                          <span className="text-xs text-gray-500 truncate max-w-md">
+                          <span className="text-[12px] text-[#9b9a97] truncate max-w-md">
                             — {review.summary}
                           </span>
                         )}
@@ -359,13 +351,13 @@ export function TaskDetail() {
 
       {/* Task Tree */}
       {showTree && (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border border-[#e8e5df] rounded">
           <CardHeader>
-            <CardTitle className="text-sm text-gray-400">Task Tree</CardTitle>
+            <CardTitle className="text-[12px] text-[#9b9a97]">Task Tree</CardTitle>
           </CardHeader>
           <CardContent>
             {treeLoading ? (
-              <Skeleton className="h-20 bg-gray-800" />
+              <Skeleton className="h-20 bg-[#f7f6f3]" />
             ) : treeData ? (
               <TaskTree tree={treeData} />
             ) : null}
@@ -375,22 +367,22 @@ export function TaskDetail() {
 
       {/* Approve dialog */}
       <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-gray-50">
+        <DialogContent className="bg-white border-[#e8e5df]">
           <DialogHeader>
-            <DialogTitle>Approve Task</DialogTitle>
+            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Approve Task</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Note (optional)</Label>
+              <Label className="text-[12px] text-[#9b9a97]">Note (optional)</Label>
               <Textarea
                 value={approveNote}
                 onChange={(e) => setApproveNote(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-gray-50"
+                className="bg-white border-[#e8e5df] text-[#37352f]"
                 placeholder="Instructions for the agent..."
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setApproveOpen(false)} className="text-gray-400">
+              <Button variant="ghost" onClick={() => setApproveOpen(false)} className="text-[#787774] hover:bg-[#f7f6f3]">
                 Cancel
               </Button>
               <Button
@@ -400,7 +392,7 @@ export function TaskDetail() {
                   setApproveNote("")
                 }}
                 disabled={approve.isPending}
-                className="bg-green-600 hover:bg-green-500 text-white"
+                className="bg-[#4dab9a] hover:bg-[#3d9b8b] text-white"
               >
                 {approve.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                 Approve
@@ -412,17 +404,17 @@ export function TaskDetail() {
 
       {/* Reject dialog */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-gray-50">
+        <DialogContent className="bg-white border-[#e8e5df]">
           <DialogHeader>
-            <DialogTitle>Reject Task</DialogTitle>
+            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Reject Task</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Note (optional)</Label>
+              <Label className="text-[12px] text-[#9b9a97]">Note (optional)</Label>
               <Textarea
                 value={rejectNote}
                 onChange={(e) => setRejectNote(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-gray-50"
+                className="bg-white border-[#e8e5df] text-[#37352f]"
                 placeholder="Reason for rejection..."
               />
             </div>
@@ -430,7 +422,7 @@ export function TaskDetail() {
               <Button
                 variant="ghost"
                 onClick={() => setRejectOpen(false)}
-                className="text-gray-400"
+                className="text-[#787774] hover:bg-[#f7f6f3]"
               >
                 Cancel
               </Button>
@@ -441,7 +433,7 @@ export function TaskDetail() {
                   setRejectNote("")
                 }}
                 disabled={reject.isPending}
-                className="bg-red-600 hover:bg-red-500 text-white"
+                className="bg-[#eb5757] hover:bg-red-500 text-white"
               >
                 {reject.isPending && (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -455,17 +447,17 @@ export function TaskDetail() {
 
       {/* Revise dialog */}
       <Dialog open={reviseOpen} onOpenChange={setReviseOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-gray-50">
+        <DialogContent className="bg-white border-[#e8e5df]">
           <DialogHeader>
-            <DialogTitle>Request Revision</DialogTitle>
+            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Request Revision</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Revision Note *</Label>
+              <Label className="text-[12px] text-[#9b9a97]">Revision Note *</Label>
               <Textarea
                 value={reviseNote}
                 onChange={(e) => setReviseNote(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-gray-50"
+                className="bg-white border-[#e8e5df] text-[#37352f]"
                 placeholder="Describe the changes needed..."
               />
             </div>
@@ -473,7 +465,7 @@ export function TaskDetail() {
               <Button
                 variant="ghost"
                 onClick={() => setReviseOpen(false)}
-                className="text-gray-400"
+                className="text-[#787774] hover:bg-[#f7f6f3]"
               >
                 Cancel
               </Button>
@@ -485,7 +477,7 @@ export function TaskDetail() {
                   setReviseNote("")
                 }}
                 disabled={revise.isPending || !reviseNote.trim()}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                className="bg-[#2383e2] hover:bg-blue-500 text-white"
               >
                 {revise.isPending && (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />

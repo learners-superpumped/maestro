@@ -17,17 +17,17 @@ interface EventProps {
 }
 
 const EVENT_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
-  created: { icon: Circle, color: "text-gray-400", label: "Created" },
-  approved: { icon: Check, color: "text-green-400", label: "Approved" },
-  rejected: { icon: X, color: "text-red-400", label: "Rejected" },
-  revised: { icon: PenLine, color: "text-amber-400", label: "Revision requested" },
-  claimed: { icon: User, color: "text-blue-400", label: "Claimed" },
-  running: { icon: Play, color: "text-blue-400", label: "Running" },
-  paused: { icon: Pause, color: "text-amber-400", label: "Paused — awaiting approval" },
-  completed: { icon: CheckCircle2, color: "text-green-400", label: "Completed" },
-  failed: { icon: AlertTriangle, color: "text-red-400", label: "Failed" },
-  review_submitted: { icon: Eye, color: "text-cyan-400", label: "Review submitted" },
-  revision_submitted: { icon: FileEdit, color: "text-blue-400", label: "Revision submitted" },
+  created: { icon: Circle, color: "text-[#9b9a97]", label: "Created" },
+  approved: { icon: Check, color: "text-[#4dab9a]", label: "Approved" },
+  rejected: { icon: X, color: "text-[#eb5757]", label: "Rejected" },
+  revised: { icon: PenLine, color: "text-[#cb912f]", label: "Revision requested" },
+  claimed: { icon: User, color: "text-[#2383e2]", label: "Claimed" },
+  running: { icon: Play, color: "text-[#2383e2]", label: "Running" },
+  paused: { icon: Pause, color: "text-[#cb912f]", label: "Paused — awaiting approval" },
+  completed: { icon: CheckCircle2, color: "text-[#4dab9a]", label: "Completed" },
+  failed: { icon: AlertTriangle, color: "text-[#eb5757]", label: "Failed" },
+  review_submitted: { icon: Eye, color: "text-[#2383e2]", label: "Review submitted" },
+  revision_submitted: { icon: FileEdit, color: "text-[#2383e2]", label: "Revision submitted" },
 }
 
 function formatActor(actor: string): string {
@@ -57,25 +57,25 @@ export function ActivityEvent({ event }: EventProps) {
         <div className={cn("h-6 w-6 rounded-full flex items-center justify-center shrink-0", config.color)}>
           <Icon className="h-3.5 w-3.5" />
         </div>
-        <div className="w-px flex-1 bg-gray-700" />
+        <div className="w-px flex-1 bg-[#e8e5df]" />
       </div>
       <div className="flex-1 min-w-0 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-200">{config.label}</span>
-            <span className="text-xs text-gray-500">by {formatActor(event.actor)}</span>
+            <span className="text-[14px] text-[#37352f]">{config.label}</span>
+            <span className="text-[12px] text-[#9b9a97]">by {formatActor(event.actor)}</span>
             {hasDetail && (
-              <button onClick={() => setExpanded(!expanded)} className="text-gray-500 hover:text-gray-300">
+              <button onClick={() => setExpanded(!expanded)} className="text-[#9b9a97] hover:text-[#37352f]">
                 {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               </button>
             )}
           </div>
-          <span className="text-xs text-gray-500 shrink-0">{formatTime(event.created_at)}</span>
+          <span className="text-[12px] text-[#9b9a97] shrink-0">{formatTime(event.created_at)}</span>
         </div>
         {expanded && detail && (
-          <div className="mt-1 text-xs text-gray-400 bg-gray-800/50 rounded px-3 py-2 space-y-1">
+          <div className="mt-1 text-[12px] text-[#787774] bg-[#f7f6f3] rounded px-3 py-2 space-y-1">
             {detail.note && <p>{detail.note}</p>}
-            {detail.error && <p className="text-red-400">{detail.error}</p>}
+            {detail.error && <p className="text-[#eb5757]">{detail.error}</p>}
             {detail.verdict && <p>Verdict: {detail.verdict}</p>}
             {detail.summary && <p>{detail.summary}</p>}
             {detail.cost_usd && <p>Cost: ${Number(detail.cost_usd).toFixed(4)}</p>}
