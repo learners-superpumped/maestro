@@ -92,12 +92,11 @@ class Daemon:
         self._last_scheduler_tick: float = 0.0
         self._last_cleanup_tick: float = 0.0
 
-        # Bootstrap planner and reviewer workspaces
-        wm = WorkspaceManager(self._base_path)
-        if not wm.workspace_exists("_planner"):
-            wm.create_workspace("_planner", template="planner")
-        if not wm.workspace_exists("_reviewer"):
-            wm.create_workspace("_reviewer", template="reviewer")
+        # Internal workspace templates (used if no local override exists)
+        self._internal_templates: dict[str, str] = {
+            "_planner": "planner",
+            "_reviewer": "reviewer",
+        }
 
     # ------------------------------------------------------------------
     # Public interface
@@ -345,17 +344,20 @@ class Daemon:
 
     async def _resume_task(self, task: Task, instruction: str) -> None:
         """Resume a paused task's CLI session."""
-        workspace_path = self._base_path / "workspaces" / task.workspace
-        if not workspace_path.exists():
+        wm = WorkspaceManager(self._base_path)
+        template = self._internal_templates.get(task.workspace)
+        try:
+            workspace_path = wm.resolve_workspace_path(task.workspace, template)
+        except FileNotFoundError:
             logger.error(
                 "Workspace %s does not exist for resume of task %s",
-                workspace_path,
+                task.workspace,
                 task.id,
             )
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.FAILED,
-                error=f"Workspace not found: {workspace_path}",
+                error=f"Workspace not found: {task.workspace}",
             )
             return
 
@@ -401,15 +403,18 @@ class Daemon:
         3. Call the AgentRunner.
         4. Handle the result.
         """
-        workspace_path = self._base_path / "workspaces" / task.workspace
-        if not workspace_path.exists():
+        wm = WorkspaceManager(self._base_path)
+        template = self._internal_templates.get(task.workspace)
+        try:
+            workspace_path = wm.resolve_workspace_path(task.workspace, template)
+        except FileNotFoundError:
             logger.error(
-                "Workspace %s does not exist for task %s", workspace_path, task.id
+                "Workspace %s does not exist for task %s", task.workspace, task.id
             )
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.FAILED,
-                error=f"Workspace not found: {workspace_path}",
+                error=f"Workspace not found: {task.workspace}",
             )
             return
 
