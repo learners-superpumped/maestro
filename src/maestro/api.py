@@ -423,10 +423,15 @@ async def task_approve_handler(request: web.Request) -> web.Response:
     mgr = ApprovalManager(store)
     task_id = request.match_info["task_id"]
 
-    try:
+    task = await store.get_task(task_id)
+    if task is None:
+        raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
+
+    approval = await mgr.get_approval(task_id)
+    if approval and approval["status"] == "pending":
         await mgr.approve(task_id)
-    except ValueError as exc:
-        raise web.HTTPNotFound(reason=str(exc)) from exc
+    else:
+        await store.update_task_status(task_id, TaskStatus.APPROVED)
 
     return web.json_response({"ok": True})
 
@@ -439,17 +444,22 @@ async def task_reject_handler(request: web.Request) -> web.Response:
     mgr = ApprovalManager(store)
     task_id = request.match_info["task_id"]
 
+    task = await store.get_task(task_id)
+    if task is None:
+        raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
+
     note = None
     try:
         body = await request.json()
         note = body.get("note")
     except (json.JSONDecodeError, ValueError):
-        pass  # No body is fine
+        pass
 
-    try:
+    approval = await mgr.get_approval(task_id)
+    if approval and approval["status"] == "pending":
         await mgr.reject(task_id, note=note)
-    except ValueError as exc:
-        raise web.HTTPNotFound(reason=str(exc)) from exc
+    else:
+        await store.update_task_status(task_id, TaskStatus.CANCELLED)
 
     return web.json_response({"ok": True})
 
