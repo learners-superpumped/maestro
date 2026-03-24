@@ -37,24 +37,41 @@ CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 
 CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    path TEXT NOT NULL,
+    task_id TEXT REFERENCES tasks(id),
+    workspace TEXT NOT NULL DEFAULT '_shared',
+    created_by TEXT NOT NULL DEFAULT 'human',
+    asset_type TEXT NOT NULL,
+    media_type TEXT,
     title TEXT NOT NULL,
     description TEXT,
     tags TEXT,
-    embedding_model TEXT,
+    content_json TEXT,
+    file_path TEXT,
+    file_size INTEGER,
+    embedding_model TEXT DEFAULT 'gemini-embedding-2-preview',
     embedded_at TEXT,
-    platforms_published TEXT,
+    ttl_days INTEGER,
+    expires_at TEXT,
+    archived INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS task_assets (
-    task_id TEXT NOT NULL REFERENCES tasks(id),
+CREATE TABLE IF NOT EXISTS asset_usage (
+    id TEXT PRIMARY KEY,
     asset_id TEXT NOT NULL REFERENCES assets(id),
-    role TEXT DEFAULT 'reference',
-    PRIMARY KEY (task_id, asset_id)
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    usage_type TEXT DEFAULT 'reference',
+    used_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_assets_workspace ON assets(workspace);
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
+CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived);
+CREATE INDEX IF NOT EXISTS idx_assets_expires ON assets(expires_at);
+CREATE INDEX IF NOT EXISTS idx_assets_task ON assets(task_id);
+CREATE INDEX IF NOT EXISTS idx_asset_usage_asset ON asset_usage(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_usage_task ON asset_usage(task_id);
 
 CREATE TABLE IF NOT EXISTS action_history (
     id TEXT PRIMARY KEY,

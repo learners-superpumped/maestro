@@ -15,6 +15,13 @@ from typing import Any, AsyncIterator, Optional
 
 import aiosqlite
 
+try:
+    import sqlite_vec
+
+    _HAS_SQLITE_VEC = True
+except ImportError:
+    _HAS_SQLITE_VEC = False
+
 from maestro.models import Task, TaskStatus
 
 # ---------------------------------------------------------------------------
@@ -96,13 +103,11 @@ def _row_to_asset(d: dict[str, Any]) -> dict[str, Any]:
     elif not d.get("tags"):
         d["tags"] = []
 
-    if d.get("platforms_published") and isinstance(d["platforms_published"], str):
+    if d.get("content_json") and isinstance(d["content_json"], str):
         try:
-            d["platforms_published"] = json.loads(d["platforms_published"])
+            d["content_json"] = json.loads(d["content_json"])
         except (json.JSONDecodeError, TypeError):
-            d["platforms_published"] = []
-    elif not d.get("platforms_published"):
-        d["platforms_published"] = []
+            pass  # Keep as raw string
 
     return d
 
@@ -146,11 +151,19 @@ class Store:
     @asynccontextmanager
     async def _conn(self) -> AsyncIterator[aiosqlite.Connection]:
         """Async context manager that yields a WAL-mode connection."""
-        async with aiosqlite.connect(self._db_path) as db:
-            db.row_factory = aiosqlite.Row
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA foreign_keys=ON")
+        db = await aiosqlite.connect(self._db_path)
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA foreign_keys=ON")
+        # Load sqlite-vec on every connection (if available)
+        if _HAS_SQLITE_VEC and hasattr(db._connection, "enable_load_extension"):
+            db._connection.enable_load_extension(True)
+            sqlite_vec.load(db._connection)
+            db._connection.enable_load_extension(False)
+        try:
             yield db
+        finally:
+            await db.close()
 
     # ------------------------------------------------------------------
     # Schema
@@ -163,6 +176,18 @@ class Store:
             await db.executescript(schema_sql)
             await db.commit()
         await self._migrate()
+        # Create vector table for embeddings (requires sqlite-vec extension)
+        try:
+            async with self._conn() as db:
+                await db.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS assets_vec USING vec0(
+                        asset_id TEXT PRIMARY KEY,
+                        embedding float[3072]
+                    )
+                """)
+                await db.commit()
+        except Exception:
+            pass  # sqlite-vec not available; vector search disabled
 
     async def _migrate(self) -> None:
         try:
@@ -180,6 +205,20 @@ class Store:
                 await db.execute(
                     "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)"
                 )
+                await db.commit()
+        except Exception:
+            pass
+
+        # Migrate old assets schema to new asset pipeline schema
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute("PRAGMA table_info(assets)")
+                columns = {row[1] for row in await cursor.fetchall()}
+                if "path" in columns:  # Old schema detection
+                    await db.execute("DROP TABLE IF EXISTS task_assets")
+                    await db.execute("DROP TABLE IF EXISTS assets")
+                    schema_sql = (pathlib.Path(__file__).parent / "schema.sql").read_text()
+                    await db.executescript(schema_sql)
                 await db.commit()
         except Exception:
             pass
@@ -388,29 +427,41 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO assets (
-                    id, type, path, title, description, tags,
-                    embedding_model, embedded_at, platforms_published,
+                    id, task_id, workspace, created_by, asset_type,
+                    media_type, title, description, tags, content_json,
+                    file_path, file_size, embedding_model, embedded_at,
+                    ttl_days, expires_at, archived,
                     created_at, updated_at
                 ) VALUES (
-                    :id, :type, :path, :title, :description, :tags,
-                    :embedding_model, :embedded_at, :platforms_published,
+                    :id, :task_id, :workspace, :created_by, :asset_type,
+                    :media_type, :title, :description, :tags, :content_json,
+                    :file_path, :file_size, :embedding_model, :embedded_at,
+                    :ttl_days, :expires_at, :archived,
                     :created_at, :updated_at
                 )
                 """,
                 {
                     "id": asset["id"],
-                    "type": asset["type"],
-                    "path": asset["path"],
+                    "task_id": asset.get("task_id"),
+                    "workspace": asset.get("workspace", "_shared"),
+                    "created_by": asset.get("created_by", "human"),
+                    "asset_type": asset["asset_type"],
+                    "media_type": asset.get("media_type"),
                     "title": asset["title"],
                     "description": asset.get("description"),
                     "tags": json.dumps(asset["tags"]) if asset.get("tags") else None,
-                    "embedding_model": asset.get("embedding_model"),
-                    "embedded_at": asset.get("embedded_at"),
-                    "platforms_published": (
-                        json.dumps(asset["platforms_published"])
-                        if asset.get("platforms_published")
-                        else None
+                    "content_json": (
+                        json.dumps(asset["content_json"])
+                        if asset.get("content_json") and not isinstance(asset["content_json"], str)
+                        else asset.get("content_json")
                     ),
+                    "file_path": asset.get("file_path"),
+                    "file_size": asset.get("file_size"),
+                    "embedding_model": asset.get("embedding_model", "gemini-embedding-2-preview"),
+                    "embedded_at": asset.get("embedded_at"),
+                    "ttl_days": asset.get("ttl_days"),
+                    "expires_at": asset.get("expires_at"),
+                    "archived": asset.get("archived", 0),
                     "created_at": asset.get("created_at", now),
                     "updated_at": asset.get("updated_at", now),
                 },
@@ -436,7 +487,7 @@ class Store:
         params: list[Any] = []
 
         if asset_type is not None:
-            clauses.append("type = ?")
+            clauses.append("asset_type = ?")
             params.append(asset_type)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
@@ -465,11 +516,17 @@ class Store:
             "title",
             "description",
             "tags",
+            "content_json",
+            "file_path",
+            "file_size",
             "embedding_model",
             "embedded_at",
-            "platforms_published",
-            "type",
-            "path",
+            "asset_type",
+            "media_type",
+            "workspace",
+            "ttl_days",
+            "expires_at",
+            "archived",
         }
         params: dict[str, Any] = {"updated_at": _now_iso(), "id": asset_id}
         set_clauses = ["updated_at = :updated_at"]
@@ -477,7 +534,9 @@ class Store:
         for key, value in kwargs.items():
             if key not in allowed:
                 raise ValueError(f"update_asset: unknown field '{key}'")
-            if key in ("tags", "platforms_published") and isinstance(value, list):
+            if key == "tags" and isinstance(value, list):
+                value = json.dumps(value)
+            if key == "content_json" and not isinstance(value, str) and value is not None:
                 value = json.dumps(value)
             params[key] = value
             set_clauses.append(f"{key} = :{key}")
