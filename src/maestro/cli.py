@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import pathlib
 import shutil
@@ -855,19 +856,28 @@ def asset() -> None:
     """Manage assets."""
 
 
-@asset.command("add")
-@click.argument("path")
+@asset.command("register")
 @click.option("--title", required=True, help="Asset title")
-@click.option("--tags", default=None, help="Comma-separated tags")
 @click.option(
-    "--type", "asset_type", default=None, help="Asset type (auto-detected if omitted)"
+    "--type", "asset_type", required=True,
+    help="Asset type: post, engage, research, image, video, audio, document",
 )
+@click.option("--file", "file_path", type=click.Path(exists=True), help="Path to file")
+@click.option("--content", "content_json", default=None, help="JSON string for text content")
+@click.option("--workspace", default=None, help="Workspace (default: _shared)")
+@click.option("--tags", default=None, help="Comma-separated tags")
+@click.option("--ttl-days", type=int, default=None, help="TTL in days")
+@click.option("--permanent", is_flag=True, help="No expiry (ttl=null)")
 @click.option("--description", default=None, help="Asset description")
-def asset_add(
-    path: str,
+def asset_register(
     title: str,
+    asset_type: str,
+    file_path: str | None,
+    content_json: str | None,
+    workspace: str | None,
     tags: str | None,
-    asset_type: str | None,
+    ttl_days: int | None,
+    permanent: bool,
     description: str | None,
 ) -> None:
     """Register a new asset."""
@@ -882,29 +892,101 @@ def asset_add(
 
     cfg = load_config(config_file)
     store = Store(cfg.project.store_path)
-    mgr = AssetManager(store, _project_root() / "assets")
 
+    # Parse content_json if provided
+    parsed_content = None
+    if content_json:
+        try:
+            parsed_content = json.loads(content_json)
+        except json.JSONDecodeError as exc:
+            click.echo(f"Error: invalid JSON in --content: {exc}", err=True)
+            sys.exit(1)
+
+    # Parse tags
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
-    asset_id = asyncio.run(
-        mgr.register_asset(
-            path=path,
-            title=title,
+    # permanent overrides ttl
+    if permanent:
+        ttl_days = None
+
+    # workspace default
+    if not workspace:
+        workspace = "_shared"
+
+    async def _run() -> None:
+        await store.init_db()
+        am = AssetManager(store, None, cfg, pathlib.Path(cfg.project.store_path).parent)
+        a = await am.register_asset(
             asset_type=asset_type,
+            title=title,
+            content_json=parsed_content,
+            file_path=file_path,
             tags=tag_list,
             description=description,
+            ttl_days=ttl_days,
+            workspace=workspace,
+            created_by="human",
         )
-    )
-    click.echo(f"Asset registered: {asset_id}")
-    click.echo(f"  Title: {title}")
-    click.echo(f"  Path:  {path}")
+        click.echo(f"Registered asset: {a['id']} — {a['title']}")
+
+    asyncio.run(_run())
 
 
 @asset.command("list")
-@click.option("--type", "asset_type", default=None, help="Filter by type")
+@click.option("--type", "asset_type", default=None, help="Filter by asset_type")
+@click.option("--workspace", default=None, help="Filter by workspace")
 @click.option("--tags", default=None, help="Filter by comma-separated tags")
-def asset_list(asset_type: str | None, tags: str | None) -> None:
+def asset_list(asset_type: str | None, workspace: str | None, tags: str | None) -> None:
     """List assets."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    async def _run() -> None:
+        await store.init_db()
+        assets = await store.list_assets_filtered(
+            asset_type=asset_type,
+            workspace=workspace,
+            tags=tag_list,
+            limit=200,
+        )
+        if not assets:
+            click.echo("No assets found.")
+            return
+
+        click.echo(f"{'ID':<14} {'TYPE':<12} {'WORKSPACE':<16} {'CREATED_BY':<12} {'TITLE'}")
+        click.echo("-" * 80)
+        for a in assets:
+            click.echo(
+                f"{a['id']:<14} {a.get('asset_type', ''):<12}"
+                f" {a.get('workspace', ''):<16} {a.get('created_by', ''):<12}"
+                f" {a.get('title', '')}"
+            )
+
+    asyncio.run(_run())
+
+
+@asset.command("search")
+@click.argument("query")
+@click.option("--workspace", default=None, help="Filter by workspace")
+@click.option("--type", "asset_type", default=None, help="Filter by asset_type")
+@click.option("--limit", default=10, type=int, help="Max results")
+def asset_search_cmd(
+    query: str,
+    workspace: str | None,
+    asset_type: str | None,
+    limit: int,
+) -> None:
+    """Search assets semantically."""
     config_file = _config_path()
     if not config_file.exists():
         click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
@@ -916,29 +998,29 @@ def asset_list(asset_type: str | None, tags: str | None) -> None:
 
     cfg = load_config(config_file)
     store = Store(cfg.project.store_path)
-    mgr = AssetManager(store, _project_root() / "assets")
 
-    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+    async def _run() -> None:
+        await store.init_db()
+        am = AssetManager(store, None, cfg, pathlib.Path(cfg.project.store_path).parent)
+        results = await am.search(
+            query=query,
+            workspace=workspace,
+            asset_type=asset_type,
+            limit=limit,
+        )
+        if not results:
+            click.echo("No assets found.")
+            return
+        for r in results:
+            click.echo(f"  {r['id']}  [{r.get('asset_type', '')}]  {r.get('title', '')}")
 
-    assets = asyncio.run(mgr.list_assets(asset_type=asset_type, tags=tag_list))
-
-    if not assets:
-        click.echo("No assets found.")
-        return
-
-    click.echo(f"{'ID':<14} {'TYPE':<10} {'TITLE':<30} {'TAGS'}")
-    click.echo("-" * 70)
-    for a in assets:
-        tag_str = ", ".join(a.get("tags") or [])
-        click.echo(f"{a['id']:<14} {a['type']:<10} {a['title']:<30} {tag_str}")
+    asyncio.run(_run())
 
 
-@asset.command("search")
-@click.argument("query")
-@click.option("--type", "asset_type", default=None, help="Filter by type")
-@click.option("--limit", default=10, type=int, help="Max results")
-def asset_search(query: str, asset_type: str | None, limit: int) -> None:
-    """Search assets by text query."""
+@asset.command("delete")
+@click.argument("asset_id")
+def asset_delete(asset_id: str) -> None:
+    """Delete an asset permanently."""
     config_file = _config_path()
     if not config_file.exists():
         click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
@@ -950,32 +1032,71 @@ def asset_search(query: str, asset_type: str | None, limit: int) -> None:
     cfg = load_config(config_file)
     store = Store(cfg.project.store_path)
 
-    # Simple text search — same logic as mcp_embedding
-    async def _search() -> list[dict]:
-        all_assets = await store.list_assets(asset_type=asset_type)
-        query_lower = query.lower()
-        matches = []
-        for a in all_assets:
-            title = (a.get("title") or "").lower()
-            desc = (a.get("description") or "").lower()
-            tag_text = " ".join(a.get("tags") or []).lower()
-            if query_lower in title or query_lower in desc or query_lower in tag_text:
-                matches.append(a)
-            if len(matches) >= limit:
-                break
-        return matches
+    async def _run() -> None:
+        await store.init_db()
+        a = await store.get_asset(asset_id)
+        if a is None:
+            click.echo(f"Asset not found: {asset_id}", err=True)
+            raise SystemExit(1)
+        async with store._conn() as db:
+            await db.execute("DELETE FROM assets_vec WHERE asset_id = ?", (asset_id,))
+            await db.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
+            await db.commit()
+        click.echo(f"Deleted asset: {asset_id}")
 
-    results = asyncio.run(_search())
+    asyncio.run(_run())
 
-    if not results:
-        click.echo(f"No assets matching '{query}'.")
-        return
 
-    click.echo(f"{'ID':<14} {'TYPE':<10} {'TITLE':<30} {'TAGS'}")
-    click.echo("-" * 70)
-    for a in results:
-        tag_str = ", ".join(a.get("tags") or [])
-        click.echo(f"{a['id']:<14} {a['type']:<10} {a['title']:<30} {tag_str}")
+@asset.command("archive")
+@click.argument("asset_id")
+def asset_archive(asset_id: str) -> None:
+    """Soft-delete (archive) an asset."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+
+    async def _run() -> None:
+        await store.init_db()
+        a = await store.get_asset(asset_id)
+        if a is None:
+            click.echo(f"Asset not found: {asset_id}", err=True)
+            raise SystemExit(1)
+        await store.update_asset(asset_id, archived=1)
+        click.echo(f"Archived asset: {asset_id}")
+
+    asyncio.run(_run())
+
+
+@asset.command("cleanup")
+@click.option("--grace-days", default=30, type=int, help="Grace period before purging archives (default: 30)")
+def asset_cleanup(grace_days: int) -> None:
+    """Archive expired assets and purge old archives."""
+    config_file = _config_path()
+    if not config_file.exists():
+        click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    from maestro.config import load_config
+    from maestro.store import Store
+
+    cfg = load_config(config_file)
+    store = Store(cfg.project.store_path)
+
+    async def _run() -> None:
+        await store.init_db()
+        archived = await store.archive_expired_assets()
+        purged = await store.purge_archived_assets(grace_days=grace_days)
+        click.echo(f"Archived {archived} expired asset(s).")
+        click.echo(f"Purged {purged} old archived asset(s) (grace={grace_days}d).")
+
+    asyncio.run(_run())
 
 
 main.add_command(asset)
