@@ -1020,6 +1020,63 @@ class Store:
             )
             await db.commit()
 
+    async def create_schedule(
+        self, *, name: str, workspace: str, task_type: str,
+        cron: str | None = None, interval_ms: int | None = None,
+        approval_level: int = 0,
+    ) -> dict:
+        sid = str(uuid.uuid4())[:8]
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO schedules
+                   (id, name, workspace, task_type, cron, interval_ms,
+                    approval_level, enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (sid, name, workspace, task_type, cron, interval_ms,
+                 approval_level, now, now),
+            )
+            await db.commit()
+        return await self.get_schedule(name)
+
+    async def get_schedule(self, name: str) -> dict | None:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute("SELECT * FROM schedules WHERE name = ?", (name,))
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def list_schedules(self, *, enabled_only: bool = False) -> list[dict]:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            sql = "SELECT * FROM schedules"
+            if enabled_only:
+                sql += " WHERE enabled = 1"
+            sql += " ORDER BY name"
+            cur = await db.execute(sql)
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def update_schedule(self, name: str, **fields) -> None:
+        sets, params = [], []
+        for key, val in fields.items():
+            if key == "enabled":
+                val = 1 if val else 0
+            sets.append(f"{key} = ?")
+            params.append(val)
+        sets.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(name)
+        async with self._conn() as db:
+            await db.execute(
+                f"UPDATE schedules SET {', '.join(sets)} WHERE name = ?", params
+            )
+            await db.commit()
+
+    async def delete_schedule(self, name: str) -> None:
+        async with self._conn() as db:
+            await db.execute("DELETE FROM schedules WHERE name = ?", (name,))
+            await db.commit()
+
     async def increment_review_count(self, task_id: str) -> None:
         async with self._conn() as db:
             await db.execute(
@@ -1086,5 +1143,72 @@ class Store:
                     updated_at = excluded.updated_at
                 """,
                 (date, amount, now),
+            )
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # auto_extract_rules
+    # ------------------------------------------------------------------
+
+    async def create_extract_rule(
+        self, *, workspace: str, task_type: str, asset_type: str,
+        title_field: str | None = None, iterate: str | None = None,
+        tags_from: list[str] | None = None,
+    ) -> dict:
+        rid = str(uuid.uuid4())[:8]
+        now = datetime.now(timezone.utc).isoformat()
+        tags_json = json.dumps(tags_from) if tags_from else None
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO auto_extract_rules
+                   (id, workspace, task_type, asset_type, title_field, iterate, tags_from, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(workspace, task_type) DO UPDATE SET
+                     asset_type=excluded.asset_type, title_field=excluded.title_field,
+                     iterate=excluded.iterate, tags_from=excluded.tags_from,
+                     updated_at=excluded.updated_at""",
+                (rid, workspace, task_type, asset_type, title_field, iterate, tags_json, now, now),
+            )
+            await db.commit()
+        return await self.get_extract_rule(workspace, task_type)
+
+    async def get_extract_rule(self, workspace: str, task_type: str) -> dict | None:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
+                (workspace, task_type),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            d = dict(row)
+            if d["tags_from"]:
+                d["tags_from"] = json.loads(d["tags_from"])
+            return d
+
+    async def list_extract_rules(self, *, workspace: str | None = None) -> list[dict]:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            if workspace:
+                cur = await db.execute(
+                    "SELECT * FROM auto_extract_rules WHERE workspace = ? ORDER BY task_type",
+                    (workspace,),
+                )
+            else:
+                cur = await db.execute(
+                    "SELECT * FROM auto_extract_rules ORDER BY workspace, task_type"
+                )
+            rows = [dict(r) for r in await cur.fetchall()]
+            for r in rows:
+                if r["tags_from"]:
+                    r["tags_from"] = json.loads(r["tags_from"])
+            return rows
+
+    async def delete_extract_rule(self, workspace: str, task_type: str) -> None:
+        async with self._conn() as db:
+            await db.execute(
+                "DELETE FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
+                (workspace, task_type),
             )
             await db.commit()
