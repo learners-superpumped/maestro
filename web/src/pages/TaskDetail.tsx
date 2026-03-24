@@ -31,6 +31,7 @@ import {
   X,
   PenLine,
   AlertTriangle,
+  Play,
 } from "lucide-react"
 import Markdown from "react-markdown"
 import { useQuery } from "@tanstack/react-query"
@@ -237,41 +238,62 @@ export function TaskDetail() {
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-2 flex-wrap">
-        {canApprove && (
-          <Button
-            size="sm"
-            onClick={() => setApproveOpen(true)}
-            className="h-[28px] text-[13px] rounded bg-[#4dab9a] hover:bg-[#3d9b8b] text-white px-3"
-          >
-            <Check className="h-3 w-3 mr-1" />
-            Approve
-          </Button>
-        )}
-        {canReject && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setRejectOpen(true)}
-            className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#eb5757] hover:bg-red-50 px-3"
-          >
-            <X className="h-3 w-3 mr-1" />
-            Reject
-          </Button>
-        )}
-        {canRevise && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setReviseOpen(true)}
-            className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
-          >
-            <PenLine className="h-3 w-3 mr-1" />
-            Revise
-          </Button>
-        )}
-      </div>
+      {/* Action buttons — context-dependent labels */}
+      {(canApprove || canReject || canRevise) && (
+        <div className="flex gap-2 flex-wrap">
+          {task.status === "pending" && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setApproveOpen(true)}
+                className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
+              >
+                <Play className="h-3 w-3 mr-1" />
+                Start
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setRejectOpen(true)}
+                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Cancel
+              </Button>
+            </>
+          )}
+          {task.status === "paused" && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setApproveOpen(true)}
+                className="h-[28px] text-[13px] rounded bg-[#4dab9a] hover:bg-[#3d9b8b] text-white px-3"
+              >
+                <Check className="h-3 w-3 mr-1" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setReviseOpen(true)}
+                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
+              >
+                <PenLine className="h-3 w-3 mr-1" />
+                Revise
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setRejectOpen(true)}
+                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#eb5757] hover:bg-red-50 px-3"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Reject
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Status-specific primary content */}
       {task.status === "running" && (
@@ -305,17 +327,25 @@ export function TaskDetail() {
         <ResultCard task={task} defaultExpanded={true} />
       )}
 
-      {task.status === "pending" && task.instruction && (
-        <Card className="bg-white border border-[#e8e5df] rounded">
-          <CardHeader>
-            <CardTitle className="text-[14px] font-semibold text-[#37352f]">Instruction</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="prose max-w-none">
-              <Markdown>{task.instruction}</Markdown>
-            </div>
-          </CardContent>
-        </Card>
+      {task.status === "pending" && (
+        <>
+          <div className="flex items-center gap-2 px-4 py-3 bg-[#2383e2]/5 border border-[#2383e2]/15 rounded text-[14px] text-[#787774]">
+            <Play className="h-4 w-4 text-[#2383e2] shrink-0" />
+            <span>This task is waiting for you to start it. Click <strong className="text-[#37352f]">Start</strong> to let the agent begin working.</span>
+          </div>
+          {task.instruction && (
+            <Card className="bg-white border border-[#e8e5df] rounded">
+              <CardHeader>
+                <CardTitle className="text-[14px] font-semibold text-[#37352f]">Instruction</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose max-w-none">
+                  <Markdown>{task.instruction}</Markdown>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Collapsible sections with consistent spacing */}
@@ -413,20 +443,29 @@ export function TaskDetail() {
         )}
       </div>
 
-      {/* Approve dialog */}
+      {/* Approve/Start dialog */}
       <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
         <DialogContent className="bg-white border-[#e8e5df]">
           <DialogHeader>
-            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Approve Task</DialogTitle>
+            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">
+              {task.status === "pending" ? "Start Task" : "Approve Task"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
+            {task.status === "pending" && (
+              <p className="text-[13px] text-[#787774]">
+                The agent will begin working on this task once you confirm.
+              </p>
+            )}
             <div className="space-y-1">
-              <Label className="text-[12px] text-[#9b9a97]">Note (optional)</Label>
+              <Label className="text-[12px] text-[#9b9a97]">
+                {task.status === "pending" ? "Instructions for the agent (optional)" : "Note (optional)"}
+              </Label>
               <Textarea
                 value={approveNote}
                 onChange={(e) => setApproveNote(e.target.value)}
                 className="bg-white border-[#e8e5df] text-[#37352f]"
-                placeholder="Instructions for the agent..."
+                placeholder={task.status === "pending" ? "Any specific instructions..." : "Approval note..."}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -440,10 +479,10 @@ export function TaskDetail() {
                   setApproveNote("")
                 }}
                 disabled={approve.isPending}
-                className="bg-[#4dab9a] hover:bg-[#3d9b8b] text-white"
+                className={task.status === "pending" ? "bg-[#2383e2] hover:bg-[#1a73cc] text-white" : "bg-[#4dab9a] hover:bg-[#3d9b8b] text-white"}
               >
                 {approve.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                Approve
+                {task.status === "pending" ? "Start" : "Approve"}
               </Button>
             </div>
           </div>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Check, X, PenLine, ExternalLink, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react"
+import { Check, X, PenLine, Play, ExternalLink, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "@/api/client"
 
@@ -85,7 +85,19 @@ function ApprovalCard({ task }: { task: any }) {
             <span className="text-[12px] text-[#9b9a97] shrink-0">{task.workspace}</span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {task.status !== "failed" && (
+            {task.status === "pending" && (
+              <>
+                <Button size="sm" onClick={() => { setDialogType("approve"); setNote("") }}
+                  className="bg-[#2383e2] hover:bg-[#1a73cc] text-white h-[28px] text-[12px] rounded px-2.5">
+                  <Play className="h-3 w-3 mr-1" /> Start
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => { setDialogType("reject"); setNote("") }}
+                  className="border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] h-[28px] text-[12px] rounded px-2.5">
+                  <X className="h-3 w-3 mr-1" /> Cancel
+                </Button>
+              </>
+            )}
+            {task.status === "paused" && (
               <>
                 <Button size="sm" onClick={() => { setDialogType("approve"); setNote("") }}
                   className="bg-[#4dab9a] hover:bg-[#3d9b8b] text-white h-[28px] text-[12px] rounded px-2.5">
