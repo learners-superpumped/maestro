@@ -31,7 +31,6 @@ import {
 
 const taskSchema = z.object({
   workspace: z.string().min(1, "Required"),
-  type: z.string().min(1, "Required"),
   title: z.string().min(1, "Required"),
   instruction: z.string().min(1, "Required"),
   priority: z.number().int().min(0).max(100),
@@ -43,23 +42,16 @@ const taskSchema = z.object({
 })
 
 const APPROVAL_LEVELS = [
-  { value: "0", label: "Auto (0)" },
-  { value: "1", label: "Post-notify (1)" },
-  { value: "2", label: "Pre-approve (2)" },
-]
-
-const TASK_TYPES = [
-  { value: "claude", label: "Claude (AI Agent)" },
-  { value: "content_creation", label: "Content Creation" },
-  { value: "content_strategy", label: "Content Strategy" },
-  { value: "planning", label: "Planning" },
-  { value: "review", label: "Review" },
+  { value: "0", label: "Auto-run", desc: "Execute immediately without approval" },
+  { value: "1", label: "Notify after", desc: "Execute first, then notify you" },
+  { value: "2", label: "Require approval", desc: "Ask you before executing" },
 ]
 
 const PRIORITY_PRESETS = [
-  { value: "1", label: "High (1)" },
-  { value: "3", label: "Medium (3)" },
-  { value: "5", label: "Low (5)" },
+  { value: "1", label: "Urgent", desc: "Run before everything else" },
+  { value: "2", label: "High", desc: "Run soon" },
+  { value: "3", label: "Normal", desc: "Default priority" },
+  { value: "5", label: "Low", desc: "Run when nothing else is queued" },
 ]
 
 type TaskFormValues = z.infer<typeof taskSchema>
@@ -96,7 +88,7 @@ export function Tasks() {
   const onSubmit = handleSubmit(async (values) => {
     const payload: any = {
       workspace: values.workspace,
-      type: values.type,
+      type: "claude",
       title: values.title,
       instruction: values.instruction,
       priority: values.priority,
@@ -142,43 +134,23 @@ export function Tasks() {
               <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Create Task</DialogTitle>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Select onValueChange={(v) => setValue("workspace", v)}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                      <SelectValue placeholder="Select workspace" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {workspaces.map((ws: any) => (
-                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {ws.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.workspace && (
-                    <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Type *</Label>
-                  <Select defaultValue="claude" onValueChange={(v) => setValue("type", v)}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {TASK_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.type && (
-                    <p className="text-[12px] text-[#eb5757]">{errors.type.message}</p>
-                  )}
-                </div>
+              <div className="space-y-1">
+                <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
+                <Select onValueChange={(v) => setValue("workspace", v)}>
+                  <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
+                    <SelectValue placeholder="Select workspace" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-[#e8e5df]">
+                    {workspaces.map((ws: any) => (
+                      <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                        {ws.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.workspace && (
+                  <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -210,28 +182,31 @@ export function Tasks() {
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
+                    <SelectContent className="bg-white border-[#e8e5df] min-w-[220px]">
                       {PRIORITY_PRESETS.map((p) => (
-                        <SelectItem key={p.value} value={p.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {p.label}
+                        <SelectItem key={p.value} value={p.value} className="text-[13px] hover:bg-[#f7f6f3]">
+                          <div>
+                            <span className="text-[#37352f]">{p.label}</span>
+                            <span className="text-[11px] text-[#9b9a97] ml-2">{p.desc}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Approval Level</Label>
-                  <Select
-                    defaultValue="2"
-                    onValueChange={(v) => setValue("approval_level", Number(v))}
-                  >
+                  <Label className="text-[12px] text-[#9b9a97]">When to run</Label>
+                  <Select defaultValue="2" onValueChange={(v) => setValue("approval_level", Number(v))}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border border-[#e8e5df]">
+                    <SelectContent className="bg-white border-[#e8e5df] min-w-[260px]">
                       {APPROVAL_LEVELS.map((level) => (
-                        <SelectItem key={level.value} value={level.value} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
-                          {level.label}
+                        <SelectItem key={level.value} value={level.value} className="text-[13px] hover:bg-[#f7f6f3]">
+                          <div>
+                            <span className="text-[#37352f]">{level.label}</span>
+                            <span className="text-[11px] text-[#9b9a97] ml-2">{level.desc}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
