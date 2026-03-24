@@ -64,6 +64,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ grace_days: graceDays }),
       }),
+    search: (data: { query: string; workspace?: string; asset_type?: string; limit?: number }) =>
+      request<any>("/api/internal/asset/search", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   schedules: {
@@ -99,5 +104,16 @@ export const api = {
 
   approvals: {
     pending: () => request<any>("/api/internal/approvals/pending"),
+  },
+
+  workspaces: {
+    list: () => request<any>("/api/internal/workspaces"),
+    create: (data: { name: string; template?: string }) =>
+      request<any>("/api/internal/workspace", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    validate: (name: string) =>
+      request<any>(`/api/internal/workspace/${name}/validate`),
   },
 }
