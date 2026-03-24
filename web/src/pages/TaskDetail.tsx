@@ -300,9 +300,9 @@ export function TaskDetail() {
         <ReviewSummaryCard approvalInfo={approvalInfo} />
       )}
 
-      {/* Result — shown for paused/completed/failed, default expanded for paused/completed */}
+      {/* Result — always expanded when it exists so the user sees agent output immediately */}
       {(task.result_json != null || task.result != null) && (
-        <ResultCard task={task} defaultExpanded={task.status === "paused" || task.status === "completed"} />
+        <ResultCard task={task} defaultExpanded={true} />
       )}
 
       {task.status === "pending" && task.instruction && (
@@ -318,97 +318,100 @@ export function TaskDetail() {
         </Card>
       )}
 
-      {/* Children */}
-      {children.length > 0 && (
-        <CollapsibleSection title="Children" count={children.length} defaultOpen>
-          <div className="space-y-2 pt-2">
-            {children.map((child: any) => {
-              const review = child.type === "review" ? parseReviewVerdict(child.result_json) : null
-              return (
-                <div
-                  key={child.id}
-                  className="flex items-start gap-3 px-3 py-2.5 rounded bg-[#f7f6f3] hover:bg-[#ebebea] cursor-pointer transition-colors"
-                  onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
-                >
-                  <StatusBadge status={child.status} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] text-[#37352f]">{child.title}</span>
-                      <TaskTypeBadge type={child.type} />
-                      {child.cost_usd > 0 && (
-                        <span className="text-[12px] text-[#9b9a97] font-mono">${Number(child.cost_usd).toFixed(4)}</span>
-                      )}
-                    </div>
-                    {review?.verdict && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {review.verdict === "pass" ? (
-                          <CheckCircle2 className="h-3 w-3 text-[#4dab9a]" />
-                        ) : (
-                          <XCircle className="h-3 w-3 text-[#eb5757]" />
-                        )}
-                        <span className={cn(
-                          "text-[12px]",
-                          review.verdict === "pass" ? "text-[#4dab9a]" : "text-[#eb5757]"
-                        )}>
-                          {review.verdict === "pass" ? "Passed" : "Failed"}
-                        </span>
-                        {review.summary && (
-                          <span className="text-[12px] text-[#9b9a97] truncate max-w-md">
-                            — {review.summary}
-                          </span>
+      {/* Collapsible sections with consistent spacing */}
+      <div className="space-y-3">
+        {/* Children */}
+        {children.length > 0 && (
+          <CollapsibleSection title="Children" count={children.length} defaultOpen>
+            <div className="space-y-2 pt-2">
+              {children.map((child: any) => {
+                const review = child.type === "review" ? parseReviewVerdict(child.result_json) : null
+                return (
+                  <div
+                    key={child.id}
+                    className="flex items-start gap-3 px-3 py-2.5 rounded bg-[#f7f6f3] hover:bg-[#ebebea] cursor-pointer transition-colors"
+                    onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
+                  >
+                    <StatusBadge status={child.status} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] text-[#37352f]">{child.title}</span>
+                        <TaskTypeBadge type={child.type} />
+                        {child.cost_usd > 0 && (
+                          <span className="text-[12px] text-[#9b9a97] font-mono">${Number(child.cost_usd).toFixed(4)}</span>
                         )}
                       </div>
-                    )}
+                      {review?.verdict && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {review.verdict === "pass" ? (
+                            <CheckCircle2 className="h-3 w-3 text-[#4dab9a]" />
+                          ) : (
+                            <XCircle className="h-3 w-3 text-[#eb5757]" />
+                          )}
+                          <span className={cn(
+                            "text-[12px]",
+                            review.verdict === "pass" ? "text-[#4dab9a]" : "text-[#eb5757]"
+                          )}>
+                            {review.verdict === "pass" ? "Passed" : "Failed"}
+                          </span>
+                          {review.summary && (
+                            <span className="text-[12px] text-[#9b9a97] truncate max-w-md">
+                              — {review.summary}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        </CollapsibleSection>
-      )}
+                )
+              })}
+            </div>
+          </CollapsibleSection>
+        )}
 
-      {/* Agent Log (if not already shown as primary content above) */}
-      {task.status !== "running" && task.status !== "failed" && (
-        <CollapsibleSection title="Agent Log">
+        {/* Activity — open by default so users see the timeline immediately */}
+        <CollapsibleSection title="Activity" defaultOpen={true}>
           <div className="pt-2">
-            <AgentLogPanel taskId={id} taskStatus={task.status} />
+            <ActivityTimeline taskId={id} />
           </div>
         </CollapsibleSection>
-      )}
 
-      {/* Activity */}
-      <CollapsibleSection title="Activity">
-        <div className="pt-2">
-          <ActivityTimeline taskId={id} />
-        </div>
-      </CollapsibleSection>
+        {/* Agent Log (if not already shown as primary content above) */}
+        {task.status !== "running" && task.status !== "failed" && (
+          <CollapsibleSection title="Agent Log">
+            <div className="pt-2">
+              <AgentLogPanel taskId={id} taskStatus={task.status} />
+            </div>
+          </CollapsibleSection>
+        )}
 
-      {/* Properties */}
-      <CollapsibleSection title="Properties">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
-          <Field label="Workspace" value={task.workspace} />
-          <Field label="Type" value={getTaskTypeLabel(task.type)} />
-          <Field label="Status" value={task.status} />
-          <Field label="Priority" value={task.priority} />
-          <Field label="Approval Level" value={task.approval_level} />
-          <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(6)}` : undefined} />
-          <Field label="Created At" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
-          <Field label="Updated At" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
-          <Field label="Created By" value={task.created_by} mono />
-          <Field label="Claimed By" value={task.claimed_by} mono />
-          <Field label="Attempt" value={task.max_retries ? `${task.attempt ?? 0}/${task.max_retries}` : undefined} />
-          <Field label="Reviews" value={task.review_count || undefined} />
-        </div>
-      </CollapsibleSection>
-
-      {/* Instruction (if not shown as primary) */}
-      {task.status !== "pending" && task.instruction && (
-        <CollapsibleSection title="Instruction">
-          <div className="prose max-w-none pt-2">
-            <Markdown>{task.instruction}</Markdown>
+        {/* Properties */}
+        <CollapsibleSection title="Properties">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
+            <Field label="Workspace" value={task.workspace} />
+            <Field label="Type" value={getTaskTypeLabel(task.type)} />
+            <Field label="Status" value={task.status} />
+            <Field label="Priority" value={task.priority} />
+            <Field label="Approval Level" value={task.approval_level} />
+            <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(6)}` : undefined} />
+            <Field label="Created At" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
+            <Field label="Updated At" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
+            <Field label="Created By" value={task.created_by} mono />
+            <Field label="Claimed By" value={task.claimed_by} mono />
+            <Field label="Attempt" value={task.max_retries ? `${task.attempt ?? 0}/${task.max_retries}` : undefined} />
+            <Field label="Reviews" value={task.review_count || undefined} />
           </div>
         </CollapsibleSection>
-      )}
+
+        {/* Instruction (if not shown as primary) */}
+        {task.status !== "pending" && task.instruction && (
+          <CollapsibleSection title="Instruction">
+            <div className="prose max-w-none pt-2">
+              <Markdown>{task.instruction}</Markdown>
+            </div>
+          </CollapsibleSection>
+        )}
+      </div>
 
       {/* Approve dialog */}
       <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
