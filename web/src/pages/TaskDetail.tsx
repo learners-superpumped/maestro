@@ -257,7 +257,6 @@ export function TaskDetail() {
                     priority: task.priority,
                     approval_level: task.approval_level,
                   })
-                  // Dismiss the old failed task
                   await api.tasks.dismiss(id)
                   navigate({ to: "/tasks" })
                 }}
@@ -269,11 +268,10 @@ export function TaskDetail() {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setRejectOpen(true)}
-                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
+                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
               >
-                <X className="h-3 w-3 mr-1" />
                 Dismiss
               </Button>
             </>
@@ -290,11 +288,10 @@ export function TaskDetail() {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setRejectOpen(true)}
-                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
+                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
               >
-                <X className="h-3 w-3 mr-1" />
                 Cancel
               </Button>
             </>
@@ -304,27 +301,25 @@ export function TaskDetail() {
               <Button
                 size="sm"
                 onClick={() => setApproveOpen(true)}
-                className="h-[28px] text-[13px] rounded bg-[#4dab9a] hover:bg-[#3d9b8b] text-white px-3"
+                className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
               >
                 <Check className="h-3 w-3 mr-1" />
                 Approve
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setReviseOpen(true)}
-                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
+                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
               >
-                <PenLine className="h-3 w-3 mr-1" />
                 Revise
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setRejectOpen(true)}
-                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#eb5757] hover:bg-red-50 px-3"
+                className="h-[28px] text-[13px] text-[#eb5757] hover:bg-red-50 px-3"
               >
-                <X className="h-3 w-3 mr-1" />
                 Reject
               </Button>
             </>
@@ -366,10 +361,9 @@ export function TaskDetail() {
 
       {task.status === "pending" && (
         <>
-          <div className="flex items-center gap-2 px-4 py-3 bg-[#2383e2]/5 border border-[#2383e2]/15 rounded text-[14px] text-[#787774]">
-            <Play className="h-4 w-4 text-[#2383e2] shrink-0" />
-            <span>This task is waiting for you to start it. Click <strong className="text-[#37352f]">Start</strong> to let the agent begin working.</span>
-          </div>
+          <p className="text-[14px] text-[#9b9a97]">
+            Waiting to start. Click <strong className="text-[#37352f]">Start</strong> to let the agent begin.
+          </p>
           {task.instruction && (
             <Card className="bg-white border border-[#e8e5df] rounded">
               <CardHeader>
