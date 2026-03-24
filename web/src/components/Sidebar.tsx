@@ -6,6 +6,7 @@ import {
   Clock,
   GitBranch,
   ClipboardCheck,
+  FolderOpen,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -19,6 +20,7 @@ const navItems = [
   { icon: Package, label: "Assets", to: "/assets" },
   { icon: Clock, label: "Schedules", to: "/schedules" },
   { icon: GitBranch, label: "Rules", to: "/rules" },
+  { icon: FolderOpen, label: "Workspaces", to: "/workspaces" },
 ]
 
 interface SidebarProps {
