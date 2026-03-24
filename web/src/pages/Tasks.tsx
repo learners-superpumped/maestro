@@ -37,8 +37,6 @@ const taskSchema = z.object({
   approval_level: z.number().int().min(0).max(2),
   budget_usd: z.number().min(0).optional(),
   max_retries: z.number().int().min(0).optional(),
-  parent_task_id: z.string().optional(),
-  goal_id: z.string().optional(),
 })
 
 const APPROVAL_LEVELS = [
@@ -96,8 +94,6 @@ export function Tasks() {
     }
     if (values.budget_usd) payload.budget_usd = values.budget_usd
     if (values.max_retries) payload.max_retries = values.max_retries
-    if (values.parent_task_id?.trim()) payload.parent_task_id = values.parent_task_id.trim()
-    if (values.goal_id?.trim()) payload.goal_id = values.goal_id.trim()
     await createTask.mutateAsync(payload)
     reset()
     setOpen(false)
@@ -185,39 +181,6 @@ export function Tasks() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Priority</Label>
-                  <Select defaultValue="3" onValueChange={(v) => setValue("priority", Number(v))}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {PRIORITY_PRESETS.map((p) => (
-                        <SelectItem key={p.value} value={p.value} className="text-[13px] text-[#37352f] hover:bg-[#f7f6f3]">
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">When to run</Label>
-                  <Select defaultValue="2" onValueChange={(v) => setValue("approval_level", Number(v))}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {APPROVAL_LEVELS.map((level) => (
-                        <SelectItem key={level.value} value={level.value} className="text-[13px] text-[#37352f] hover:bg-[#f7f6f3]">
-                          {level.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div>
                 <button
                   type="button"
@@ -229,11 +192,43 @@ export function Tasks() {
                   ) : (
                     <ChevronDown className="h-3 w-3" />
                   )}
-                  Advanced options
+                  Options
                 </button>
 
                 {showAdvanced && (
                   <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-[12px] text-[#9b9a97]">Priority</Label>
+                        <Select defaultValue="3" onValueChange={(v) => setValue("priority", Number(v))}>
+                          <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
+                            <SelectValue placeholder="Normal" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border-[#e8e5df]">
+                            {PRIORITY_PRESETS.map((p) => (
+                              <SelectItem key={p.value} value={p.value} className="text-[13px] text-[#37352f] hover:bg-[#f7f6f3]">
+                                {p.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[12px] text-[#9b9a97]">When to run</Label>
+                        <Select defaultValue="2" onValueChange={(v) => setValue("approval_level", Number(v))}>
+                          <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
+                            <SelectValue placeholder="Require approval" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white border-[#e8e5df]">
+                            {APPROVAL_LEVELS.map((level) => (
+                              <SelectItem key={level.value} value={level.value} className="text-[13px] text-[#37352f] hover:bg-[#f7f6f3]">
+                                {level.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <Label className="text-[12px] text-[#9b9a97]">Budget (USD)</Label>
@@ -252,24 +247,6 @@ export function Tasks() {
                           {...register("max_retries", { valueAsNumber: true })}
                           className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                           placeholder="3"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label className="text-[12px] text-[#9b9a97]">Parent Task ID</Label>
-                        <Input
-                          {...register("parent_task_id")}
-                          className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
-                          placeholder="Optional"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[12px] text-[#9b9a97]">Goal ID</Label>
-                        <Input
-                          {...register("goal_id")}
-                          className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
-                          placeholder="Optional"
                         />
                       </div>
                     </div>
