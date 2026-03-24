@@ -714,8 +714,7 @@ async def assets_cleanup_handler(request: web.Request) -> web.Response:
 
 async def handle_workspace_list(request: web.Request) -> web.Response:
     """GET /api/internal/workspaces — list all workspaces."""
-    app_state = request.app
-    root = app_state["project_root"]
+    root: pathlib.Path = request.app["project_root"]
     wm = WorkspaceManager(root)
     names = wm.list_workspaces()
     result = []
@@ -733,25 +732,26 @@ async def handle_workspace_list(request: web.Request) -> web.Response:
 
 async def handle_workspace_create(request: web.Request) -> web.Response:
     """POST /api/internal/workspace — create a workspace."""
-    body = await request.json()
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
     name = body.get("name", "").strip()
     template = body.get("template", "default")
     if not name:
-        return web.json_response({"error": "name is required"}, status=400)
+        raise web.HTTPBadRequest(reason="'name' is required")
 
-    app_state = request.app
-    root = app_state["project_root"]
+    root: pathlib.Path = request.app["project_root"]
     wm = WorkspaceManager(root)
     wm.ensure_base_knowledge()
 
     try:
         ws_path = wm.create_workspace(name, template=template)
     except FileExistsError:
-        return web.json_response(
-            {"error": f"workspace '{name}' already exists"}, status=409
-        )
+        raise web.HTTPConflict(reason=f"workspace '{name}' already exists")
     except ValueError as exc:
-        return web.json_response({"error": str(exc)}, status=400)
+        raise web.HTTPBadRequest(reason=str(exc)) from exc
 
     warnings = wm.validate_workspace(name)
     return web.json_response(
@@ -768,12 +768,11 @@ async def handle_workspace_create(request: web.Request) -> web.Response:
 async def handle_workspace_validate(request: web.Request) -> web.Response:
     """GET /api/internal/workspace/{name}/validate — validate a workspace."""
     name = request.match_info["name"]
-    app_state = request.app
-    root = app_state["project_root"]
+    root: pathlib.Path = request.app["project_root"]
     wm = WorkspaceManager(root)
 
     if not wm.workspace_exists(name):
-        return web.json_response({"error": f"workspace '{name}' not found"}, status=404)
+        raise web.HTTPNotFound(reason=f"workspace '{name}' not found")
 
     warnings = wm.validate_workspace(name)
     return web.json_response(
@@ -926,12 +925,13 @@ def create_api_app(
     app.router.add_post("/api/internal/asset/{asset_id}/archive", asset_archive_handler)
     app.router.add_post("/api/internal/assets/cleanup", assets_cleanup_handler)
 
-    # Workspaces
-    app.router.add_get("/api/internal/workspaces", handle_workspace_list)
-    app.router.add_post("/api/internal/workspace", handle_workspace_create)
-    app.router.add_get(
-        "/api/internal/workspace/{name}/validate", handle_workspace_validate
-    )
+    # Workspaces (require project_root)
+    if project_root is not None:
+        app.router.add_get("/api/internal/workspaces", handle_workspace_list)
+        app.router.add_post("/api/internal/workspace", handle_workspace_create)
+        app.router.add_get(
+            "/api/internal/workspace/{name}/validate", handle_workspace_validate
+        )
 
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)
