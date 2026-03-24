@@ -295,11 +295,16 @@ def task_create(
 @click.option("--status", "filter_status", default=None, help="Filter by status")
 @click.option("--workspace", "filter_workspace", default=None, help="Filter by workspace")
 @click.option("--flat", is_flag=True, help="Flat list without tree indentation")
-def task_list(filter_status, filter_workspace, flat):
+@click.option("--limit", "-L", "limit", default=20, type=int, help="Max number of tasks to show (default: 20)")
+def task_list(filter_status, filter_workspace, flat, limit):
     """List tasks."""
     config_file = _config_path()
     if not config_file.exists():
         click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    if limit <= 0:
+        click.echo("Error: --limit must be a positive integer.", err=True)
         sys.exit(1)
 
     from maestro.config import load_config
@@ -319,42 +324,26 @@ def task_list(filter_status, filter_workspace, flat):
                 click.echo(f"Invalid status: {filter_status}. Valid: {valid}")
                 return
 
-        tasks = await store.list_tasks(status=ts, workspace=filter_workspace)
+        # Fetch limit+1 to detect if there are more results
+        tasks = await store.list_tasks(status=ts, workspace=filter_workspace, limit=limit + 1)
 
         if not tasks:
             click.echo("No tasks found.")
             return
 
-        if flat or not any(t.parent_task_id for t in tasks):
-            # Flat output
-            for t in tasks:
-                emoji = _STATUS_EMOJI.get(t.status.value, " ")
-                click.echo(
-                    f"{emoji} {t.id:<10} {t.status.value:<14}"
-                    f" {t.priority:>3} {t.workspace:<20} {t.title}"
-                )
-        else:
-            # Tree output
-            task_map = {t.id: t for t in tasks}
-            roots = [t for t in tasks
-                     if t.parent_task_id is None
-                     or t.parent_task_id not in task_map]
-            children_map: dict[str, list] = {}
-            for t in tasks:
-                if t.parent_task_id and t.parent_task_id in task_map:
-                    children_map.setdefault(t.parent_task_id, []).append(t)
+        has_more = len(tasks) > limit
+        display_tasks = tasks[:limit]
 
-            def _print_tree(task, indent=""):
-                emoji = _STATUS_EMOJI.get(task.status.value, " ")
-                click.echo(
-                    f"{indent}{emoji} {task.id:<10} {task.status.value:<14}"
-                    f" {task.priority:>3} {task.workspace:<20} {task.title}"
-                )
-                for child in children_map.get(task.id, []):
-                    _print_tree(child, indent + "   ")
+        for t in display_tasks:
+            emoji = _STATUS_EMOJI.get(t.status.value, " ")
+            click.echo(
+                f"{emoji} {t.id:<10} {t.status.value:<14}"
+                f" {t.priority:>3} {t.workspace:<20} {t.title}"
+            )
 
-            for root in roots:
-                _print_tree(root)
+        if has_more:
+            status_label = f" {filter_status}" if filter_status else ""
+            click.echo(f"\nShowing {limit}{status_label} tasks. Use --limit to show more.")
 
     asyncio.run(_run())
 

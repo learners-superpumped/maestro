@@ -352,6 +352,7 @@ class Store:
         self,
         status: Optional[TaskStatus] = None,
         workspace: Optional[str] = None,
+        limit: int | None = None,
     ) -> list[Task]:
         """Return tasks optionally filtered by status and/or workspace."""
         clauses: list[str] = []
@@ -365,7 +366,10 @@ class Store:
             params.append(workspace)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = f"SELECT * FROM tasks {where} ORDER BY created_at ASC"
+        sql = f"SELECT * FROM tasks {where} ORDER BY created_at DESC"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
 
         async with self._conn() as db:
             cursor = await db.execute(sql, params)

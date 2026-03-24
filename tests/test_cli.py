@@ -224,6 +224,30 @@ class TestTaskCommands:
             get_result = runner.invoke(main, ["task", "get", task_id])
             assert "please fix X" in get_result.output
 
+    def test_task_list_limit(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            # Create 5 tasks
+            for i in range(5):
+                runner.invoke(main, [
+                    "task", "create",
+                    "--workspace", "ws1",
+                    "--type", "shell",
+                    "--title", f"Task-{i}",
+                    "--instruction", f"do {i}",
+                ])
+            # Default limit=20 should show all 5
+            result = runner.invoke(main, ["task", "list"])
+            assert result.exit_code == 0
+            for i in range(5):
+                assert f"Task-{i}" in result.output
+
+            # Limit to 3
+            result = runner.invoke(main, ["task", "list", "--limit", "3"])
+            assert result.exit_code == 0
+            assert "Use --limit to show more" in result.output
+
     def test_task_list_filter_status(self) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem():
