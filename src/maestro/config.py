@@ -105,6 +105,27 @@ class ResourceProfile:
 
 
 @dataclass
+class AssetsConfig:
+    """에셋 파이프라인 설정."""
+
+    default_ttl: dict[str, int | None] = field(
+        default_factory=lambda: {
+            "post": None,
+            "engage": 30,
+            "research": 7,
+            "image": None,
+            "video": None,
+            "audio": None,
+            "document": None,
+        }
+    )
+    auto_extract: dict[str, dict] = field(default_factory=dict)
+    cleanup_interval_ms: int = 86_400_000
+    archive_grace_days: int = 30
+    gemini_api_key: str = ""
+
+
+@dataclass
 class MaestroConfig:
     project: ProjectConfig
     daemon: DaemonConfig = field(default_factory=DaemonConfig)
@@ -115,6 +136,7 @@ class MaestroConfig:
     schedules: list[ScheduleEntry] = field(default_factory=list)
     goals: list[GoalEntry] = field(default_factory=list)
     integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
+    assets: AssetsConfig = field(default_factory=AssetsConfig)
     # dict[resource_type, dict[profile_name, ResourceProfile]]
     resources: dict[str, dict[str, ResourceProfile]] = field(default_factory=dict)
 
@@ -272,6 +294,24 @@ def _parse_resources(
     return result
 
 
+def _parse_assets(data: dict[str, Any]) -> AssetsConfig:
+    defaults = AssetsConfig()
+    ttl_raw = data.get("default_ttl")
+    if ttl_raw and isinstance(ttl_raw, dict):
+        merged_ttl = dict(defaults.default_ttl)
+        merged_ttl.update(ttl_raw)
+        ttl = merged_ttl
+    else:
+        ttl = dict(defaults.default_ttl)
+    return AssetsConfig(
+        default_ttl=ttl,
+        auto_extract=dict(data.get("auto_extract") or {}),
+        cleanup_interval_ms=int(data.get("cleanup_interval_ms", defaults.cleanup_interval_ms)),
+        archive_grace_days=int(data.get("archive_grace_days", defaults.archive_grace_days)),
+        gemini_api_key=str(data.get("gemini_api_key", "")),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -316,6 +356,10 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     goals = _parse_goals(data.get("goals") or [])
     integrations = _parse_integrations(data.get("integrations") or {})
     resources = _parse_resources(data.get("resources") or {})
+    assets_raw = data.get("assets", {})
+    assets = _parse_assets(assets_raw or {})
+    if not assets.gemini_api_key:
+        assets.gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 
     return MaestroConfig(
         project=project,
@@ -327,5 +371,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
         schedules=schedules,
         goals=goals,
         integrations=integrations,
+        assets=assets,
         resources=resources,
     )

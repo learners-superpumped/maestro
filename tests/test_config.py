@@ -10,6 +10,7 @@ import yaml
 
 from maestro.config import (
     AgentConfig,
+    AssetsConfig,
     BudgetConfig,
     ConcurrencyConfig,
     DaemonConfig,
@@ -374,3 +375,42 @@ def test_resources_empty_when_omitted(tmp_path: pathlib.Path) -> None:
     cfg = load_config(cfg_file)
 
     assert cfg.resources == {}
+
+
+# ---------------------------------------------------------------------------
+# AssetsConfig
+# ---------------------------------------------------------------------------
+
+
+def test_assets_config_defaults() -> None:
+    cfg = AssetsConfig()
+    assert cfg.default_ttl["post"] is None
+    assert cfg.default_ttl["engage"] == 30
+    assert cfg.default_ttl["research"] == 7
+    assert cfg.cleanup_interval_ms == 86_400_000
+    assert cfg.archive_grace_days == 30
+    assert cfg.gemini_api_key == ""
+
+
+def test_assets_config_from_yaml(tmp_path: pathlib.Path) -> None:
+    yaml_content = """\
+project:
+  name: test
+  store_path: ./test.db
+assets:
+  default_ttl:
+    post: null
+    engage: 14
+  cleanup_interval_ms: 3600000
+  auto_extract:
+    sns-threads:
+      create_post:
+        asset_type: post
+        title_field: "content.text"
+"""
+    cfg_path = tmp_path / "test.yaml"
+    cfg_path.write_text(yaml_content)
+    cfg = load_config(str(cfg_path))
+    assert cfg.assets.default_ttl["engage"] == 14
+    assert cfg.assets.cleanup_interval_ms == 3_600_000
+    assert "sns-threads" in cfg.assets.auto_extract

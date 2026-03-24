@@ -13,6 +13,8 @@ dependencies = [
     "aiohttp>=3.9",
     "aiosqlite>=0.20",
     "croniter>=2.0",
+    "sqlite-vec>=0.1",
+    "google-genai>=1.0",
 ]
 
 [project.optional-dependencies]
