@@ -56,6 +56,11 @@ class EventEmittingStore(Store):
     # -- Tasks --
     async def create_task(self, task) -> None:
         await super().create_task(task)
+        actor = getattr(task, "created_by", None) or "system"
+        detail = (
+            {"parent_task_id": task.parent_task_id} if task.parent_task_id else None
+        )
+        await self.record_task_event(task.id, "created", actor, detail)
         await self._bus.emit(
             "task.created",
             {
@@ -70,6 +75,17 @@ class EventEmittingStore(Store):
         old = await self.get_task(task_id)
         old_status = old.status.value if old else None
         await super().update_task_status(task_id, status, **kwargs)
+
+        # Record task event
+        session_id = kwargs.get("session_id")
+        actor = f"agent:{session_id}" if session_id else "system"
+        detail = {}
+        if kwargs.get("error"):
+            detail["error"] = str(kwargs["error"])
+        if kwargs.get("cost_usd"):
+            detail["cost_usd"] = kwargs["cost_usd"]
+        await self.record_task_event(task_id, status.value, actor, detail or None)
+
         await self._bus.emit(
             "task.status_changed",
             {
