@@ -14,6 +14,9 @@ export function ActionRequired() {
   const approve = useApproveTask()
   const reject = useRejectTask()
   const navigate = useNavigate()
+  const [dialogTask, setDialogTask] = useState<any>(null)
+  const [dialogType, setDialogType] = useState<"approve" | "reject" | null>(null)
+  const [note, setNote] = useState("")
 
   // Filter for actionable tasks
   const tasks = (data?.tasks ?? []).filter((t: any) =>
@@ -21,11 +24,6 @@ export function ActionRequired() {
   )
 
   if (tasks.length === 0) return null  // Auto-hide
-
-  // State for approve/reject dialogs
-  const [dialogTask, setDialogTask] = useState<any>(null)
-  const [dialogType, setDialogType] = useState<"approve" | "reject" | null>(null)
-  const [note, setNote] = useState("")
 
   return (
     <div className="space-y-2">
