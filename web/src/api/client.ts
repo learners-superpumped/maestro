@@ -111,6 +111,7 @@ export const api = {
 
   approvals: {
     pending: () => request<any>("/api/internal/approvals/pending"),
+    get: (taskId: string) => request<any>(`/api/internal/approval/${taskId}`),
   },
 
   workspaces: {
