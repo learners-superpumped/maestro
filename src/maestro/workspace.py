@@ -195,6 +195,7 @@ _AD_CLAUDE_MD = textwrap.dedent("""\
 _DEFAULT_MCP_JSON = {
     "mcpServers": {
         "maestro-store": _MCP_MAESTRO_STORE,
+        "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
     },
 }
 
@@ -292,6 +293,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": [],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
     },
     "sns": {
@@ -299,6 +301,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": ["tone.md", "strategy.md", "guidelines.md"],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
     },
     "seo": {
@@ -306,6 +309,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": ["strategy.md", "guidelines.md"],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
     },
     "ad": {
@@ -323,6 +327,7 @@ TEMPLATES["planner"] = {
     "knowledge_files": [],
     "mcp_servers": {
         "maestro-store": _MCP_MAESTRO_STORE,
+        "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
     },
 }
 
@@ -331,6 +336,7 @@ TEMPLATES["reviewer"] = {
     "knowledge_files": [],
     "mcp_servers": {
         "maestro-store": _MCP_MAESTRO_STORE,
+        "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
     },
 }
 
