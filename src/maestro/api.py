@@ -508,14 +508,24 @@ async def task_create_handler(request: web.Request) -> web.Response:
             raise web.HTTPBadRequest(reason=f"'{field}' is required")
     import uuid
 
+    # Parse priority/approval_level safely (frontend may send strings)
+    try:
+        priority = int(body.get("priority", 3))
+    except (ValueError, TypeError):
+        priority = 3
+    try:
+        approval_level = int(body.get("approval_level", 2))
+    except (ValueError, TypeError):
+        approval_level = 2
+
     task = Task(
         id=uuid.uuid4().hex[:8],
         type=body.get("type", "claude"),
         workspace=body["workspace"],
         title=body["title"],
         instruction=body["instruction"],
-        priority=int(body.get("priority", 3)),
-        approval_level=int(body.get("approval_level", 2)),
+        priority=priority,
+        approval_level=approval_level,
         parent_task_id=body.get("parent_task_id"),
         goal_id=body.get("goal_id"),
         budget_usd=float(body.get("budget_usd", 5.0)),
