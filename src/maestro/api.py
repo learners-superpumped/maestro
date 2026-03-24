@@ -578,8 +578,10 @@ async def task_children_handler(request: web.Request) -> web.Response:
                     "status": c.status.value,
                     "priority": c.priority,
                     "cost_usd": c.cost_usd,
+                    "result_json": c.result_json,
                     "parent_task_id": c.parent_task_id,
                     "created_at": c.created_at.isoformat() if c.created_at else None,
+                    "updated_at": c.updated_at.isoformat() if c.updated_at else None,
                 }
                 for c in children
             ]

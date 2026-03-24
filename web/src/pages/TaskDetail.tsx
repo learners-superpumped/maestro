@@ -380,7 +380,7 @@ export function TaskDetail() {
         {task.status !== "running" && task.status !== "failed" && (
           <CollapsibleSection title="Agent Log">
             <div className="pt-2">
-              <AgentLogPanel taskId={id} taskStatus={task.status} />
+              <AgentLogPanel taskId={id} taskStatus={task.status} embedded />
             </div>
           </CollapsibleSection>
         )}

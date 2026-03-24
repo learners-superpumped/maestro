@@ -8,22 +8,20 @@ import { Skeleton } from "@/components/ui/skeleton"
 interface AgentLogPanelProps {
   taskId: string
   taskStatus: string
+  /** When true, renders without Card wrapper (for use inside CollapsibleSection) */
+  embedded?: boolean
 }
 
-export function AgentLogPanel({ taskId, taskStatus }: AgentLogPanelProps) {
+export function AgentLogPanel({ taskId, taskStatus, embedded = false }: AgentLogPanelProps) {
   const isLive = taskStatus === "running"
 
-  // Historical mode: fetch from API
   const { data, isLoading, isError } = useTaskLogs(isLive ? "" : taskId)
   const historicalLogs: any[] = data?.logs ?? []
 
-  // Live mode: stream from WebSocket
   const { logs: liveLogs, scrollRef, scrollToBottom } = useAgentLogStream(taskId, isLive)
 
-  // Auto-scroll when new live entries arrive
   useEffect(() => {
     if (isLive && liveLogs.length > 0) {
-      // Small delay to let DOM render the new entry
       const timer = setTimeout(scrollToBottom, 50)
       return () => clearTimeout(timer)
     }
@@ -40,6 +38,33 @@ export function AgentLogPanel({ taskId, taskStatus }: AgentLogPanelProps) {
       }))
     : historicalLogs
 
+  // Error/loading/empty for embedded mode (no Card wrapper)
+  if (embedded) {
+    if (isError && !isLive) return <p className="text-[14px] text-[#9b9a97] py-2">Could not load agent logs</p>
+    if (!isLive && isLoading) return <Skeleton className="h-16 bg-[#f7f6f3]" />
+    if (logs.length === 0 && !isLive) return <p className="text-[14px] text-[#9b9a97] py-2">No logs recorded</p>
+
+    return (
+      <div ref={scrollRef} className="max-h-[400px] overflow-y-auto">
+        {logs.map((log: any, index: number) => (
+          <div key={log.id ?? index} className="animate-in" style={{ animationDelay: isLive ? "0ms" : `${index * 20}ms` }}>
+            <AgentLogEntry taskId={taskId} log={log} />
+          </div>
+        ))}
+        {isLive && logs.length === 0 && (
+          <div className="flex items-center gap-2 py-4 text-[14px] text-[#9b9a97]">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4dab9a] opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4dab9a]" />
+            </span>
+            Waiting for agent activity...
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Standalone mode (with Card wrapper — used as primary content for running/failed)
   if (isError && !isLive) {
     return (
       <Card className="bg-white border border-[#e8e5df] rounded">
@@ -81,16 +106,9 @@ export function AgentLogPanel({ taskId, taskStatus }: AgentLogPanelProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div
-          ref={scrollRef}
-          className="max-h-[400px] overflow-y-auto"
-        >
+        <div ref={scrollRef} className="max-h-[400px] overflow-y-auto">
           {logs.map((log: any, index: number) => (
-            <div
-              key={log.id ?? index}
-              className="animate-in fade-in duration-300"
-              style={{ animationDelay: isLive ? "0ms" : `${index * 20}ms` }}
-            >
+            <div key={log.id ?? index} className="animate-in" style={{ animationDelay: isLive ? "0ms" : `${index * 20}ms` }}>
               <AgentLogEntry taskId={taskId} log={log} />
             </div>
           ))}
