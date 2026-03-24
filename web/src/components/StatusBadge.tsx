@@ -16,7 +16,14 @@ export function StatusBadge({ status, className }: { status: string; className?:
   const config = STATUS_CONFIG[status] || { color: "bg-[#9b9a97]", label: status }
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-[12px] text-[#787774]", className)}>
-      <span className={cn("h-2 w-2 rounded-full shrink-0", config.color)} />
+      {status === "running" ? (
+        <span className="relative flex h-2 w-2 shrink-0">
+          <span className={cn("animate-ping absolute inline-flex h-full w-full rounded-full opacity-75", config.color)} />
+          <span className={cn("relative inline-flex h-2 w-2 rounded-full", config.color)} />
+        </span>
+      ) : (
+        <span className={cn("h-2 w-2 rounded-full shrink-0", config.color)} />
+      )}
       {config.label}
     </span>
   )

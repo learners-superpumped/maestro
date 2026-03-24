@@ -30,9 +30,6 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ["root-tasks"] })
             queryClient.invalidateQueries({ queryKey: ["task-events"] })
           }
-          if (type === "task.agent_log") {
-            queryClient.invalidateQueries({ queryKey: ["task-logs"] })
-          }
           if (type.startsWith("approval."))
             queryClient.invalidateQueries({ queryKey: ["approvals"] })
           if (type.startsWith("asset."))

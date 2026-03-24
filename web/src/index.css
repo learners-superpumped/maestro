@@ -153,3 +153,19 @@
 .prose a:hover {
   text-decoration: underline;
 }
+
+/* Entry animations */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fade-in-up 0.3s ease-out forwards;
+}
