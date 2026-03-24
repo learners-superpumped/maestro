@@ -129,9 +129,13 @@ function ApprovalCard({ task }: { task: any }) {
                   className="bg-[#2383e2] hover:bg-[#1a73cc] text-white h-[28px] text-[12px] rounded px-2.5">
                   {retryTask.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Retry
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
-                  className="border border-[#e8e5df] text-[#787774] h-[28px] text-[12px] rounded px-2.5">
-                  <ExternalLink className="h-3 w-3 mr-1" /> View
+                <Button size="sm" variant="ghost" onClick={async () => { await api.tasks.dismiss(task.id) }}
+                  className="text-[#787774] hover:bg-[#f7f6f3] h-[28px] text-[12px] rounded px-2.5">
+                  Dismiss
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
+                  className="text-[#787774] hover:bg-[#f7f6f3] h-[28px] text-[12px] rounded px-2.5">
+                  View
                 </Button>
               </>
             )}
