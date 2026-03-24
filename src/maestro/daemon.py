@@ -163,7 +163,9 @@ class Daemon:
                   picks an ephemeral port.
         """
         # 1. Create the aiohttp app
-        app = create_api_app(self._store, slack=self._slack)
+        app = create_api_app(
+            self._store, slack=self._slack, project_root=self._base_path
+        )
         app["asset_manager"] = self._asset_manager
         app.router.add_get("/ws", self._ws_manager.handle)
 

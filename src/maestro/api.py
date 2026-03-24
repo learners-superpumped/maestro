@@ -21,6 +21,7 @@ from aiohttp import web
 
 from maestro.models import Task, TaskStatus
 from maestro.store import Store
+from maestro.workspace import WorkspaceManager
 
 logger = logging.getLogger(__name__)
 
@@ -707,6 +708,84 @@ async def assets_cleanup_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Workspace handlers
+# ---------------------------------------------------------------------------
+
+
+async def handle_workspace_list(request: web.Request) -> web.Response:
+    """GET /api/internal/workspaces — list all workspaces."""
+    app_state = request.app
+    root = app_state["project_root"]
+    wm = WorkspaceManager(root)
+    names = wm.list_workspaces()
+    result = []
+    for name in names:
+        warnings = wm.validate_workspace(name)
+        result.append(
+            {
+                "name": name,
+                "valid": len(warnings) == 0,
+                "warnings": warnings,
+            }
+        )
+    return web.json_response({"workspaces": result, "count": len(result)})
+
+
+async def handle_workspace_create(request: web.Request) -> web.Response:
+    """POST /api/internal/workspace — create a workspace."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    template = body.get("template", "default")
+    if not name:
+        return web.json_response({"error": "name is required"}, status=400)
+
+    app_state = request.app
+    root = app_state["project_root"]
+    wm = WorkspaceManager(root)
+    wm.ensure_base_knowledge()
+
+    try:
+        ws_path = wm.create_workspace(name, template=template)
+    except FileExistsError:
+        return web.json_response(
+            {"error": f"workspace '{name}' already exists"}, status=409
+        )
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+
+    warnings = wm.validate_workspace(name)
+    return web.json_response(
+        {
+            "name": name,
+            "path": str(ws_path),
+            "template": template,
+            "valid": len(warnings) == 0,
+            "warnings": warnings,
+        }
+    )
+
+
+async def handle_workspace_validate(request: web.Request) -> web.Response:
+    """GET /api/internal/workspace/{name}/validate — validate a workspace."""
+    name = request.match_info["name"]
+    app_state = request.app
+    root = app_state["project_root"]
+    wm = WorkspaceManager(root)
+
+    if not wm.workspace_exists(name):
+        return web.json_response({"error": f"workspace '{name}' not found"}, status=404)
+
+    warnings = wm.validate_workspace(name)
+    return web.json_response(
+        {
+            "name": name,
+            "valid": len(warnings) == 0,
+            "warnings": warnings,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
 # Webhook handlers
 # ---------------------------------------------------------------------------
 
@@ -765,17 +844,26 @@ async def webhook_linear_handler(request: web.Request) -> web.Response:
 # ---------------------------------------------------------------------------
 
 
-def create_api_app(store: Store, slack: object | None = None) -> web.Application:
+def create_api_app(
+    store: Store,
+    slack: object | None = None,
+    project_root: pathlib.Path | None = None,
+) -> web.Application:
     """Create and configure the aiohttp Application.
 
     Args:
         store: The data store instance.
         slack: Optional SlackNotifier instance for sending notifications.
+        project_root: Root directory of the Maestro project (used by workspace
+            endpoints).  When *None* the workspace endpoints will raise a
+            ``KeyError`` at request time, so callers should supply this.
     """
     app = web.Application(middlewares=[spa_fallback_middleware])
     app["store"] = store
     if slack is not None:
         app["slack"] = slack
+    if project_root is not None:
+        app["project_root"] = project_root
 
     # SPA static assets
     if _WEB_DIST.exists():
@@ -838,9 +926,20 @@ def create_api_app(store: Store, slack: object | None = None) -> web.Application
     app.router.add_post("/api/internal/asset/{asset_id}/archive", asset_archive_handler)
     app.router.add_post("/api/internal/assets/cleanup", assets_cleanup_handler)
 
+    # Workspaces
+    app.router.add_get("/api/internal/workspaces", handle_workspace_list)
+    app.router.add_post("/api/internal/workspace", handle_workspace_create)
+    app.router.add_get(
+        "/api/internal/workspace/{name}/validate", handle_workspace_validate
+    )
+
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)
     app.router.add_post("/api/webhooks/slack", webhook_slack_handler)
     app.router.add_post("/api/webhooks/linear", webhook_linear_handler)
 
     return app
+
+
+# Convenience alias used by tests and tooling.
+create_app = create_api_app
