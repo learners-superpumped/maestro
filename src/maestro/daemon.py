@@ -62,7 +62,7 @@ class Daemon:
         self._store = store
         self._base_path = base_path
         self._runner = AgentRunner()
-        self._scheduler = Scheduler(config.schedules)
+        self._scheduler = Scheduler(store)
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
@@ -137,12 +137,12 @@ class Daemon:
         logger.info("PID %d written to %s", os.getpid(), pid_file)
 
         # 5. Restore scheduler state from DB
-        schedule_names = [s.name for s in self._config.schedules]
+        schedules = await self._store.list_schedules(enabled_only=True)
         restored: dict[str, str] = {}
-        for name in schedule_names:
-            last = await self._store.get_schedule_last_run(name)
+        for s in schedules:
+            last = await self._store.get_schedule_last_run(s["name"])
             if last:
-                restored[name] = last
+                restored[s["name"]] = last
         self._scheduler.restore_last_triggered(restored)
 
         try:
@@ -546,33 +546,33 @@ class Daemon:
                 seconds=self._config.daemon.scheduler_interval_ms / 1000
             )
 
-        due = self._scheduler.get_due_schedules(now, since)
-        due += self._scheduler.get_due_intervals(now)
+        due = await self._scheduler.get_due_schedules(now, since)
+        due += await self._scheduler.get_due_intervals(now)
 
         for entry in due:
-            if await self._has_active_task(entry):
+            if await self._has_active_task_for_schedule(entry):
                 continue
             task = Task(
                 id=str(uuid.uuid4())[:8],
-                type=entry.task_type,
-                workspace=entry.workspace,
-                title=f"Scheduled: {entry.name}",
+                type=entry["task_type"],
+                workspace=entry["workspace"],
+                title=f"Scheduled: {entry['name']}",
                 instruction=(
-                    f"스케줄 '{entry.name}' 실행. task_type: {entry.task_type}. "
+                    f"스케줄 '{entry['name']}' 실행. task_type: {entry['task_type']}. "
                     f"knowledge/ 파일을 읽고 적절한 액션을 수행하라."
                 ),
-                approval_level=entry.approval_level,
+                approval_level=entry["approval_level"],
             )
             await self._store.create_task(task)
-            self._scheduler.mark_triggered(entry.name, now)
-            await self._store.set_schedule_last_run(entry.name, now.isoformat())
+            self._scheduler.mark_triggered(entry["name"], now)
+            await self._store.set_schedule_last_run(entry["name"], now.isoformat())
 
         await self._store.set_scheduler_state("last_tick", now.isoformat())
 
-    async def _has_active_task(self, entry) -> bool:
-        tasks = await self._store.list_tasks(workspace=entry.workspace)
+    async def _has_active_task_for_schedule(self, entry: dict) -> bool:
+        tasks = await self._store.list_tasks(workspace=entry["workspace"])
         return any(
-            t.type == entry.task_type
+            t.type == entry["task_type"]
             and t.status.value not in ("completed", "failed", "cancelled")
             for t in tasks
         )
@@ -645,9 +645,14 @@ class Daemon:
 
         # Auto-extract assets from result_json
         if result.result_json and self._asset_manager:
-            rules_map = self._config.assets.auto_extract.get(task.workspace, {})
-            rules = rules_map.get(task.type)
-            if rules:
+            rule = await self._store.get_extract_rule(task.workspace, task.type)
+            if rule:
+                rules = {
+                    "asset_type": rule["asset_type"],
+                    "title_field": rule.get("title_field"),
+                    "iterate": rule.get("iterate"),
+                    "tags_from": rule.get("tags_from"),
+                }
                 try:
                     rj = result.result_json
                     if isinstance(rj, str):
