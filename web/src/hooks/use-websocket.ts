@@ -25,8 +25,14 @@ export function useWebSocket() {
       ws.onmessage = (e) => {
         try {
           const { type } = JSON.parse(e.data as string) as { type: string }
-          if (type.startsWith("task."))
+          if (type.startsWith("task.")) {
             queryClient.invalidateQueries({ queryKey: ["tasks"] })
+            queryClient.invalidateQueries({ queryKey: ["root-tasks"] })
+            queryClient.invalidateQueries({ queryKey: ["task-events"] })
+          }
+          if (type === "task.agent_log") {
+            queryClient.invalidateQueries({ queryKey: ["task-logs"] })
+          }
           if (type.startsWith("approval."))
             queryClient.invalidateQueries({ queryKey: ["approvals"] })
           if (type.startsWith("asset."))

@@ -24,7 +24,7 @@ export const api = {
   stats: () => request<any>("/api/internal/stats"),
 
   tasks: {
-    list: (params?: { status?: string; workspace?: string }) =>
+    list: (params?: { status?: string; workspace?: string; root_only?: string }) =>
       request<any>(`/api/internal/tasks${buildQuery(params)}`),
     get: (id: string) => request<any>(`/api/internal/task/${id}`),
     create: (data: any) =>
@@ -48,6 +48,9 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ note }),
       }),
+    events: (id: string) => request<any>(`/api/internal/task/${id}/events`),
+    logs: (id: string) => request<any>(`/api/internal/task/${id}/logs`),
+    log: (id: string, logId: number) => request<any>(`/api/internal/task/${id}/logs/${logId}`),
   },
 
   assets: {

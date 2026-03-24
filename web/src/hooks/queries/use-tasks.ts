@@ -83,6 +83,37 @@ export function useReviseTask() {
   })
 }
 
+export function useRootTasks(params?: { status?: string; workspace?: string }) {
+  return useQuery({
+    queryKey: ["root-tasks", params],
+    queryFn: () => api.tasks.list({ ...params, root_only: "true" }),
+  })
+}
+
+export function useTaskEvents(id: string) {
+  return useQuery({
+    queryKey: ["task-events", id],
+    queryFn: () => api.tasks.events(id),
+    enabled: !!id,
+  })
+}
+
+export function useTaskLogs(id: string) {
+  return useQuery({
+    queryKey: ["task-logs", id],
+    queryFn: () => api.tasks.logs(id),
+    enabled: !!id,
+  })
+}
+
+export function useLogContent(taskId: string, logId: number | null) {
+  return useQuery({
+    queryKey: ["task-log", taskId, logId],
+    queryFn: () => api.tasks.log(taskId, logId!),
+    enabled: !!taskId && logId != null,
+  })
+}
+
 export function useTaskTree(id: string) {
   return useQuery({
     queryKey: ["task-tree", id],
