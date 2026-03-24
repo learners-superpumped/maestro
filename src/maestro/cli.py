@@ -17,7 +17,6 @@ import click
 from maestro.models import Task, TaskStatus
 from maestro.workspace import WorkspaceManager
 
-
 _STATUS_EMOJI = {
     "pending": "⏳",
     "approved": "👍",
@@ -62,6 +61,7 @@ def _load_config():
         sys.exit(1)
 
     from maestro.config import load_config
+
     return load_config(config_file)
 
 
@@ -293,9 +293,18 @@ def task_create(
 
 @task.command("list")
 @click.option("--status", "filter_status", default=None, help="Filter by status")
-@click.option("--workspace", "filter_workspace", default=None, help="Filter by workspace")
+@click.option(
+    "--workspace", "filter_workspace", default=None, help="Filter by workspace"
+)
 @click.option("--flat", is_flag=True, help="Flat list without tree indentation")
-@click.option("--limit", "-L", "limit", default=20, type=int, help="Max number of tasks to show (default: 20)")
+@click.option(
+    "--limit",
+    "-L",
+    "limit",
+    default=20,
+    type=int,
+    help="Max number of tasks to show (default: 20)",
+)
 def task_list(filter_status, filter_workspace, flat, limit):
     """List tasks."""
     config_file = _config_path()
@@ -326,7 +335,9 @@ def task_list(filter_status, filter_workspace, flat, limit):
 
         if flat:
             # Flat mode: use SQL LIMIT for efficiency
-            tasks = await store.list_tasks(status=ts, workspace=filter_workspace, limit=limit + 1)
+            tasks = await store.list_tasks(
+                status=ts, workspace=filter_workspace, limit=limit + 1
+            )
 
             if not tasks:
                 click.echo("No tasks found.")
@@ -344,7 +355,9 @@ def task_list(filter_status, filter_workspace, flat, limit):
 
             if has_more:
                 status_label = f" {filter_status}" if filter_status else ""
-                click.echo(f"\nShowing {limit}{status_label} tasks. Use --limit to show more.")
+                click.echo(
+                    f"\nShowing {limit}{status_label} tasks. Use --limit to show more."
+                )
             return
 
         # Tree auto-detection: fetch all tasks
@@ -359,9 +372,11 @@ def task_list(filter_status, filter_workspace, flat, limit):
         if has_tree:
             # Tree mode: limit applies to root tasks
             task_map = {t.id: t for t in all_tasks}
-            roots = [t for t in all_tasks
-                     if t.parent_task_id is None
-                     or t.parent_task_id not in task_map]
+            roots = [
+                t
+                for t in all_tasks
+                if t.parent_task_id is None or t.parent_task_id not in task_map
+            ]
             children_map: dict[str, list] = {}
             for t in all_tasks:
                 if t.parent_task_id and t.parent_task_id in task_map:
@@ -384,7 +399,9 @@ def task_list(filter_status, filter_workspace, flat, limit):
 
             if total_roots > limit:
                 status_label = f" {filter_status}" if filter_status else ""
-                click.echo(f"\nShowing {limit} of {total_roots}{status_label} root tasks. Use --limit to show more.")
+                click.echo(
+                    f"\nShowing {limit} of {total_roots}{status_label} root tasks. Use --limit to show more."
+                )
         else:
             # Flat mode: slice already-fetched data
             has_more = len(all_tasks) > limit
@@ -399,7 +416,9 @@ def task_list(filter_status, filter_workspace, flat, limit):
 
             if has_more:
                 status_label = f" {filter_status}" if filter_status else ""
-                click.echo(f"\nShowing {limit}{status_label} tasks. Use --limit to show more.")
+                click.echo(
+                    f"\nShowing {limit}{status_label} tasks. Use --limit to show more."
+                )
 
     asyncio.run(_run())
 
@@ -456,12 +475,15 @@ def task_get(task_id: str, full: bool) -> None:
                 click.echo(f"Reviewed At:    {approval['reviewed_at']}")
 
         # Review verdicts from children
-        review_children = [c for c in await store.list_children(t.id) if c.type == "review"]
+        review_children = [
+            c for c in await store.list_children(t.id) if c.type == "review"
+        ]
         if review_children:
             click.echo("Reviews:")
             for rc in review_children:
                 if rc.result_json:
                     from maestro.daemon import Daemon
+
                     parsed = Daemon._extract_json(rc.result_json)
                     if isinstance(parsed, dict):
                         verdict = parsed.get("verdict", "?")
@@ -494,7 +516,9 @@ def task_get(task_id: str, full: bool) -> None:
             result_str = str(t.result_json)
             if not full and len(result_str) > 500:
                 click.echo(f"Result:         {result_str[:500]}...")
-                click.echo("                (truncated, use --full for complete output)")
+                click.echo(
+                    "                (truncated, use --full for complete output)"
+                )
             else:
                 click.echo(f"Result:         {result_str}")
 
@@ -533,8 +557,7 @@ def task_tree(task_id: str) -> None:
             cost_str = f" (${t.cost_usd:.2f})" if t.cost_usd > 0 else ""
             emoji = _STATUS_EMOJI.get(t.status.value, "")
             click.echo(
-                f"{prefix}{connector}{t.id} {emoji} {t.type:<12} "
-                f"{t.title}{cost_str}"
+                f"{prefix}{connector}{t.id} {emoji} {t.type:<12} {t.title}{cost_str}"
             )
             kids = children_map.get(t.id, [])
             for i, child in enumerate(kids):
@@ -662,16 +685,8 @@ def revise(task_id: str, note: str, content: str | None) -> None:
         updated_instruction = f"{t.instruction}\n\n[Reviewer note]: {note}"
 
         async def _revise() -> None:
-            async with store._conn() as db:
-                await db.execute(
-                    "UPDATE tasks SET instruction = ?, updated_at = ? WHERE id = ?",
-                    (
-                        updated_instruction,
-                        datetime.now(timezone.utc).isoformat(),
-                        task_id,
-                    ),
-                )
-                await db.commit()
+            await store.init_db()
+            await store.update_task_fields(task_id, instruction=updated_instruction)
             await store.update_task_status(task_id, TaskStatus.APPROVED)
 
         asyncio.run(_revise())
@@ -691,7 +706,6 @@ def dashboard() -> None:
 
     async def _run():
         await store.init_db()
-        from datetime import datetime, timezone
         tasks = await store.list_tasks()
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         daily_spend = await store.get_daily_spend(today)
@@ -713,8 +727,17 @@ def dashboard() -> None:
 
         # Tasks summary
         parts = []
-        for s in ["completed", "running", "paused", "pending", "approved",
-                   "claimed", "retry_queued", "failed", "cancelled"]:
+        for s in [
+            "completed",
+            "running",
+            "paused",
+            "pending",
+            "approved",
+            "claimed",
+            "retry_queued",
+            "failed",
+            "cancelled",
+        ]:
             count = status_counts.get(s, 0)
             if count > 0:
                 emoji = _STATUS_EMOJI.get(s, "")
@@ -904,11 +927,15 @@ def asset() -> None:
 @asset.command("register")
 @click.option("--title", required=True, help="Asset title")
 @click.option(
-    "--type", "asset_type", required=True,
+    "--type",
+    "asset_type",
+    required=True,
     help="Asset type: post, engage, research, image, video, audio, document",
 )
 @click.option("--file", "file_path", type=click.Path(exists=True), help="Path to file")
-@click.option("--content", "content_json", default=None, help="JSON string for text content")
+@click.option(
+    "--content", "content_json", default=None, help="JSON string for text content"
+)
 @click.option("--workspace", default=None, help="Workspace (default: _shared)")
 @click.option("--tags", default=None, help="Comma-separated tags")
 @click.option("--ttl-days", type=int, default=None, help="TTL in days")
@@ -981,8 +1008,17 @@ def asset_register(
 @click.option("--type", "asset_type", default=None, help="Filter by asset_type")
 @click.option("--workspace", default=None, help="Filter by workspace")
 @click.option("--tags", default=None, help="Filter by comma-separated tags")
-@click.option("--limit", "-L", "limit", default=20, type=int, help="Max number of assets to show (default: 20)")
-def asset_list(asset_type: str | None, workspace: str | None, tags: str | None, limit: int) -> None:
+@click.option(
+    "--limit",
+    "-L",
+    "limit",
+    default=20,
+    type=int,
+    help="Max number of assets to show (default: 20)",
+)
+def asset_list(
+    asset_type: str | None, workspace: str | None, tags: str | None, limit: int
+) -> None:
     """List assets."""
     config_file = _config_path()
     if not config_file.exists():
@@ -1016,7 +1052,9 @@ def asset_list(asset_type: str | None, workspace: str | None, tags: str | None, 
         has_more = len(assets) > limit
         display_assets = assets[:limit]
 
-        click.echo(f"{'ID':<14} {'TYPE':<12} {'WORKSPACE':<16} {'CREATED_BY':<12} {'TITLE'}")
+        click.echo(
+            f"{'ID':<14} {'TYPE':<12} {'WORKSPACE':<16} {'CREATED_BY':<12} {'TITLE'}"
+        )
         click.echo("-" * 80)
         for a in display_assets:
             click.echo(
@@ -1068,7 +1106,9 @@ def asset_search_cmd(
             click.echo("No assets found.")
             return
         for r in results:
-            click.echo(f"  {r['id']}  [{r.get('asset_type', '')}]  {r.get('title', '')}")
+            click.echo(
+                f"  {r['id']}  [{r.get('asset_type', '')}]  {r.get('title', '')}"
+            )
 
     asyncio.run(_run())
 
@@ -1094,10 +1134,7 @@ def asset_delete(asset_id: str) -> None:
         if a is None:
             click.echo(f"Asset not found: {asset_id}", err=True)
             raise SystemExit(1)
-        async with store._conn() as db:
-            await db.execute("DELETE FROM assets_vec WHERE asset_id = ?", (asset_id,))
-            await db.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
-            await db.commit()
+        await store.delete_asset(asset_id)
         click.echo(f"Deleted asset: {asset_id}")
 
     asyncio.run(_run())
@@ -1131,7 +1168,12 @@ def asset_archive(asset_id: str) -> None:
 
 
 @asset.command("cleanup")
-@click.option("--grace-days", default=30, type=int, help="Grace period before purging archives (default: 30)")
+@click.option(
+    "--grace-days",
+    default=30,
+    type=int,
+    help="Grace period before purging archives (default: 30)",
+)
 def asset_cleanup(grace_days: int) -> None:
     """Archive expired assets and purge old archives."""
     config_file = _config_path()
@@ -1162,89 +1204,120 @@ main.add_command(asset)
 # schedule
 # ---------------------------------------------------------------------------
 
+
 @main.group()
 def schedule():
     """Manage schedules."""
     pass
+
 
 @schedule.command("add")
 @click.option("--name", required=True, help="Unique schedule name")
 @click.option("--workspace", required=True)
 @click.option("--type", "task_type", required=True, help="Task type to create")
 @click.option("--cron", default=None, help='Cron expression (e.g. "0 9 * * *")')
-@click.option("--interval", "interval_ms", type=int, default=None, help="Interval in ms")
+@click.option(
+    "--interval", "interval_ms", type=int, default=None, help="Interval in ms"
+)
 @click.option("--approval", "approval_level", type=int, default=0)
 def schedule_add(name, workspace, task_type, cron, interval_ms, approval_level):
     """Add a new schedule."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         await store.create_schedule(
-            name=name, workspace=workspace, task_type=task_type,
-            cron=cron, interval_ms=interval_ms, approval_level=approval_level,
+            name=name,
+            workspace=workspace,
+            task_type=task_type,
+            cron=cron,
+            interval_ms=interval_ms,
+            approval_level=approval_level,
         )
         click.echo(f"Created schedule: {name}")
+
     asyncio.run(_run())
+
 
 @schedule.command("list")
 def schedule_list():
     """List all schedules."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         schedules = await store.list_schedules()
         if not schedules:
             click.echo("No schedules.")
             return
-        click.echo(f"{'NAME':<25} {'TYPE':<15} {'WORKSPACE':<15} {'TRIGGER':<20} {'ENABLED'}")
+        click.echo(
+            f"{'NAME':<25} {'TYPE':<15} {'WORKSPACE':<15} {'TRIGGER':<20} {'ENABLED'}"
+        )
         click.echo("-" * 85)
         for s in schedules:
             trigger = s["cron"] or f"every {s['interval_ms']}ms"
             enabled = "✓" if s["enabled"] else "✗"
-            click.echo(f"{s['name']:<25} {s['task_type']:<15} {s['workspace']:<15} {trigger:<20} {enabled}")
+            click.echo(
+                f"{s['name']:<25} {s['task_type']:<15} {s['workspace']:<15} {trigger:<20} {enabled}"
+            )
+
     asyncio.run(_run())
+
 
 @schedule.command("remove")
 @click.argument("name")
 def schedule_remove(name):
     """Remove a schedule."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         await store.delete_schedule(name)
         click.echo(f"Removed schedule: {name}")
+
     asyncio.run(_run())
+
 
 @schedule.command("enable")
 @click.argument("name")
 def schedule_enable(name):
     """Enable a schedule."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         await store.update_schedule(name, enabled=True)
         click.echo(f"Enabled: {name}")
+
     asyncio.run(_run())
+
 
 @schedule.command("disable")
 @click.argument("name")
 def schedule_disable(name):
     """Disable a schedule."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         await store.update_schedule(name, enabled=False)
         click.echo(f"Disabled: {name}")
+
     asyncio.run(_run())
 
 
@@ -1252,10 +1325,12 @@ def schedule_disable(name):
 # extract-rule
 # ---------------------------------------------------------------------------
 
+
 @main.group("extract-rule")
 def extract_rule():
     """Manage auto-extract rules."""
     pass
+
 
 @extract_rule.command("add")
 @click.option("--workspace", required=True)
@@ -1266,50 +1341,69 @@ def extract_rule():
 @click.option("--tags-from", default=None, help="Comma-separated dot-paths")
 def rule_add(workspace, task_type, asset_type, title_field, iterate, tags_from):
     """Add or update an auto-extract rule."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         tf = [t.strip() for t in tags_from.split(",")] if tags_from else None
         await store.create_extract_rule(
-            workspace=workspace, task_type=task_type, asset_type=asset_type,
-            title_field=title_field, iterate=iterate, tags_from=tf,
+            workspace=workspace,
+            task_type=task_type,
+            asset_type=asset_type,
+            title_field=title_field,
+            iterate=iterate,
+            tags_from=tf,
         )
         click.echo(f"Rule set: {workspace}/{task_type} → {asset_type}")
+
     asyncio.run(_run())
+
 
 @extract_rule.command("list")
 @click.option("--workspace", default=None)
 def rule_list(workspace):
     """List auto-extract rules."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         rules = await store.list_extract_rules(workspace=workspace)
         if not rules:
             click.echo("No rules.")
             return
-        click.echo(f"{'WORKSPACE':<20} {'TASK_TYPE':<15} {'ASSET_TYPE':<10} {'TITLE_FIELD':<20}")
+        click.echo(
+            f"{'WORKSPACE':<20} {'TASK_TYPE':<15} {'ASSET_TYPE':<10} {'TITLE_FIELD':<20}"
+        )
         click.echo("-" * 70)
         for r in rules:
-            click.echo(f"{r['workspace']:<20} {r['task_type']:<15} {r['asset_type']:<10} {r.get('title_field') or '':<20}")
+            click.echo(
+                f"{r['workspace']:<20} {r['task_type']:<15} {r['asset_type']:<10} {r.get('title_field') or '':<20}"
+            )
+
     asyncio.run(_run())
+
 
 @extract_rule.command("remove")
 @click.option("--workspace", required=True)
 @click.option("--task-type", required=True)
 def rule_remove(workspace, task_type):
     """Remove an auto-extract rule."""
+
     async def _run():
         config = _load_config()
         from maestro.store import Store
+
         store = Store(config.project.store_path)
         await store.init_db()
         await store.delete_extract_rule(workspace, task_type)
         click.echo(f"Removed rule: {workspace}/{task_type}")
+
     asyncio.run(_run())
 
 
