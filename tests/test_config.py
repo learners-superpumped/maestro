@@ -19,7 +19,6 @@ from maestro.config import (
     MaestroConfig,
     ProjectConfig,
     ResourceProfile,
-    ScheduleEntry,
     load_config,
 )
 
@@ -156,7 +155,6 @@ def test_defaults_applied(tmp_path: pathlib.Path) -> None:
 
     # collections default to empty
     assert cfg.goals == []
-    assert cfg.schedules == []
     assert cfg.resources == {}
 
 
@@ -296,38 +294,6 @@ def test_logging_config_parsed(tmp_path: pathlib.Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Schedules parsing
-# ---------------------------------------------------------------------------
-
-
-def test_schedules_parsed(tmp_path: pathlib.Path) -> None:
-    """Both cron-based and interval-based schedule entries should parse correctly."""
-    cfg_file = tmp_path / "maestro.yaml"
-    cfg_file.write_text(FULL_CONFIG)
-    cfg = load_config(cfg_file)
-
-    assert len(cfg.schedules) == 2
-
-    cron_entry = cfg.schedules[0]
-    assert isinstance(cron_entry, ScheduleEntry)
-    assert cron_entry.name == "threads-daily-post"
-    assert cron_entry.cron == "0 9 * * *"
-    assert cron_entry.interval_ms is None
-    assert cron_entry.workspace == "sns-threads"
-    assert cron_entry.task_type == "create_post"
-    assert cron_entry.approval_level == 2
-
-    interval_entry = cfg.schedules[1]
-    assert isinstance(interval_entry, ScheduleEntry)
-    assert interval_entry.name == "threads-engagement"
-    assert interval_entry.cron is None
-    assert interval_entry.interval_ms == 1_800_000
-    assert interval_entry.workspace == "sns-threads"
-    assert interval_entry.task_type == "check_and_engage"
-    assert interval_entry.approval_level == 1
-
-
-# ---------------------------------------------------------------------------
 # Goals parsing
 # ---------------------------------------------------------------------------
 
@@ -402,15 +368,9 @@ assets:
     post: null
     engage: 14
   cleanup_interval_ms: 3600000
-  auto_extract:
-    sns-threads:
-      create_post:
-        asset_type: post
-        title_field: "content.text"
 """
     cfg_path = tmp_path / "test.yaml"
     cfg_path.write_text(yaml_content)
     cfg = load_config(str(cfg_path))
     assert cfg.assets.default_ttl["engage"] == 14
     assert cfg.assets.cleanup_interval_ms == 3_600_000
-    assert "sns-threads" in cfg.assets.auto_extract
