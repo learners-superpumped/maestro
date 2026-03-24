@@ -37,24 +37,41 @@ CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 
 CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    path TEXT NOT NULL,
+    task_id TEXT REFERENCES tasks(id),
+    workspace TEXT NOT NULL DEFAULT '_shared',
+    created_by TEXT NOT NULL DEFAULT 'human',
+    asset_type TEXT NOT NULL,
+    media_type TEXT,
     title TEXT NOT NULL,
     description TEXT,
     tags TEXT,
-    embedding_model TEXT,
+    content_json TEXT,
+    file_path TEXT,
+    file_size INTEGER,
+    embedding_model TEXT DEFAULT 'gemini-embedding-2-preview',
     embedded_at TEXT,
-    platforms_published TEXT,
+    ttl_days INTEGER,
+    expires_at TEXT,
+    archived INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS task_assets (
-    task_id TEXT NOT NULL REFERENCES tasks(id),
+CREATE TABLE IF NOT EXISTS asset_usage (
+    id TEXT PRIMARY KEY,
     asset_id TEXT NOT NULL REFERENCES assets(id),
-    role TEXT DEFAULT 'reference',
-    PRIMARY KEY (task_id, asset_id)
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    usage_type TEXT DEFAULT 'reference',
+    used_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_assets_workspace ON assets(workspace);
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
+CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived);
+CREATE INDEX IF NOT EXISTS idx_assets_expires ON assets(expires_at);
+CREATE INDEX IF NOT EXISTS idx_assets_task ON assets(task_id);
+CREATE INDEX IF NOT EXISTS idx_asset_usage_asset ON asset_usage(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_usage_task ON asset_usage(task_id);
 
 CREATE TABLE IF NOT EXISTS action_history (
     id TEXT PRIMARY KEY,
@@ -117,4 +134,33 @@ CREATE TABLE IF NOT EXISTS notifications (
     delivered INTEGER DEFAULT 0,
     channel TEXT DEFAULT 'log',
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS schedules (
+    id             TEXT PRIMARY KEY,
+    name           TEXT UNIQUE NOT NULL,
+    workspace      TEXT NOT NULL,
+    task_type      TEXT NOT NULL,
+    cron           TEXT,
+    interval_ms    INTEGER,
+    approval_level INTEGER NOT NULL DEFAULT 0,
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
+CREATE INDEX IF NOT EXISTS idx_schedules_workspace ON schedules(workspace);
+
+CREATE TABLE IF NOT EXISTS auto_extract_rules (
+    id          TEXT PRIMARY KEY,
+    workspace   TEXT NOT NULL,
+    task_type   TEXT NOT NULL,
+    asset_type  TEXT NOT NULL,
+    title_field TEXT,
+    iterate     TEXT,
+    tags_from   TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(workspace, task_type)
 );

@@ -9,11 +9,21 @@ from __future__ import annotations
 
 import json
 import pathlib
+import secrets
+import struct
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
 
 import aiosqlite
+
+try:
+    import sqlite_vec
+
+    _HAS_SQLITE_VEC = True
+except ImportError:
+    _HAS_SQLITE_VEC = False
 
 from maestro.models import Task, TaskStatus
 
@@ -96,13 +106,11 @@ def _row_to_asset(d: dict[str, Any]) -> dict[str, Any]:
     elif not d.get("tags"):
         d["tags"] = []
 
-    if d.get("platforms_published") and isinstance(d["platforms_published"], str):
+    if d.get("content_json") and isinstance(d["content_json"], str):
         try:
-            d["platforms_published"] = json.loads(d["platforms_published"])
+            d["content_json"] = json.loads(d["content_json"])
         except (json.JSONDecodeError, TypeError):
-            d["platforms_published"] = []
-    elif not d.get("platforms_published"):
-        d["platforms_published"] = []
+            pass  # Keep as raw string
 
     return d
 
@@ -128,6 +136,19 @@ def _row_to_action(d: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
+def _has_tags(asset: dict, required_tags: list[str]) -> bool:
+    """Check if an asset has all required tags."""
+    asset_tags = asset.get("tags")
+    if not asset_tags:
+        return False
+    if isinstance(asset_tags, str):
+        try:
+            asset_tags = json.loads(asset_tags)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    return all(t in asset_tags for t in required_tags)
+
+
 # ---------------------------------------------------------------------------
 # Store
 # ---------------------------------------------------------------------------
@@ -146,11 +167,19 @@ class Store:
     @asynccontextmanager
     async def _conn(self) -> AsyncIterator[aiosqlite.Connection]:
         """Async context manager that yields a WAL-mode connection."""
-        async with aiosqlite.connect(self._db_path) as db:
-            db.row_factory = aiosqlite.Row
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA foreign_keys=ON")
+        db = await aiosqlite.connect(self._db_path)
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA foreign_keys=ON")
+        # Load sqlite-vec on every connection (if available)
+        if _HAS_SQLITE_VEC and hasattr(db._connection, "enable_load_extension"):
+            db._connection.enable_load_extension(True)
+            sqlite_vec.load(db._connection)
+            db._connection.enable_load_extension(False)
+        try:
             yield db
+        finally:
+            await db.close()
 
     # ------------------------------------------------------------------
     # Schema
@@ -158,11 +187,24 @@ class Store:
 
     async def init_db(self) -> None:
         """Apply schema.sql to the database (idempotent)."""
+        # Migrate FIRST so old tables are dropped before schema.sql runs
+        await self._migrate()
         schema_sql = _SCHEMA_PATH.read_text()
         async with self._conn() as db:
             await db.executescript(schema_sql)
             await db.commit()
-        await self._migrate()
+        # Create vector table for embeddings (requires sqlite-vec extension)
+        try:
+            async with self._conn() as db:
+                await db.execute("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS assets_vec USING vec0(
+                        asset_id TEXT PRIMARY KEY,
+                        embedding float[3072]
+                    )
+                """)
+                await db.commit()
+        except Exception:
+            pass  # sqlite-vec not available; vector search disabled
 
     async def _migrate(self) -> None:
         try:
@@ -180,6 +222,20 @@ class Store:
                 await db.execute(
                     "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)"
                 )
+                await db.commit()
+        except Exception:
+            pass
+
+        # Migrate old assets schema to new asset pipeline schema
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute("PRAGMA table_info(assets)")
+                columns = {row[1] for row in await cursor.fetchall()}
+                if "path" in columns:  # Old schema detection
+                    await db.execute("DROP TABLE IF EXISTS task_assets")
+                    await db.execute("DROP TABLE IF EXISTS assets")
+                    schema_sql = (pathlib.Path(__file__).parent / "schema.sql").read_text()
+                    await db.executescript(schema_sql)
                 await db.commit()
         except Exception:
             pass
@@ -388,29 +444,41 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO assets (
-                    id, type, path, title, description, tags,
-                    embedding_model, embedded_at, platforms_published,
+                    id, task_id, workspace, created_by, asset_type,
+                    media_type, title, description, tags, content_json,
+                    file_path, file_size, embedding_model, embedded_at,
+                    ttl_days, expires_at, archived,
                     created_at, updated_at
                 ) VALUES (
-                    :id, :type, :path, :title, :description, :tags,
-                    :embedding_model, :embedded_at, :platforms_published,
+                    :id, :task_id, :workspace, :created_by, :asset_type,
+                    :media_type, :title, :description, :tags, :content_json,
+                    :file_path, :file_size, :embedding_model, :embedded_at,
+                    :ttl_days, :expires_at, :archived,
                     :created_at, :updated_at
                 )
                 """,
                 {
                     "id": asset["id"],
-                    "type": asset["type"],
-                    "path": asset["path"],
+                    "task_id": asset.get("task_id"),
+                    "workspace": asset.get("workspace", "_shared"),
+                    "created_by": asset.get("created_by", "human"),
+                    "asset_type": asset["asset_type"],
+                    "media_type": asset.get("media_type"),
                     "title": asset["title"],
                     "description": asset.get("description"),
                     "tags": json.dumps(asset["tags"]) if asset.get("tags") else None,
-                    "embedding_model": asset.get("embedding_model"),
-                    "embedded_at": asset.get("embedded_at"),
-                    "platforms_published": (
-                        json.dumps(asset["platforms_published"])
-                        if asset.get("platforms_published")
-                        else None
+                    "content_json": (
+                        json.dumps(asset["content_json"])
+                        if asset.get("content_json") and not isinstance(asset["content_json"], str)
+                        else asset.get("content_json")
                     ),
+                    "file_path": asset.get("file_path"),
+                    "file_size": asset.get("file_size"),
+                    "embedding_model": asset.get("embedding_model", "gemini-embedding-2-preview"),
+                    "embedded_at": asset.get("embedded_at"),
+                    "ttl_days": asset.get("ttl_days"),
+                    "expires_at": asset.get("expires_at"),
+                    "archived": asset.get("archived", 0),
                     "created_at": asset.get("created_at", now),
                     "updated_at": asset.get("updated_at", now),
                 },
@@ -436,7 +504,7 @@ class Store:
         params: list[Any] = []
 
         if asset_type is not None:
-            clauses.append("type = ?")
+            clauses.append("asset_type = ?")
             params.append(asset_type)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
@@ -465,11 +533,17 @@ class Store:
             "title",
             "description",
             "tags",
+            "content_json",
+            "file_path",
+            "file_size",
             "embedding_model",
             "embedded_at",
-            "platforms_published",
-            "type",
-            "path",
+            "asset_type",
+            "media_type",
+            "workspace",
+            "ttl_days",
+            "expires_at",
+            "archived",
         }
         params: dict[str, Any] = {"updated_at": _now_iso(), "id": asset_id}
         set_clauses = ["updated_at = :updated_at"]
@@ -477,7 +551,9 @@ class Store:
         for key, value in kwargs.items():
             if key not in allowed:
                 raise ValueError(f"update_asset: unknown field '{key}'")
-            if key in ("tags", "platforms_published") and isinstance(value, list):
+            if key == "tags" and isinstance(value, list):
+                value = json.dumps(value)
+            if key == "content_json" and not isinstance(value, str) and value is not None:
                 value = json.dumps(value)
             params[key] = value
             set_clauses.append(f"{key} = :{key}")
@@ -485,6 +561,122 @@ class Store:
         sql = f"UPDATE assets SET {', '.join(set_clauses)} WHERE id = :id"
         async with self._conn() as db:
             await db.execute(sql, params)
+            await db.commit()
+
+    async def list_assets_filtered(
+        self,
+        *,
+        workspace: str | None = None,
+        asset_type: str | None = None,
+        tags: list[str] | None = None,
+        task_id: str | None = None,
+        archived: int = 0,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List assets with filters. Includes _shared when workspace specified."""
+        conditions = ["archived = ?"]
+        params: list = [archived]
+        if workspace:
+            conditions.append("workspace IN (?, '_shared')")
+            params.append(workspace)
+        if asset_type:
+            conditions.append("asset_type = ?")
+            params.append(asset_type)
+        if task_id:
+            conditions.append("task_id = ?")
+            params.append(task_id)
+        where = " AND ".join(conditions)
+        where += " AND (expires_at IS NULL OR expires_at > datetime('now'))"
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                f"SELECT * FROM assets WHERE {where} ORDER BY created_at DESC LIMIT ?",
+                params + [limit],
+            )
+            rows = await cursor.fetchall()
+        results = [_row_to_asset(dict(r)) for r in rows]
+        if tags:
+            results = [r for r in results if _has_tags(r, tags)]
+        return results
+
+    async def store_embedding(self, asset_id: str, embedding: list[float]) -> None:
+        """Store embedding vector in assets_vec."""
+        blob = struct.pack(f"{len(embedding)}f", *embedding)
+        async with self._conn() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO assets_vec (asset_id, embedding) VALUES (?, ?)",
+                (asset_id, blob),
+            )
+            await db.execute(
+                "UPDATE assets SET embedded_at = datetime('now') WHERE id = ?",
+                (asset_id,),
+            )
+            await db.commit()
+
+    async def vec_search(
+        self,
+        query_embedding: list[float],
+        candidate_ids: list[str] | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Vector similarity search via sqlite-vec."""
+        blob = struct.pack(f"{len(query_embedding)}f", *query_embedding)
+        async with self._conn() as db:
+            if candidate_ids and len(candidate_ids) <= 1000:
+                placeholders = ",".join("?" for _ in candidate_ids)
+                cursor = await db.execute(
+                    f"""SELECT asset_id, distance FROM assets_vec
+                        WHERE asset_id IN ({placeholders})
+                        AND embedding MATCH ?
+                        ORDER BY distance LIMIT ?""",
+                    candidate_ids + [blob, limit],
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT asset_id, distance FROM assets_vec
+                       WHERE embedding MATCH ?
+                       ORDER BY distance LIMIT ?""",
+                    (blob, limit),
+                )
+            return [{"asset_id": r[0], "distance": r[1]} for r in await cursor.fetchall()]
+
+    async def archive_expired_assets(self) -> int:
+        """Archive assets whose expires_at has passed."""
+        async with self._conn() as db:
+            cursor = await db.execute("""
+                UPDATE assets SET archived = 1, updated_at = datetime('now')
+                WHERE expires_at IS NOT NULL AND expires_at < datetime('now')
+                AND archived = 0
+            """)
+            count = cursor.rowcount
+            if count:
+                await db.execute("""
+                    DELETE FROM assets_vec WHERE asset_id IN (
+                        SELECT id FROM assets WHERE archived = 1
+                    )
+                """)
+            await db.commit()
+            return count
+
+    async def purge_archived_assets(self, grace_days: int = 30) -> int:
+        """Permanently delete archived assets older than grace_days."""
+        async with self._conn() as db:
+            cursor = await db.execute("""
+                DELETE FROM assets WHERE archived = 1
+                AND updated_at < datetime('now', ? || ' days')
+            """, (f"-{grace_days}",))
+            await db.commit()
+            return cursor.rowcount
+
+    async def record_asset_usage(
+        self, asset_id: str, task_id: str, usage_type: str = "reference"
+    ) -> None:
+        """Record asset usage in asset_usage table."""
+        async with self._conn() as db:
+            await db.execute("""
+                INSERT INTO asset_usage (id, asset_id, task_id, usage_type, used_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+            """, (secrets.token_hex(6), asset_id, task_id, usage_type))
             await db.commit()
 
     # ------------------------------------------------------------------
@@ -808,6 +1000,83 @@ class Store:
             )
             await db.commit()
 
+    async def seed_schedule(self, schedule: dict) -> None:
+        """Insert a schedule if name doesn't already exist (for YAML migration)."""
+        async with self._conn() as db:
+            existing = await db.execute(
+                "SELECT id FROM schedules WHERE name = ?", (schedule["name"],)
+            )
+            if await existing.fetchone():
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            sid = str(uuid.uuid4())[:8]
+            await db.execute(
+                """INSERT INTO schedules
+                   (id, name, workspace, task_type, cron, interval_ms, approval_level, enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (sid, schedule["name"], schedule["workspace"], schedule["task_type"],
+                 schedule.get("cron"), schedule.get("interval_ms"),
+                 schedule.get("approval_level", 0), now, now),
+            )
+            await db.commit()
+
+    async def create_schedule(
+        self, *, name: str, workspace: str, task_type: str,
+        cron: str | None = None, interval_ms: int | None = None,
+        approval_level: int = 0,
+    ) -> dict:
+        sid = str(uuid.uuid4())[:8]
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO schedules
+                   (id, name, workspace, task_type, cron, interval_ms,
+                    approval_level, enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (sid, name, workspace, task_type, cron, interval_ms,
+                 approval_level, now, now),
+            )
+            await db.commit()
+        return await self.get_schedule(name)
+
+    async def get_schedule(self, name: str) -> dict | None:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute("SELECT * FROM schedules WHERE name = ?", (name,))
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def list_schedules(self, *, enabled_only: bool = False) -> list[dict]:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            sql = "SELECT * FROM schedules"
+            if enabled_only:
+                sql += " WHERE enabled = 1"
+            sql += " ORDER BY name"
+            cur = await db.execute(sql)
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def update_schedule(self, name: str, **fields) -> None:
+        sets, params = [], []
+        for key, val in fields.items():
+            if key == "enabled":
+                val = 1 if val else 0
+            sets.append(f"{key} = ?")
+            params.append(val)
+        sets.append("updated_at = ?")
+        params.append(datetime.now(timezone.utc).isoformat())
+        params.append(name)
+        async with self._conn() as db:
+            await db.execute(
+                f"UPDATE schedules SET {', '.join(sets)} WHERE name = ?", params
+            )
+            await db.commit()
+
+    async def delete_schedule(self, name: str) -> None:
+        async with self._conn() as db:
+            await db.execute("DELETE FROM schedules WHERE name = ?", (name,))
+            await db.commit()
+
     async def increment_review_count(self, task_id: str) -> None:
         async with self._conn() as db:
             await db.execute(
@@ -874,5 +1143,72 @@ class Store:
                     updated_at = excluded.updated_at
                 """,
                 (date, amount, now),
+            )
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # auto_extract_rules
+    # ------------------------------------------------------------------
+
+    async def create_extract_rule(
+        self, *, workspace: str, task_type: str, asset_type: str,
+        title_field: str | None = None, iterate: str | None = None,
+        tags_from: list[str] | None = None,
+    ) -> dict:
+        rid = str(uuid.uuid4())[:8]
+        now = datetime.now(timezone.utc).isoformat()
+        tags_json = json.dumps(tags_from) if tags_from else None
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO auto_extract_rules
+                   (id, workspace, task_type, asset_type, title_field, iterate, tags_from, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(workspace, task_type) DO UPDATE SET
+                     asset_type=excluded.asset_type, title_field=excluded.title_field,
+                     iterate=excluded.iterate, tags_from=excluded.tags_from,
+                     updated_at=excluded.updated_at""",
+                (rid, workspace, task_type, asset_type, title_field, iterate, tags_json, now, now),
+            )
+            await db.commit()
+        return await self.get_extract_rule(workspace, task_type)
+
+    async def get_extract_rule(self, workspace: str, task_type: str) -> dict | None:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT * FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
+                (workspace, task_type),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            d = dict(row)
+            if d["tags_from"]:
+                d["tags_from"] = json.loads(d["tags_from"])
+            return d
+
+    async def list_extract_rules(self, *, workspace: str | None = None) -> list[dict]:
+        async with self._conn() as db:
+            db.row_factory = aiosqlite.Row
+            if workspace:
+                cur = await db.execute(
+                    "SELECT * FROM auto_extract_rules WHERE workspace = ? ORDER BY task_type",
+                    (workspace,),
+                )
+            else:
+                cur = await db.execute(
+                    "SELECT * FROM auto_extract_rules ORDER BY workspace, task_type"
+                )
+            rows = [dict(r) for r in await cur.fetchall()]
+            for r in rows:
+                if r["tags_from"]:
+                    r["tags_from"] = json.loads(r["tags_from"])
+            return rows
+
+    async def delete_extract_rule(self, workspace: str, task_type: str) -> None:
+        async with self._conn() as db:
+            await db.execute(
+                "DELETE FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
+                (workspace, task_type),
             )
             await db.commit()

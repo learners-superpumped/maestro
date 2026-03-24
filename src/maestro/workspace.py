@@ -8,6 +8,7 @@ containing CLAUDE.md, knowledge/, skills/, sessions/, and .claude/ config.
 from __future__ import annotations
 
 import json
+import tempfile
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -195,6 +196,7 @@ _AD_CLAUDE_MD = textwrap.dedent("""\
 _DEFAULT_MCP_JSON = {
     "mcpServers": {
         "maestro-store": _MCP_MAESTRO_STORE,
+        "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
     },
 }
 
@@ -292,6 +294,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": [],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
     },
     "sns": {
@@ -299,6 +302,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": ["tone.md", "strategy.md", "guidelines.md"],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
     },
     "seo": {
@@ -306,6 +310,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "knowledge_files": ["strategy.md", "guidelines.md"],
         "mcp_servers": {
             "maestro-store": _MCP_MAESTRO_STORE,
+            "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
         },
     },
     "ad": {
@@ -323,6 +328,7 @@ TEMPLATES["planner"] = {
     "knowledge_files": [],
     "mcp_servers": {
         "maestro-store": _MCP_MAESTRO_STORE,
+        "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
     },
 }
 
@@ -331,6 +337,7 @@ TEMPLATES["reviewer"] = {
     "knowledge_files": [],
     "mcp_servers": {
         "maestro-store": _MCP_MAESTRO_STORE,
+        "maestro-embedding": _MCP_MAESTRO_EMBEDDING,
     },
 }
 
@@ -467,6 +474,55 @@ class WorkspaceManager:
             )
 
         return ws_path
+
+    def resolve_workspace_path(self, name: str, template: str | None = None) -> Path:
+        """Return workspace path, creating a temp workspace if no local override exists.
+
+        For internal workspaces like ``_planner`` and ``_reviewer``, the user
+        only needs to create a local directory when they want to customise.
+        Otherwise the built-in template is materialised into a temp directory.
+
+        Args:
+            name: Workspace name.
+            template: Template to use when creating a temp workspace.
+                      If *None* and no local workspace exists, raises FileNotFoundError.
+
+        Returns:
+            Path to the workspace directory (local or temp).
+        """
+        local_path = self._workspaces_dir / name
+        if local_path.is_dir():
+            return local_path.resolve()
+
+        if template is None:
+            raise FileNotFoundError(f"Workspace not found: {local_path}")
+
+        if template not in TEMPLATES:
+            raise ValueError(f"Unknown template: {template!r}")
+
+        # Materialise built-in template into a temp directory
+        tmp_dir = Path(tempfile.mkdtemp(prefix=f"maestro-{name}-"))
+        tmpl = TEMPLATES[template]
+        (tmp_dir / "knowledge").mkdir(exist_ok=True)
+        (tmp_dir / "skills").mkdir(exist_ok=True)
+        (tmp_dir / ".claude").mkdir(exist_ok=True)
+
+        content = tmpl["claude_md"].format(name=name)
+        (tmp_dir / "CLAUDE.md").write_text(content, encoding="utf-8")
+
+        mcp = {"mcpServers": dict(tmpl["mcp_servers"])}
+        (tmp_dir / ".claude" / "mcp.json").write_text(
+            json.dumps(mcp, indent=2) + "\n", encoding="utf-8"
+        )
+        (tmp_dir / ".claude" / "settings.json").write_text(
+            json.dumps(_DEFAULT_SETTINGS_JSON, indent=2) + "\n", encoding="utf-8"
+        )
+
+        for filename in tmpl["knowledge_files"]:
+            kc = _KNOWLEDGE_TEMPLATES.get(filename, f"# {filename}\n")
+            (tmp_dir / "knowledge" / filename).write_text(kc, encoding="utf-8")
+
+        return tmp_dir
 
     def ensure_base_knowledge(self) -> Path:
         """Create the _base/ shared knowledge directory with placeholder files.

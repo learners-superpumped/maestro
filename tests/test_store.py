@@ -39,7 +39,7 @@ async def test_schema_applies_cleanly(db_path: pathlib.Path) -> None:
     expected_tables = {
         "tasks",
         "assets",
-        "task_assets",
+        "asset_usage",
         "action_history",
         "approvals",
         "budget_daily",
@@ -269,8 +269,7 @@ def _asset(**kwargs) -> dict:
     """Create a minimal asset dict with sensible defaults."""
     defaults = dict(
         id=str(uuid.uuid4()),
-        type="image",
-        path="/assets/test.png",
+        asset_type="image",
         title="Test Asset",
         description="A test image",
         tags=["test", "image"],
@@ -289,8 +288,9 @@ async def test_create_and_get_asset(db_path: pathlib.Path) -> None:
     assert fetched is not None
     assert fetched["id"] == asset["id"]
     assert fetched["title"] == asset["title"]
-    assert fetched["type"] == asset["type"]
-    assert fetched["path"] == asset["path"]
+    assert fetched["asset_type"] == asset["asset_type"]
+    assert fetched["workspace"] == "_shared"
+    assert fetched["created_by"] == "human"
     assert fetched["tags"] == ["test", "image"]
 
 
@@ -303,9 +303,9 @@ async def test_get_nonexistent_asset_returns_none(db_path: pathlib.Path) -> None
 async def test_list_assets_by_type(db_path: pathlib.Path) -> None:
     store = Store(db_path)
 
-    img = _asset(type="image", title="Image")
-    vid = _asset(type="video", title="Video")
-    doc = _asset(type="document", title="Doc")
+    img = _asset(asset_type="image", title="Image")
+    vid = _asset(asset_type="video", title="Video")
+    doc = _asset(asset_type="document", title="Doc")
 
     for a in (img, vid, doc):
         await store.create_asset(a)
@@ -459,3 +459,50 @@ async def test_update_goal_state_rejects_unknown_field(db_path: pathlib.Path) ->
     store = Store(db_path)
     with pytest.raises(ValueError, match="unknown field"):
         await store.update_goal_state("g1", bad_field="value")
+
+
+# ---------------------------------------------------------------------------
+# Schema Migration
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_migration_drops_old_assets(tmp_path):
+    db_file = str(tmp_path / "test.db")
+    store = Store(db_file)
+    await store.init_db()
+    async with store._conn() as db:
+        cursor = await db.execute("PRAGMA table_info(assets)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        assert "workspace" in columns
+        assert "created_by" in columns
+        assert "content_json" in columns
+        assert "file_path" in columns
+        assert "ttl_days" in columns
+        assert "archived" in columns
+        assert "path" not in columns
+        assert "platforms_published" not in columns
+        cursor = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='task_assets'"
+        )
+        assert await cursor.fetchone() is None
+        cursor = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='asset_usage'"
+        )
+        assert await cursor.fetchone() is not None
+
+
+@pytest.mark.asyncio
+async def test_assets_vec_table_created(tmp_path):
+    import sqlite3
+
+    if not hasattr(sqlite3.connect(":memory:"), "enable_load_extension"):
+        pytest.skip("sqlite3 built without extension loading support")
+
+    db_file = str(tmp_path / "test.db")
+    store = Store(db_file)
+    await store.init_db()
+    async with store._conn() as db:
+        cursor = await db.execute(
+            "SELECT name FROM sqlite_master WHERE name='assets_vec'"
+        )
+        assert await cursor.fetchone() is not None

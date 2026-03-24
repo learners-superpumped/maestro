@@ -10,6 +10,7 @@ import yaml
 
 from maestro.config import (
     AgentConfig,
+    AssetsConfig,
     BudgetConfig,
     ConcurrencyConfig,
     DaemonConfig,
@@ -18,7 +19,6 @@ from maestro.config import (
     MaestroConfig,
     ProjectConfig,
     ResourceProfile,
-    ScheduleEntry,
     load_config,
 )
 
@@ -155,7 +155,6 @@ def test_defaults_applied(tmp_path: pathlib.Path) -> None:
 
     # collections default to empty
     assert cfg.goals == []
-    assert cfg.schedules == []
     assert cfg.resources == {}
 
 
@@ -295,38 +294,6 @@ def test_logging_config_parsed(tmp_path: pathlib.Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Schedules parsing
-# ---------------------------------------------------------------------------
-
-
-def test_schedules_parsed(tmp_path: pathlib.Path) -> None:
-    """Both cron-based and interval-based schedule entries should parse correctly."""
-    cfg_file = tmp_path / "maestro.yaml"
-    cfg_file.write_text(FULL_CONFIG)
-    cfg = load_config(cfg_file)
-
-    assert len(cfg.schedules) == 2
-
-    cron_entry = cfg.schedules[0]
-    assert isinstance(cron_entry, ScheduleEntry)
-    assert cron_entry.name == "threads-daily-post"
-    assert cron_entry.cron == "0 9 * * *"
-    assert cron_entry.interval_ms is None
-    assert cron_entry.workspace == "sns-threads"
-    assert cron_entry.task_type == "create_post"
-    assert cron_entry.approval_level == 2
-
-    interval_entry = cfg.schedules[1]
-    assert isinstance(interval_entry, ScheduleEntry)
-    assert interval_entry.name == "threads-engagement"
-    assert interval_entry.cron is None
-    assert interval_entry.interval_ms == 1_800_000
-    assert interval_entry.workspace == "sns-threads"
-    assert interval_entry.task_type == "check_and_engage"
-    assert interval_entry.approval_level == 1
-
-
-# ---------------------------------------------------------------------------
 # Goals parsing
 # ---------------------------------------------------------------------------
 
@@ -374,3 +341,36 @@ def test_resources_empty_when_omitted(tmp_path: pathlib.Path) -> None:
     cfg = load_config(cfg_file)
 
     assert cfg.resources == {}
+
+
+# ---------------------------------------------------------------------------
+# AssetsConfig
+# ---------------------------------------------------------------------------
+
+
+def test_assets_config_defaults() -> None:
+    cfg = AssetsConfig()
+    assert cfg.default_ttl["post"] is None
+    assert cfg.default_ttl["engage"] == 30
+    assert cfg.default_ttl["research"] == 7
+    assert cfg.cleanup_interval_ms == 86_400_000
+    assert cfg.archive_grace_days == 30
+    assert cfg.gemini_api_key == ""
+
+
+def test_assets_config_from_yaml(tmp_path: pathlib.Path) -> None:
+    yaml_content = """\
+project:
+  name: test
+  store_path: ./test.db
+assets:
+  default_ttl:
+    post: null
+    engage: 14
+  cleanup_interval_ms: 3600000
+"""
+    cfg_path = tmp_path / "test.yaml"
+    cfg_path.write_text(yaml_content)
+    cfg = load_config(str(cfg_path))
+    assert cfg.assets.default_ttl["engage"] == 14
+    assert cfg.assets.cleanup_interval_ms == 3_600_000

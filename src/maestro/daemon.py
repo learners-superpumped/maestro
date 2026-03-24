@@ -23,6 +23,7 @@ from aiohttp import web
 
 from maestro.api import create_api_app
 from maestro.approval import ApprovalManager
+from maestro.assets import AssetManager
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
 from maestro.dispatcher import Dispatcher
@@ -61,7 +62,7 @@ class Daemon:
         self._store = store
         self._base_path = base_path
         self._runner = AgentRunner()
-        self._scheduler = Scheduler(config.schedules)
+        self._scheduler = Scheduler(store)
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
@@ -70,18 +71,74 @@ class Daemon:
         signal_collector = SignalCollector(store, config.goals)
         self._planner = Planner(store, config, signal_collector)
         self._approval_manager = ApprovalManager(store)
+
+        # Asset manager (embedding client is optional)
+        embedding_client = None
+        if self._config.assets.gemini_api_key:
+            try:
+                from maestro.embedding import EmbeddingClient
+
+                embedding_client = EmbeddingClient(self._config.assets.gemini_api_key)
+            except Exception:
+                pass
+        self._asset_manager = AssetManager(
+            self._store, embedding_client, self._config, self._base_path
+        )
+
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick: float = 0.0
         self._last_reconcile: float = 0.0
         self._last_scheduler_tick: float = 0.0
+        self._last_cleanup_tick: float = 0.0
 
-        # Bootstrap planner and reviewer workspaces
-        wm = WorkspaceManager(self._base_path)
-        if not wm.workspace_exists("_planner"):
-            wm.create_workspace("_planner", template="planner")
-        if not wm.workspace_exists("_reviewer"):
-            wm.create_workspace("_reviewer", template="reviewer")
+        # Internal workspace templates (used if no local override exists)
+        self._internal_templates: dict[str, str] = {
+            "_planner": "planner",
+            "_reviewer": "reviewer",
+        }
+
+    # ------------------------------------------------------------------
+    # Seed helpers
+    # ------------------------------------------------------------------
+
+    async def _seed_from_yaml(self) -> None:
+        """One-time migration: seed DB from YAML schedules if DB is empty."""
+        existing = await self._store.list_schedules()
+        if existing:
+            return  # Already has schedules in DB, skip seeding
+
+        # Check if config still has schedules in YAML (old format)
+        yaml_path = self._base_path / "maestro.yaml"
+        if not yaml_path.exists():
+            return
+        import yaml
+        raw = yaml.safe_load(yaml_path.read_text()) or {}
+        for s in raw.get("schedules", []):
+            await self._store.create_schedule(
+                name=s["name"],
+                workspace=s["workspace"],
+                task_type=s["task_type"],
+                cron=s.get("cron"),
+                interval_ms=s.get("interval_ms"),
+                approval_level=s.get("approval_level", 0),
+            )
+            logger.info("Seeded schedule from YAML: %s", s["name"])
+
+        # Seed auto_extract rules
+        assets_cfg = raw.get("assets", {})
+        for workspace, type_rules in assets_cfg.get("auto_extract", {}).items():
+            for task_type, rule in type_rules.items():
+                tags = rule.get("tags_from", [])
+                await self._store.create_extract_rule(
+                    workspace=workspace,
+                    task_type=task_type,
+                    asset_type=rule["asset_type"],
+                    title_field=rule.get("title_field"),
+                    iterate=rule.get("iterate"),
+                    tags_from=tags if tags else None,
+                )
+                logger.info("Seeded extract rule from YAML: %s/%s", workspace, task_type)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -96,6 +153,7 @@ class Daemon:
         """
         # 1. Create the aiohttp app
         app = create_api_app(self._store, slack=self._slack)
+        app["asset_manager"] = self._asset_manager
 
         # 2. Start TCP site on loopback
         runner = web.AppRunner(app)
@@ -120,13 +178,16 @@ class Daemon:
         pid_file.write_text(str(os.getpid()))
         logger.info("PID %d written to %s", os.getpid(), pid_file)
 
-        # 5. Restore scheduler state from DB
-        schedule_names = [s.name for s in self._config.schedules]
+        # 5. Seed DB from YAML on first run (backward compatibility)
+        await self._seed_from_yaml()
+
+        # 6. Restore scheduler state from DB
+        schedules = await self._store.list_schedules(enabled_only=True)
         restored: dict[str, str] = {}
-        for name in schedule_names:
-            last = await self._store.get_schedule_last_run(name)
+        for s in schedules:
+            last = await self._store.get_schedule_last_run(s["name"])
             if last:
-                restored[name] = last
+                restored[s["name"]] = last
         self._scheduler.restore_last_triggered(restored)
 
         try:
@@ -167,6 +228,7 @@ class Daemon:
         reconcile_interval_s = self._config.daemon.reconcile_interval_ms / 1_000.0
         planner_interval_s = self._config.daemon.planner_interval_ms / 1_000.0
         scheduler_interval_s = self._config.daemon.scheduler_interval_ms / 1_000.0
+        cleanup_interval_s = self._config.assets.cleanup_interval_ms / 1_000.0
 
         logger.info(
             "Main loop started (dispatch every %.1fs, reconcile every %.1fs,"
@@ -181,6 +243,7 @@ class Daemon:
         self._last_reconcile = loop.time()
         self._last_planner_tick = loop.time()
         self._last_scheduler_tick = loop.time()
+        self._last_cleanup_tick = loop.time()
 
         while not self._shutdown.is_set():
             try:
@@ -203,6 +266,11 @@ class Daemon:
                 if (now_mono - self._last_scheduler_tick) >= scheduler_interval_s:
                     await self._scheduler_tick()
                     self._last_scheduler_tick = now_mono
+
+                # Asset cleanup on schedule
+                if (now_mono - self._last_cleanup_tick) >= cleanup_interval_s:
+                    await self._cleanup_tick()
+                    self._last_cleanup_tick = now_mono
 
             except Exception:
                 logger.exception("Error in main loop tick")
@@ -321,17 +389,20 @@ class Daemon:
 
     async def _resume_task(self, task: Task, instruction: str) -> None:
         """Resume a paused task's CLI session."""
-        workspace_path = self._base_path / "workspaces" / task.workspace
-        if not workspace_path.exists():
+        wm = WorkspaceManager(self._base_path)
+        template = self._internal_templates.get(task.workspace)
+        try:
+            workspace_path = wm.resolve_workspace_path(task.workspace, template)
+        except FileNotFoundError:
             logger.error(
                 "Workspace %s does not exist for resume of task %s",
-                workspace_path,
+                task.workspace,
                 task.id,
             )
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.FAILED,
-                error=f"Workspace not found: {workspace_path}",
+                error=f"Workspace not found: {task.workspace}",
             )
             return
 
@@ -377,15 +448,18 @@ class Daemon:
         3. Call the AgentRunner.
         4. Handle the result.
         """
-        workspace_path = self._base_path / "workspaces" / task.workspace
-        if not workspace_path.exists():
+        wm = WorkspaceManager(self._base_path)
+        template = self._internal_templates.get(task.workspace)
+        try:
+            workspace_path = wm.resolve_workspace_path(task.workspace, template)
+        except FileNotFoundError:
             logger.error(
-                "Workspace %s does not exist for task %s", workspace_path, task.id
+                "Workspace %s does not exist for task %s", task.workspace, task.id
             )
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.FAILED,
-                error=f"Workspace not found: {workspace_path}",
+                error=f"Workspace not found: {task.workspace}",
             )
             return
 
@@ -517,36 +591,54 @@ class Daemon:
                 seconds=self._config.daemon.scheduler_interval_ms / 1000
             )
 
-        due = self._scheduler.get_due_schedules(now, since)
-        due += self._scheduler.get_due_intervals(now)
+        due = await self._scheduler.get_due_schedules(now, since)
+        due += await self._scheduler.get_due_intervals(now)
 
         for entry in due:
-            if await self._has_active_task(entry):
+            if await self._has_active_task_for_schedule(entry):
                 continue
             task = Task(
                 id=str(uuid.uuid4())[:8],
-                type=entry.task_type,
-                workspace=entry.workspace,
-                title=f"Scheduled: {entry.name}",
+                type=entry["task_type"],
+                workspace=entry["workspace"],
+                title=f"Scheduled: {entry['name']}",
                 instruction=(
-                    f"스케줄 '{entry.name}' 실행. task_type: {entry.task_type}. "
+                    f"스케줄 '{entry['name']}' 실행. task_type: {entry['task_type']}. "
                     f"knowledge/ 파일을 읽고 적절한 액션을 수행하라."
                 ),
-                approval_level=entry.approval_level,
+                approval_level=entry["approval_level"],
             )
             await self._store.create_task(task)
-            self._scheduler.mark_triggered(entry.name, now)
-            await self._store.set_schedule_last_run(entry.name, now.isoformat())
+            self._scheduler.mark_triggered(entry["name"], now)
+            await self._store.set_schedule_last_run(entry["name"], now.isoformat())
 
         await self._store.set_scheduler_state("last_tick", now.isoformat())
 
-    async def _has_active_task(self, entry) -> bool:
-        tasks = await self._store.list_tasks(workspace=entry.workspace)
+    async def _has_active_task_for_schedule(self, entry: dict) -> bool:
+        tasks = await self._store.list_tasks(workspace=entry["workspace"])
         return any(
-            t.type == entry.task_type
+            t.type == entry["task_type"]
             and t.status.value not in ("completed", "failed", "cancelled")
             for t in tasks
         )
+
+    # ------------------------------------------------------------------
+    # Asset cleanup
+    # ------------------------------------------------------------------
+
+    async def _cleanup_tick(self) -> None:
+        """Archive expired assets and purge old archives."""
+        try:
+            archived = await self._store.archive_expired_assets()
+            if archived:
+                logger.info("Archived %d expired assets", archived)
+            purged = await self._store.purge_archived_assets(
+                grace_days=self._config.assets.archive_grace_days
+            )
+            if purged:
+                logger.info("Purged %d archived assets", purged)
+        except Exception as e:
+            logger.warning("Asset cleanup failed: %s", e)
 
     # ------------------------------------------------------------------
     # Post-completion processing
@@ -595,6 +687,32 @@ class Daemon:
         if task.type == "review" and result.result_json:
             await self._handle_review_result(task, result)
             return
+
+        # Auto-extract assets from result_json
+        if result.result_json and self._asset_manager:
+            rule = await self._store.get_extract_rule(task.workspace, task.type)
+            if rule:
+                rules = {
+                    "asset_type": rule["asset_type"],
+                    "title_field": rule.get("title_field"),
+                    "iterate": rule.get("iterate"),
+                    "tags_from": rule.get("tags_from"),
+                }
+                try:
+                    rj = result.result_json
+                    if isinstance(rj, str):
+                        rj = json.loads(rj)
+                    if isinstance(rj, dict):
+                        await self._asset_manager.auto_extract(
+                            task_id=task.id,
+                            workspace=task.workspace,
+                            result_json=rj,
+                            rules=rules,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "Asset auto-extract failed for task %s: %s", task.id, e
+                    )
 
         # 일반 태스크: approve 후 resume 완료 → 리뷰 재진입 방지
         approval = await self._store.get_approval_by_task(task.id)

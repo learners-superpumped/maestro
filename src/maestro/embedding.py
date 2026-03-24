@@ -1,85 +1,102 @@
-"""
-Gemini Embedding client.
-
-Provides text and file embedding via the Gemini Embedding 2 API.
-Gracefully degrades to zero vectors when no API key is configured.
-"""
+"""Gemini Embedding 2 Preview client for multimodal asset embedding."""
 
 from __future__ import annotations
 
-import logging
-import os
+import asyncio
+import json
+import mimetypes
 from pathlib import Path
-from typing import Optional
 
-logger = logging.getLogger(__name__)
+from google import genai
+from google.genai import types
 
-# Gemini text-embedding-004 produces 768-dim vectors
-EMBEDDING_DIM = 768
+
+def _guess_mime(file_path: str) -> str:
+    """Guess MIME type from file extension."""
+    mime, _ = mimetypes.guess_type(file_path)
+    return mime or "application/octet-stream"
 
 
 class EmbeddingClient:
-    """Client for Gemini Embedding API with fallback to zero vectors."""
+    """Gemini Embedding 2 Preview client.
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
-        self._api_key = api_key or os.environ.get("GEMINI_API_KEY")
+    Supports: text, image, video, audio, PDF — all natively.
+    Output: 3072-dimensional vectors in a single shared vector space.
+    """
 
-    @property
-    def available(self) -> bool:
-        """Check if API key is configured."""
-        return self._api_key is not None
+    MODEL = "gemini-embedding-2-preview"
+    EMBEDDING_DIM = 3072
 
-    async def embed_text(self, text: str) -> list[float]:
-        """Get embedding vector for text.
+    def __init__(self, api_key: str) -> None:
+        if not api_key:
+            raise ValueError("Gemini API key is required for EmbeddingClient")
+        self._client = genai.Client(api_key=api_key)
 
-        Returns a 768-dim zero vector when no API key is set.
-        """
-        if not self.available:
-            logger.debug(
-                "No GEMINI_API_KEY set; returning zero vector for text embedding"
-            )
-            return [0.0] * EMBEDDING_DIM
-
-        return await self._call_gemini_text(text)
-
-    async def embed_file(self, path: Path) -> list[float]:
-        """Get embedding for a file (image, document, etc.).
-
-        For documents (.txt, .md): extracts text and embeds it.
-        For images/video: placeholder (returns zero vector).
-        Returns a 768-dim zero vector when no API key is set.
-        """
-        if not self.available:
-            logger.debug(
-                "No GEMINI_API_KEY set; returning zero vector for file embedding"
-            )
-            return [0.0] * EMBEDDING_DIM
-
-        suffix = path.suffix.lower()
-
-        # Text-based files: read and embed as text
-        if suffix in (".txt", ".md", ".csv"):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            return await self._call_gemini_text(text)
-
-        # For images, video, PDFs — return zero vector placeholder
-        logger.info(
-            "File type %s not yet supported for embedding; returning zero vector",
-            suffix,
+    async def embed_text(
+        self, text: str, task_type: str = "RETRIEVAL_DOCUMENT"
+    ) -> list[float]:
+        result = await asyncio.to_thread(
+            self._client.models.embed_content,
+            model=self.MODEL,
+            contents=text,
+            config=types.EmbedContentConfig(
+                output_dimensionality=self.EMBEDDING_DIM,
+                task_type=task_type,
+            ),
         )
-        return [0.0] * EMBEDDING_DIM
+        return list(result.embeddings[0].values)
 
-    async def _call_gemini_text(self, text: str) -> list[float]:
-        """Call the Gemini embedding API for text.
+    async def embed_query(self, query: str) -> list[float]:
+        return await self.embed_text(query, task_type="RETRIEVAL_QUERY")
 
-        Currently a stub that returns zero vectors.
-        Replace with actual API call when ready.
-        """
-        # TODO: Implement actual Gemini API call:
-        #   POST https://generativelanguage.googleapis.com/v1beta/models/
-        #        text-embedding-004:embedContent
-        #   Headers: x-goog-api-key: {api_key}
-        #   Body: {"model": "models/text-embedding-004",
-        #          "content": {"parts": [{"text": text}]}}
-        logger.info("Gemini API call stubbed; returning zero vector")
-        return [0.0] * EMBEDDING_DIM
+    async def embed_image(self, image_path: str) -> list[float]:
+        data = Path(image_path).read_bytes()
+        mime = _guess_mime(image_path)
+        return await self._embed_bytes(data, mime)
+
+    async def embed_video(self, video_path: str) -> list[float]:
+        data = Path(video_path).read_bytes()
+        mime = _guess_mime(video_path)
+        return await self._embed_bytes(data, mime)
+
+    async def embed_audio(self, audio_path: str) -> list[float]:
+        data = Path(audio_path).read_bytes()
+        mime = _guess_mime(audio_path)
+        return await self._embed_bytes(data, mime)
+
+    async def embed_asset(self, asset: dict) -> list[float]:
+        media = asset.get("media_type", "")
+
+        if asset.get("file_path"):
+            if media.startswith("image/"):
+                return await self.embed_image(asset["file_path"])
+            if media.startswith("video/"):
+                return await self.embed_video(asset["file_path"])
+            if media.startswith("audio/"):
+                return await self.embed_audio(asset["file_path"])
+            if media == "application/pdf":
+                return await self._embed_bytes(
+                    Path(asset["file_path"]).read_bytes(), media
+                )
+
+        if asset.get("content_json"):
+            text = asset["content_json"]
+            if not isinstance(text, str):
+                text = json.dumps(text, ensure_ascii=False)
+            return await self.embed_text(text)
+
+        if asset.get("description"):
+            return await self.embed_text(asset["description"])
+
+        return [0.0] * self.EMBEDDING_DIM
+
+    async def _embed_bytes(self, data: bytes, mime_type: str) -> list[float]:
+        result = await asyncio.to_thread(
+            self._client.models.embed_content,
+            model=self.MODEL,
+            contents=[types.Part.from_bytes(data=data, mime_type=mime_type)],
+            config=types.EmbedContentConfig(
+                output_dimensionality=self.EMBEDDING_DIM,
+            ),
+        )
+        return list(result.embeddings[0].values)

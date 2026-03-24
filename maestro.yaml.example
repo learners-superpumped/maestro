@@ -44,21 +44,9 @@ goals:
       engagement_check: "daily"
     workspace: sns-threads
 
-schedules:
-  # cron-based schedule: uses standard five-field cron expression.
-  - name: threads-daily-post
-    cron: "0 9 * * *"
-    workspace: sns-threads
-    task_type: create_post
-    # approval_level: 0 = auto-approve, 1 = soft approval, 2 = hard approval
-    approval_level: 2
-
-  # interval-based schedule: fires every interval_ms milliseconds.
-  - name: threads-engagement
-    interval_ms: 1800000
-    workspace: sns-threads
-    task_type: check_and_engage
-    approval_level: 1
+# Schedules and auto-extract rules are managed via CLI/DB:
+#   maestro schedule add --name daily-post --cron "0 9 * * *" ...
+#   maestro extract-rule add --workspace sns-threads --task-type create_post ...
 
 agent:
   # Tools agents are permitted to call by default.
