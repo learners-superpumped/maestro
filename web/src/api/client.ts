@@ -20,6 +20,7 @@ function buildQuery(params?: Record<string, string | undefined>): string {
 }
 
 export const api = {
+  health: () => request<any>("/api/internal/health"),
   stats: () => request<any>("/api/internal/stats"),
 
   tasks: {
@@ -32,8 +33,11 @@ export const api = {
         body: JSON.stringify(data),
       }),
     children: (id: string) => request<any>(`/api/internal/task/${id}/children`),
-    approve: (id: string) =>
-      request<any>(`/api/internal/task/${id}/approve`, { method: "POST" }),
+    approve: (id: string, note?: string) =>
+      request<any>(`/api/internal/task/${id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ note }),
+      }),
     reject: (id: string, note?: string) =>
       request<any>(`/api/internal/task/${id}/reject`, {
         method: "POST",
