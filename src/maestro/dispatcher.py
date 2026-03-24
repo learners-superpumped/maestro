@@ -13,6 +13,8 @@ SQL — tasks with a future scheduled_at are never returned by the store.
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -20,6 +22,131 @@ from maestro.config import BudgetConfig, ConcurrencyConfig
 from maestro.models import TaskStatus
 from maestro.resources import ResourceManager
 from maestro.store import Store
+
+# ---------------------------------------------------------------------------
+# AgentLogProcessor
+# ---------------------------------------------------------------------------
+
+
+class AgentLogProcessor:
+    """Processes raw Claude CLI stream events into stored logs and WebSocket summaries.
+
+    Args:
+        store: The Maestro persistence layer.
+        bus:   The EventBus for emitting real-time updates.
+    """
+
+    def __init__(self, store, bus) -> None:
+        self._store = store
+        self._bus = bus
+        self._last_emit: dict[str, float] = {}
+        self._throttle_s = 0.5
+
+    def _tool_summary(self, tool_name: str, tool_input: dict) -> str:
+        if tool_name in ("Read", "Write"):
+            return tool_input.get("file_path", tool_name)
+        elif tool_name == "Edit":
+            fp = tool_input.get("file_path", "")
+            old = (tool_input.get("old_string", ""))[:30]
+            new = (tool_input.get("new_string", ""))[:30]
+            return f"{fp}: {old} → {new}" if fp else tool_name
+        elif tool_name == "Bash":
+            return (tool_input.get("command", ""))[:80]
+        elif tool_name == "Grep":
+            return f"pattern: '{tool_input.get('pattern', '')}'"
+        return tool_name
+
+    def _result_summary(self, result_text: str) -> str:
+        lines = result_text.count("\n") + 1
+        if len(result_text) > 200:
+            return f"{lines} lines"
+        return result_text[:100]
+
+    async def _should_emit(self, task_id: str) -> bool:
+        now = time.monotonic()
+        last = self._last_emit.get(task_id, 0)
+        if now - last < self._throttle_s:
+            return False
+        self._last_emit[task_id] = now
+        return True
+
+    async def process_event(self, task_id: str, event: dict) -> None:
+        """Process a single stream event from the Claude CLI.
+
+        Only ``assistant`` type events are processed; all others are ignored.
+        """
+        event_type = event.get("type")
+        if event_type != "assistant":
+            return
+        message = event.get("message", {})
+        for block in message.get("content", []):
+            block_type = block.get("type")
+            if block_type == "text":
+                text = block.get("text", "")
+                log_id = await self._store.record_task_log(
+                    task_id=task_id,
+                    log_type="text",
+                    summary=text,
+                    content=text,
+                )
+                if await self._should_emit(task_id):
+                    await self._bus.emit(
+                        "task.agent_log",
+                        {
+                            "task_id": task_id,
+                            "log_id": log_id,
+                            "log_type": "text",
+                            "summary": text[:500],
+                            "has_content": len(text) > 500,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+            elif block_type == "tool_use":
+                tool_name = block.get("name", "")
+                tool_input = block.get("input", {})
+                summary = self._tool_summary(tool_name, tool_input)
+                log_id = await self._store.record_task_log(
+                    task_id=task_id,
+                    log_type="tool_use",
+                    tool_name=tool_name,
+                    summary=summary,
+                    content=json.dumps(tool_input),
+                )
+                if await self._should_emit(task_id):
+                    await self._bus.emit(
+                        "task.agent_log",
+                        {
+                            "task_id": task_id,
+                            "log_id": log_id,
+                            "log_type": "tool_use",
+                            "tool_name": tool_name,
+                            "summary": summary,
+                            "has_content": True,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+            elif block_type == "tool_result":
+                result_text = str(block.get("content", ""))
+                summary = self._result_summary(result_text)
+                log_id = await self._store.record_task_log(
+                    task_id=task_id,
+                    log_type="tool_result",
+                    summary=summary,
+                    content=result_text,
+                )
+                if await self._should_emit(task_id):
+                    await self._bus.emit(
+                        "task.agent_log",
+                        {
+                            "task_id": task_id,
+                            "log_id": log_id,
+                            "log_type": "tool_result",
+                            "summary": summary,
+                            "has_content": True,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+
 
 # ---------------------------------------------------------------------------
 # DispatchDecision

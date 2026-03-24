@@ -493,12 +493,18 @@ class Daemon:
         task.status = TaskStatus.RUNNING
 
         # Execute via the runner
+        processor = AgentLogProcessor(self._store, self._bus)
+
+        async def on_event(event: dict) -> None:
+            await processor.process_event(task.id, event)
+
         try:
             result = await self._runner.execute(
                 task,
                 workspace_path,
                 allowed_tools=self._config.agent.default_allowed_tools,
                 max_turns=self._config.agent.default_max_turns,
+                on_event=on_event,
             )
         except Exception as exc:
             logger.exception("Runner raised for task %s: %s", task.id, exc)
