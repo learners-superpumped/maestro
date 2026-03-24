@@ -6,6 +6,7 @@ import {
   useApproveTask,
   useRejectTask,
   useReviseTask,
+  useCreateTask,
 } from "@/hooks/queries/use-tasks"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ActivityTimeline } from "@/components/ActivityTimeline"
@@ -32,6 +33,7 @@ import {
   PenLine,
   AlertTriangle,
   Play,
+  RefreshCw,
 } from "lucide-react"
 import Markdown from "react-markdown"
 import { useQuery } from "@tanstack/react-query"
@@ -166,6 +168,7 @@ export function TaskDetail() {
   const approve = useApproveTask()
   const reject = useRejectTask()
   const revise = useReviseTask()
+  const createTask = useCreateTask()
 
   const [approveOpen, setApproveOpen] = useState(false)
   const [approveNote, setApproveNote] = useState("")
@@ -239,8 +242,40 @@ export function TaskDetail() {
       </div>
 
       {/* Action buttons — context-dependent labels */}
-      {(canApprove || canReject || canRevise) && (
+      {(canApprove || canReject || canRevise || task.status === "failed") && (
         <div className="flex gap-2 flex-wrap">
+          {task.status === "failed" && (
+            <>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  await createTask.mutateAsync({
+                    workspace: task.workspace,
+                    type: task.type,
+                    title: task.title,
+                    instruction: task.instruction,
+                    priority: task.priority,
+                    approval_level: task.approval_level,
+                  })
+                  navigate({ to: "/tasks" })
+                }}
+                disabled={createTask.isPending}
+                className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
+              >
+                {createTask.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                Retry
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setRejectOpen(true)}
+                className="h-[28px] text-[13px] rounded border border-[#e8e5df] text-[#787774] hover:bg-[#f7f6f3] px-3"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Dismiss
+              </Button>
+            </>
+          )}
           {task.status === "pending" && (
             <>
               <Button

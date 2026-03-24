@@ -1,13 +1,13 @@
 import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { useRootTasks, useApproveTask, useRejectTask, useReviseTask } from "@/hooks/queries/use-tasks"
+import { useRootTasks, useApproveTask, useRejectTask, useReviseTask, useCreateTask } from "@/hooks/queries/use-tasks"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Check, X, PenLine, Play, ExternalLink, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react"
+import { Check, X, PenLine, Play, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "@/api/client"
 
@@ -38,6 +38,7 @@ function ApprovalCard({ task }: { task: any }) {
   const approve = useApproveTask()
   const reject = useRejectTask()
   const revise = useReviseTask()
+  const retryTask = useCreateTask()
   const [expanded, setExpanded] = useState(false)
   const [dialogType, setDialogType] = useState<"approve" | "reject" | "revise" | null>(null)
   const [note, setNote] = useState("")
@@ -114,10 +115,23 @@ function ApprovalCard({ task }: { task: any }) {
               </>
             )}
             {task.status === "failed" && (
-              <Button size="sm" variant="outline" onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
-                className="border border-[#e8e5df] text-[#787774] h-[28px] text-[12px] rounded px-2.5">
-                <ExternalLink className="h-3 w-3 mr-1" /> View
-              </Button>
+              <>
+                <Button size="sm" onClick={async () => {
+                  await retryTask.mutateAsync({
+                    workspace: task.workspace, type: task.type,
+                    title: task.title, instruction: task.instruction,
+                    priority: task.priority, approval_level: task.approval_level,
+                  })
+                }}
+                  disabled={retryTask.isPending}
+                  className="bg-[#2383e2] hover:bg-[#1a73cc] text-white h-[28px] text-[12px] rounded px-2.5">
+                  {retryTask.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Retry
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
+                  className="border border-[#e8e5df] text-[#787774] h-[28px] text-[12px] rounded px-2.5">
+                  <ExternalLink className="h-3 w-3 mr-1" /> View
+                </Button>
+              </>
             )}
           </div>
         </div>
