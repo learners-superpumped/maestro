@@ -272,3 +272,31 @@ class TestTaskCommands:
             assert result.exit_code == 0
             assert "T2" in result.output
             assert "T1" not in result.output
+
+    def test_task_list_limit_validation(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            result = runner.invoke(main, ["task", "list", "--limit", "0"])
+            assert result.exit_code != 0
+            assert "positive integer" in result.output.lower()
+
+            result = runner.invoke(main, ["task", "list", "--limit", "-5"])
+            assert result.exit_code != 0
+            assert "positive integer" in result.output.lower()
+
+    def test_task_list_limit_short_flag(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            for i in range(5):
+                runner.invoke(main, [
+                    "task", "create",
+                    "--workspace", "ws1",
+                    "--type", "shell",
+                    "--title", f"Task-{i}",
+                    "--instruction", f"do {i}",
+                ])
+            result = runner.invoke(main, ["task", "list", "-L", "3"])
+            assert result.exit_code == 0
+            assert "Use --limit to show more" in result.output

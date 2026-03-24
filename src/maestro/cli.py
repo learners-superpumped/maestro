@@ -294,9 +294,8 @@ def task_create(
 @task.command("list")
 @click.option("--status", "filter_status", default=None, help="Filter by status")
 @click.option("--workspace", "filter_workspace", default=None, help="Filter by workspace")
-@click.option("--flat", is_flag=True, help="Flat list without tree indentation")
 @click.option("--limit", "-L", "limit", default=20, type=int, help="Max number of tasks to show (default: 20)")
-def task_list(filter_status, filter_workspace, flat, limit):
+def task_list(filter_status, filter_workspace, limit):
     """List tasks."""
     config_file = _config_path()
     if not config_file.exists():
