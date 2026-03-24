@@ -81,16 +81,6 @@ class IntegrationsConfig:
 
 
 @dataclass
-class ScheduleEntry:
-    name: str
-    workspace: str
-    task_type: str
-    approval_level: int = 0
-    cron: str | None = None
-    interval_ms: int | None = None
-
-
-@dataclass
 class GoalEntry:
     id: str
     description: str
@@ -119,7 +109,6 @@ class AssetsConfig:
             "document": None,
         }
     )
-    auto_extract: dict[str, dict] = field(default_factory=dict)
     cleanup_interval_ms: int = 86_400_000
     archive_grace_days: int = 30
     gemini_api_key: str = ""
@@ -133,7 +122,6 @@ class MaestroConfig:
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
-    schedules: list[ScheduleEntry] = field(default_factory=list)
     goals: list[GoalEntry] = field(default_factory=list)
     integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     assets: AssetsConfig = field(default_factory=AssetsConfig)
@@ -220,22 +208,6 @@ def _parse_logging(data: dict[str, Any]) -> LoggingConfig:
     )
 
 
-def _parse_schedules(items: list[dict[str, Any]]) -> list[ScheduleEntry]:
-    entries: list[ScheduleEntry] = []
-    for item in items:
-        entries.append(
-            ScheduleEntry(
-                name=item["name"],
-                workspace=item["workspace"],
-                task_type=item["task_type"],
-                approval_level=int(item.get("approval_level", 0)),
-                cron=item.get("cron"),
-                interval_ms=item.get("interval_ms"),
-            )
-        )
-    return entries
-
-
 def _parse_goals(items: list[dict[str, Any]]) -> list[GoalEntry]:
     entries: list[GoalEntry] = []
     for item in items:
@@ -305,7 +277,6 @@ def _parse_assets(data: dict[str, Any]) -> AssetsConfig:
         ttl = dict(defaults.default_ttl)
     return AssetsConfig(
         default_ttl=ttl,
-        auto_extract=dict(data.get("auto_extract") or {}),
         cleanup_interval_ms=int(data.get("cleanup_interval_ms", defaults.cleanup_interval_ms)),
         archive_grace_days=int(data.get("archive_grace_days", defaults.archive_grace_days)),
         gemini_api_key=str(data.get("gemini_api_key", "")),
@@ -352,7 +323,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     budget = _parse_budget(data.get("budget") or {})
     agent = _parse_agent(data.get("agent") or {})
     logging_cfg = _parse_logging(data.get("logging") or {})
-    schedules = _parse_schedules(data.get("schedules") or [])
     goals = _parse_goals(data.get("goals") or [])
     integrations = _parse_integrations(data.get("integrations") or {})
     resources = _parse_resources(data.get("resources") or {})
@@ -368,7 +338,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
         budget=budget,
         agent=agent,
         logging=logging_cfg,
-        schedules=schedules,
         goals=goals,
         integrations=integrations,
         assets=assets,
