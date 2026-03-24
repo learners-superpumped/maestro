@@ -21,6 +21,9 @@ workspaces/*/sessions/pending/*.json
 # Chrome profiles (large, binary)
 chrome-profiles/
 
+# Superpowers docs (local planning only)
+docs/superpowers/
+
 # Claude Code
 .claude/settings.local.json
 
