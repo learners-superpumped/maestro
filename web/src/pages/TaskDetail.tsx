@@ -33,6 +33,7 @@ import {
   PenLine,
   Network,
 } from "lucide-react"
+import Markdown from "react-markdown"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { cn } from "@/lib/utils"
@@ -285,11 +286,13 @@ export function TaskDetail() {
           </CardHeader>
           {resultExpanded && (
             <CardContent>
-              <pre className="text-[13px] font-mono text-[#787774] whitespace-pre-wrap overflow-auto max-h-96">
-                {typeof (task.result_json ?? task.result) === "string"
-                  ? (task.result_json ?? task.result)
-                  : JSON.stringify(task.result_json ?? task.result, null, 2)}
-              </pre>
+              <div className="prose max-w-none overflow-auto max-h-[600px]">
+                <Markdown>
+                  {typeof (task.result_json ?? task.result) === "string"
+                    ? (task.result_json ?? task.result)
+                    : JSON.stringify(task.result_json ?? task.result, null, 2)}
+                </Markdown>
+              </div>
             </CardContent>
           )}
         </Card>
