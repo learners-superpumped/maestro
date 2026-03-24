@@ -349,6 +349,7 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
 
     status_str = request.query.get("status")
     workspace = request.query.get("workspace")
+    root_only = request.query.get("root_only", "").lower() == "true"
 
     status = None
     if status_str:
@@ -357,7 +358,16 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
         except ValueError:
             raise web.HTTPBadRequest(reason=f"Unknown status: '{status_str}'")
 
-    tasks = await store.list_tasks(status=status, workspace=workspace)
+    tasks = await store.list_tasks(
+        status=status, workspace=workspace, root_only=root_only
+    )
+
+    if root_only:
+        # store returns dicts with children_summary when root_only=True
+        return web.json_response(
+            {"tasks": tasks, "count": len(tasks)},
+            dumps=lambda obj: json.dumps(obj, default=str),
+        )
 
     return web.json_response(
         {
@@ -428,11 +438,22 @@ async def task_approve_handler(request: web.Request) -> web.Response:
     if task is None:
         raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
 
+    note = None
+    try:
+        body = await request.json()
+        note = body.get("note")
+    except (json.JSONDecodeError, ValueError):
+        pass
+
     approval = await mgr.get_approval(task_id)
     if approval and approval["status"] == "pending":
         await mgr.approve(task_id)
     else:
         await store.update_task_status(task_id, TaskStatus.APPROVED)
+
+    await store.record_task_event(
+        task_id, "approved", "human", {"note": note} if note else None
+    )
 
     return web.json_response({"ok": True})
 
@@ -462,6 +483,10 @@ async def task_reject_handler(request: web.Request) -> web.Response:
     else:
         await store.update_task_status(task_id, TaskStatus.CANCELLED)
 
+    await store.record_task_event(
+        task_id, "rejected", "human", {"note": note} if note else None
+    )
+
     return web.json_response({"ok": True})
 
 
@@ -488,6 +513,8 @@ async def task_revise_handler(request: web.Request) -> web.Response:
         await mgr.revise(task_id, note=note, revised_content=revised_content)
     except ValueError as exc:
         raise web.HTTPNotFound(reason=str(exc)) from exc
+
+    await store.record_task_event(task_id, "revised", "human", {"note": note})
 
     return web.json_response({"ok": True})
 
@@ -532,6 +559,7 @@ async def task_create_handler(request: web.Request) -> web.Response:
         budget_usd=float(body.get("budget_usd", 5.0)),
     )
     await store.create_task(task)
+    await store.record_task_event(task.id, "created", body.get("created_by", "human"))
     return web.json_response({"ok": True, "task_id": task.id}, status=201)
 
 
@@ -558,6 +586,62 @@ async def task_children_handler(request: web.Request) -> web.Response:
         },
         dumps=lambda obj: json.dumps(obj, default=str),
     )
+
+
+# ---------------------------------------------------------------------------
+# Task events & logs
+# ---------------------------------------------------------------------------
+
+
+async def task_events_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/task/{task_id}/events"""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+    events = await store.get_task_events(task_id, include_children=True)
+    return web.json_response({"events": events})
+
+
+async def task_logs_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/task/{task_id}/logs"""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+    logs = await store.get_task_logs(task_id)
+    return web.json_response({"logs": logs})
+
+
+async def task_log_detail_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/task/{task_id}/logs/{log_id}"""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+    log_id = int(request.match_info["log_id"])
+    log = await store.get_task_log(task_id, log_id)
+    if not log:
+        raise web.HTTPNotFound(reason="Log not found")
+    return web.json_response(log)
+
+
+async def task_logs_delete_handler(request: web.Request) -> web.Response:
+    """DELETE /api/internal/task/{task_id}/logs"""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+    async with store._db() as db:
+        cursor = await db.execute(
+            "DELETE FROM task_logs WHERE task_id = :tid", {"tid": task_id}
+        )
+        await db.commit()
+    return web.json_response({"deleted": cursor.rowcount})
+
+
+async def logs_cleanup_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/logs/cleanup"""
+    store: Store = request.app["store"]
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+    days = int(body.get("older_than_days", 30))
+    count = await store.cleanup_logs(days)
+    return web.json_response({"deleted": count})
 
 
 # ---------------------------------------------------------------------------
@@ -903,6 +987,15 @@ def create_api_app(
     # Task create + children
     app.router.add_post("/api/internal/task", task_create_handler)
     app.router.add_get("/api/internal/task/{task_id}/children", task_children_handler)
+
+    # Task events & logs
+    app.router.add_get("/api/internal/task/{task_id}/events", task_events_handler)
+    app.router.add_get("/api/internal/task/{task_id}/logs", task_logs_handler)
+    app.router.add_get(
+        "/api/internal/task/{task_id}/logs/{log_id}", task_log_detail_handler
+    )
+    app.router.add_delete("/api/internal/task/{task_id}/logs", task_logs_delete_handler)
+    app.router.add_post("/api/internal/logs/cleanup", logs_cleanup_handler)
 
     # Schedules
     app.router.add_get("/api/internal/schedules", schedules_list_handler)
