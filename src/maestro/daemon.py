@@ -23,6 +23,7 @@ from aiohttp import web
 
 from maestro.api import create_api_app
 from maestro.approval import ApprovalManager
+from maestro.assets import AssetManager
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
 from maestro.dispatcher import Dispatcher
@@ -70,11 +71,26 @@ class Daemon:
         signal_collector = SignalCollector(store, config.goals)
         self._planner = Planner(store, config, signal_collector)
         self._approval_manager = ApprovalManager(store)
+
+        # Asset manager (embedding client is optional)
+        embedding_client = None
+        if self._config.assets.gemini_api_key:
+            try:
+                from maestro.embedding import EmbeddingClient
+
+                embedding_client = EmbeddingClient(self._config.assets.gemini_api_key)
+            except Exception:
+                pass
+        self._asset_manager = AssetManager(
+            self._store, embedding_client, self._config, self._base_path
+        )
+
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick: float = 0.0
         self._last_reconcile: float = 0.0
         self._last_scheduler_tick: float = 0.0
+        self._last_cleanup_tick: float = 0.0
 
         # Bootstrap planner and reviewer workspaces
         wm = WorkspaceManager(self._base_path)
@@ -96,6 +112,7 @@ class Daemon:
         """
         # 1. Create the aiohttp app
         app = create_api_app(self._store, slack=self._slack)
+        app["asset_manager"] = self._asset_manager
 
         # 2. Start TCP site on loopback
         runner = web.AppRunner(app)
@@ -167,6 +184,7 @@ class Daemon:
         reconcile_interval_s = self._config.daemon.reconcile_interval_ms / 1_000.0
         planner_interval_s = self._config.daemon.planner_interval_ms / 1_000.0
         scheduler_interval_s = self._config.daemon.scheduler_interval_ms / 1_000.0
+        cleanup_interval_s = self._config.assets.cleanup_interval_ms / 1_000.0
 
         logger.info(
             "Main loop started (dispatch every %.1fs, reconcile every %.1fs,"
@@ -181,6 +199,7 @@ class Daemon:
         self._last_reconcile = loop.time()
         self._last_planner_tick = loop.time()
         self._last_scheduler_tick = loop.time()
+        self._last_cleanup_tick = loop.time()
 
         while not self._shutdown.is_set():
             try:
@@ -203,6 +222,11 @@ class Daemon:
                 if (now_mono - self._last_scheduler_tick) >= scheduler_interval_s:
                     await self._scheduler_tick()
                     self._last_scheduler_tick = now_mono
+
+                # Asset cleanup on schedule
+                if (now_mono - self._last_cleanup_tick) >= cleanup_interval_s:
+                    await self._cleanup_tick()
+                    self._last_cleanup_tick = now_mono
 
             except Exception:
                 logger.exception("Error in main loop tick")
@@ -549,6 +573,24 @@ class Daemon:
         )
 
     # ------------------------------------------------------------------
+    # Asset cleanup
+    # ------------------------------------------------------------------
+
+    async def _cleanup_tick(self) -> None:
+        """Archive expired assets and purge old archives."""
+        try:
+            archived = await self._store.archive_expired_assets()
+            if archived:
+                logger.info("Archived %d expired assets", archived)
+            purged = await self._store.purge_archived_assets(
+                grace_days=self._config.assets.archive_grace_days
+            )
+            if purged:
+                logger.info("Purged %d archived assets", purged)
+        except Exception as e:
+            logger.warning("Asset cleanup failed: %s", e)
+
+    # ------------------------------------------------------------------
     # Post-completion processing
     # ------------------------------------------------------------------
 
@@ -595,6 +637,27 @@ class Daemon:
         if task.type == "review" and result.result_json:
             await self._handle_review_result(task, result)
             return
+
+        # Auto-extract assets from result_json
+        if result.result_json and self._asset_manager:
+            rules_map = self._config.assets.auto_extract.get(task.workspace, {})
+            rules = rules_map.get(task.type)
+            if rules:
+                try:
+                    rj = result.result_json
+                    if isinstance(rj, str):
+                        rj = json.loads(rj)
+                    if isinstance(rj, dict):
+                        await self._asset_manager.auto_extract(
+                            task_id=task.id,
+                            workspace=task.workspace,
+                            result_json=rj,
+                            rules=rules,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "Asset auto-extract failed for task %s: %s", task.id, e
+                    )
 
         # 일반 태스크: approve 후 resume 완료 → 리뷰 재진입 방지
         approval = await self._store.get_approval_by_task(task.id)

@@ -238,31 +238,57 @@ async def history_record_handler(request: web.Request) -> web.Response:
 
 async def asset_register_handler(request: web.Request) -> web.Response:
     """POST /api/internal/asset/register — register a new asset."""
-    store: Store = request.app["store"]
-
     try:
-        body = await request.json()
+        data = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
 
-    path = body.get("path")
-    title = body.get("title")
-    if not path or not title:
-        raise web.HTTPBadRequest(reason="'path' and 'title' are required")
+    if not data.get("asset_type") or not data.get("title"):
+        raise web.HTTPBadRequest(reason="'asset_type' and 'title' are required")
 
-    from maestro.assets import AssetManager
+    am = request.app.get("asset_manager")
+    if am is None:
+        raise web.HTTPServiceUnavailable(reason="AssetManager not available")
 
-    mgr = AssetManager(store, request.app.get("assets_dir", "."))
-
-    asset_id = await mgr.register_asset(
-        path=path,
-        title=title,
-        asset_type=body.get("type"),
-        tags=body.get("tags"),
-        description=body.get("description"),
+    asset = await am.register_asset(
+        asset_type=data["asset_type"],
+        title=data["title"],
+        content_json=data.get("content_json"),
+        file_path=data.get("file_path"),
+        tags=data.get("tags"),
+        description=data.get("description"),
+        ttl_days=data.get("ttl_days"),
+        workspace=data.get("workspace", "_shared"),
+        created_by=data.get("created_by", "agent"),
+        task_id=data.get("task_id"),
     )
+    return web.json_response(asset, dumps=lambda obj: json.dumps(obj, default=str))
 
-    return web.json_response({"ok": True, "asset_id": asset_id})
+
+async def asset_search_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/asset/search — search assets with vector similarity."""
+    try:
+        data = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    if not data.get("query"):
+        raise web.HTTPBadRequest(reason="'query' is required")
+
+    am = request.app.get("asset_manager")
+    if am is None:
+        raise web.HTTPServiceUnavailable(reason="AssetManager not available")
+
+    results = await am.search(
+        query=data["query"],
+        workspace=data.get("workspace"),
+        asset_type=data.get("asset_type"),
+        tags=data.get("tags"),
+        since=data.get("since"),
+        limit=data.get("limit", 10),
+        include_content=data.get("include_content", True),
+    )
+    return web.json_response(results, dumps=lambda obj: json.dumps(obj, default=str))
 
 
 async def asset_get_handler(request: web.Request) -> web.Response:
@@ -282,10 +308,15 @@ async def asset_list_handler(request: web.Request) -> web.Response:
     store: Store = request.app["store"]
 
     asset_type = request.query.get("type")
+    workspace = request.query.get("workspace")
     tags_str = request.query.get("tags")
     tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
 
-    assets = await store.list_assets(asset_type=asset_type, tags_contain=tags)
+    assets = await store.list_assets_filtered(
+        asset_type=asset_type,
+        workspace=workspace,
+        tags=tags,
+    )
 
     return web.json_response(
         {"assets": assets, "count": len(assets)},
@@ -545,6 +576,7 @@ def create_api_app(store: Store, slack: object | None = None) -> web.Application
 
     # Assets
     app.router.add_post("/api/internal/asset/register", asset_register_handler)
+    app.router.add_post("/api/internal/asset/search", asset_search_handler)
     app.router.add_get("/api/internal/asset/{asset_id}", asset_get_handler)
     app.router.add_get("/api/internal/assets", asset_list_handler)
 

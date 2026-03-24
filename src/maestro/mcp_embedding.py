@@ -4,12 +4,13 @@ MCP server for asset embedding search.
 Runs as: python -m maestro.mcp_embedding
 
 Reads directly from SQLite (read-only, WAL safe) for search/list/get.
-Calls daemon HTTP API for write operations (register).
+Calls daemon HTTP API for write operations (register, search with vectors).
 
 Protocol: JSON-RPC 2.0 over stdin/stdout (MCP standard).
 
 Tools:
-  - maestro_asset_search(query, type?, limit?) -> matching assets
+  - maestro_asset_register(asset_type, title, ...) -> registered asset
+  - maestro_asset_search(query, workspace?, type?, ...) -> matching assets
   - maestro_asset_get(asset_id) -> asset details
   - maestro_asset_list(tags?, type?, unused_only?) -> asset list
 """
@@ -22,6 +23,8 @@ import logging
 import os
 import sys
 from typing import Any
+
+import aiohttp
 
 from maestro.store import Store
 
@@ -39,37 +42,83 @@ def _store() -> Store:
     return Store(db_path)
 
 
+def _daemon_port() -> int:
+    return int(os.environ.get("MAESTRO_DAEMON_PORT", "18321"))
+
+
+async def _post(port: int, path: str, data: dict) -> dict:
+    """POST to the daemon's internal HTTP API."""
+    url = f"http://127.0.0.1:{port}{path}"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data) as resp:
+            return await resp.json()
+
+
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
 
 
+async def maestro_asset_register(
+    asset_type: str,
+    title: str,
+    content_json: dict | None = None,
+    file_path: str | None = None,
+    tags: list[str] | None = None,
+    description: str | None = None,
+    ttl_days: int | None = None,
+    workspace: str = "_shared",
+    created_by: str = "agent",
+    task_id: str | None = None,
+) -> dict[str, Any]:
+    """Register a new asset via daemon HTTP API."""
+    payload: dict[str, Any] = {
+        "asset_type": asset_type,
+        "title": title,
+        "workspace": workspace,
+        "created_by": created_by,
+    }
+    if content_json is not None:
+        payload["content_json"] = content_json
+    if file_path is not None:
+        payload["file_path"] = file_path
+    if tags is not None:
+        payload["tags"] = tags
+    if description is not None:
+        payload["description"] = description
+    if ttl_days is not None:
+        payload["ttl_days"] = ttl_days
+    if task_id is not None:
+        payload["task_id"] = task_id
+
+    return await _post(_daemon_port(), "/api/internal/asset/register", payload)
+
+
 async def maestro_asset_search(
     query: str,
+    workspace: str | None = None,
     asset_type: str | None = None,
+    tags: list[str] | None = None,
+    since: str | None = None,
     limit: int = 10,
+    include_content: bool = True,
 ) -> dict[str, Any]:
-    """Search assets by text query.
+    """Search assets via daemon HTTP API (supports vector similarity)."""
+    payload: dict[str, Any] = {"query": query, "limit": limit, "include_content": include_content}
+    if workspace is not None:
+        payload["workspace"] = workspace
+    if asset_type is not None:
+        payload["asset_type"] = asset_type
+    if tags is not None:
+        payload["tags"] = tags
+    if since is not None:
+        payload["since"] = since
 
-    Currently performs simple text matching on title/description.
-    Vector search will be added when sqlite-vec is integrated.
-    """
-    store = _store()
-    all_assets = await store.list_assets(asset_type=asset_type)
-
-    # Simple text search: match query terms against title + description
-    query_lower = query.lower()
-    matches = []
-    for asset in all_assets:
-        title = (asset.get("title") or "").lower()
-        desc = (asset.get("description") or "").lower()
-        tags = " ".join(asset.get("tags") or []).lower()
-        if query_lower in title or query_lower in desc or query_lower in tags:
-            matches.append(asset)
-        if len(matches) >= limit:
-            break
-
-    return {"results": matches, "query": query, "count": len(matches)}
+    result = await _post(_daemon_port(), "/api/internal/asset/search", payload)
+    # Wrap in standard format if daemon returns a list directly
+    if isinstance(result, list):
+        return {"results": result, "query": query, "count": len(result)}
+    return result
 
 
 async def maestro_asset_get(asset_id: str) -> dict[str, Any]:
@@ -100,20 +149,84 @@ async def maestro_asset_list(
 # ---------------------------------------------------------------------------
 
 TOOLS: dict[str, dict[str, Any]] = {
+    "maestro_asset_register": {
+        "description": "Register a new asset (text, image, video, etc.)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_type": {
+                    "type": "string",
+                    "description": "Asset type (post, image, video, audio, document, research, engage)",
+                },
+                "title": {"type": "string", "description": "Human-readable title"},
+                "content_json": {
+                    "type": "object",
+                    "description": "Structured content (for text-based assets)",
+                },
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to binary file (image, video, etc.)",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags for categorization",
+                },
+                "description": {"type": "string", "description": "Brief description"},
+                "ttl_days": {
+                    "type": "integer",
+                    "description": "Days until auto-archival (null = permanent)",
+                },
+                "workspace": {
+                    "type": "string",
+                    "description": "Workspace scope (default: _shared)",
+                    "default": "_shared",
+                },
+                "created_by": {
+                    "type": "string",
+                    "description": "Creator identifier",
+                    "default": "agent",
+                },
+                "task_id": {
+                    "type": "string",
+                    "description": "Originating task ID",
+                },
+            },
+            "required": ["asset_type", "title"],
+        },
+    },
     "maestro_asset_search": {
-        "description": "Search assets by text query (title, description, tags)",
+        "description": "Search assets by semantic query with optional filters",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query text"},
-                "type": {
+                "workspace": {
                     "type": "string",
-                    "description": "Filter by asset type (image, video, document)",
+                    "description": "Filter by workspace (also includes _shared)",
+                },
+                "asset_type": {
+                    "type": "string",
+                    "description": "Filter by asset type",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Filter by tags (any match)",
+                },
+                "since": {
+                    "type": "string",
+                    "description": "Only assets created after this ISO datetime",
                 },
                 "limit": {
                     "type": "integer",
                     "description": "Max results to return",
                     "default": 10,
+                },
+                "include_content": {
+                    "type": "boolean",
+                    "description": "Include content_json in results",
+                    "default": True,
                 },
             },
             "required": ["query"],
@@ -161,11 +274,28 @@ TOOLS: dict[str, dict[str, Any]] = {
 
 async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
     """Dispatch a tool call to the appropriate handler."""
-    if name == "maestro_asset_search":
+    if name == "maestro_asset_register":
+        return await maestro_asset_register(
+            asset_type=arguments["asset_type"],
+            title=arguments["title"],
+            content_json=arguments.get("content_json"),
+            file_path=arguments.get("file_path"),
+            tags=arguments.get("tags"),
+            description=arguments.get("description"),
+            ttl_days=arguments.get("ttl_days"),
+            workspace=arguments.get("workspace", "_shared"),
+            created_by=arguments.get("created_by", "agent"),
+            task_id=arguments.get("task_id"),
+        )
+    elif name == "maestro_asset_search":
         return await maestro_asset_search(
             query=arguments["query"],
-            asset_type=arguments.get("type"),
+            workspace=arguments.get("workspace"),
+            asset_type=arguments.get("asset_type"),
+            tags=arguments.get("tags"),
+            since=arguments.get("since"),
             limit=arguments.get("limit", 10),
+            include_content=arguments.get("include_content", True),
         )
     elif name == "maestro_asset_get":
         return await maestro_asset_get(arguments["asset_id"])
