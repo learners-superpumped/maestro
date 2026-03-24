@@ -30,3 +30,7 @@ docs/superpowers/
 # OS
 .DS_Store
 .worktrees/
+
+# Frontend
+web/dist/
+web/node_modules/
