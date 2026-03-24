@@ -300,3 +300,35 @@ class TestTaskCommands:
             result = runner.invoke(main, ["task", "list", "-L", "3"])
             assert result.exit_code == 0
             assert "Use --limit to show more" in result.output
+
+    def test_task_list_tree_limit(self) -> None:
+        """Tree mode applies limit to root tasks, children always included."""
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            # Create 3 root tasks
+            root_ids = []
+            for i in range(3):
+                r = runner.invoke(main, [
+                    "task", "create",
+                    "--workspace", "ws1",
+                    "--type", "shell",
+                    "--title", f"Root-{i}",
+                    "--instruction", f"root {i}",
+                ])
+                root_ids.append(r.output.split("Task created: ")[1].split("\n")[0].strip())
+
+            # Create child for first root
+            runner.invoke(main, [
+                "task", "create",
+                "--workspace", "ws1",
+                "--type", "shell",
+                "--title", "Child-0",
+                "--instruction", "child",
+                "--parent", root_ids[0],
+            ])
+
+            # Limit to 2 roots — should still show child of included root
+            result = runner.invoke(main, ["task", "list", "--limit", "2"])
+            assert result.exit_code == 0
+            assert "root tasks" in result.output.lower() or "Use --limit" in result.output

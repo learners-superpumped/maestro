@@ -294,8 +294,9 @@ def task_create(
 @task.command("list")
 @click.option("--status", "filter_status", default=None, help="Filter by status")
 @click.option("--workspace", "filter_workspace", default=None, help="Filter by workspace")
+@click.option("--flat", is_flag=True, help="Flat list without tree indentation")
 @click.option("--limit", "-L", "limit", default=20, type=int, help="Max number of tasks to show (default: 20)")
-def task_list(filter_status, filter_workspace, limit):
+def task_list(filter_status, filter_workspace, flat, limit):
     """List tasks."""
     config_file = _config_path()
     if not config_file.exists():
@@ -323,26 +324,59 @@ def task_list(filter_status, filter_workspace, limit):
                 click.echo(f"Invalid status: {filter_status}. Valid: {valid}")
                 return
 
-        # Fetch limit+1 to detect if there are more results
-        tasks = await store.list_tasks(status=ts, workspace=filter_workspace, limit=limit + 1)
+        # Fetch all tasks (needed for tree detection and tree mode)
+        all_tasks = await store.list_tasks(status=ts, workspace=filter_workspace)
 
-        if not tasks:
+        if not all_tasks:
             click.echo("No tasks found.")
             return
 
-        has_more = len(tasks) > limit
-        display_tasks = tasks[:limit]
+        has_tree = not flat and any(t.parent_task_id for t in all_tasks)
 
-        for t in display_tasks:
-            emoji = _STATUS_EMOJI.get(t.status.value, " ")
-            click.echo(
-                f"{emoji} {t.id:<10} {t.status.value:<14}"
-                f" {t.priority:>3} {t.workspace:<20} {t.title}"
-            )
+        if has_tree:
+            # Tree mode: limit applies to root tasks
+            task_map = {t.id: t for t in all_tasks}
+            roots = [t for t in all_tasks
+                     if t.parent_task_id is None
+                     or t.parent_task_id not in task_map]
+            children_map: dict[str, list] = {}
+            for t in all_tasks:
+                if t.parent_task_id and t.parent_task_id in task_map:
+                    children_map.setdefault(t.parent_task_id, []).append(t)
 
-        if has_more:
-            status_label = f" {filter_status}" if filter_status else ""
-            click.echo(f"\nShowing {limit}{status_label} tasks. Use --limit to show more.")
+            total_roots = len(roots)
+            display_roots = roots[:limit]
+
+            def _print_tree(task, indent=""):
+                emoji = _STATUS_EMOJI.get(task.status.value, " ")
+                click.echo(
+                    f"{indent}{emoji} {task.id:<10} {task.status.value:<14}"
+                    f" {task.priority:>3} {task.workspace:<20} {task.title}"
+                )
+                for child in children_map.get(task.id, []):
+                    _print_tree(child, indent + "   ")
+
+            for root in display_roots:
+                _print_tree(root)
+
+            if total_roots > limit:
+                status_label = f" {filter_status}" if filter_status else ""
+                click.echo(f"\nShowing {limit} of {total_roots}{status_label} root tasks. Use --limit to show more.")
+        else:
+            # Flat mode: slice already-fetched data
+            has_more = len(all_tasks) > limit
+            display_tasks = all_tasks[:limit]
+
+            for t in display_tasks:
+                emoji = _STATUS_EMOJI.get(t.status.value, " ")
+                click.echo(
+                    f"{emoji} {t.id:<10} {t.status.value:<14}"
+                    f" {t.priority:>3} {t.workspace:<20} {t.title}"
+                )
+
+            if has_more:
+                status_label = f" {filter_status}" if filter_status else ""
+                click.echo(f"\nShowing {limit}{status_label} tasks. Use --limit to show more.")
 
     asyncio.run(_run())
 
