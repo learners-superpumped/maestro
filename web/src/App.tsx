@@ -3,6 +3,7 @@ import {
   createRoute,
   createRootRoute,
   RouterProvider,
+  redirect,
 } from "@tanstack/react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/sonner"
@@ -13,7 +14,6 @@ import { TaskDetail } from "@/pages/TaskDetail"
 import { Assets } from "@/pages/Assets"
 import { Schedules } from "@/pages/Schedules"
 import { Rules } from "@/pages/Rules"
-import { Approvals } from "@/pages/Approvals"
 import { Workspaces } from "@/pages/Workspaces"
 
 const queryClient = new QueryClient({
@@ -68,7 +68,10 @@ const rulesRoute = createRoute({
 const approvalsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/approvals",
-  component: Approvals,
+  beforeLoad: () => {
+    throw redirect({ to: "/tasks" })
+  },
+  component: () => null,
 })
 
 const workspacesRoute = createRoute({

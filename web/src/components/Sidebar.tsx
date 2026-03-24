@@ -5,7 +5,6 @@ import {
   Package,
   Clock,
   GitBranch,
-  ClipboardCheck,
   FolderOpen,
   ChevronLeft,
   ChevronRight,
@@ -15,8 +14,7 @@ import { Button } from "@/components/ui/button"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", to: "/" },
-  { icon: ClipboardCheck, label: "Approvals", to: "/approvals" },
-  { icon: ListTodo, label: "Tasks", to: "/tasks" },
+{ icon: ListTodo, label: "Tasks", to: "/tasks" },
   { icon: Package, label: "Assets", to: "/assets" },
   { icon: Clock, label: "Schedules", to: "/schedules" },
   { icon: GitBranch, label: "Rules", to: "/rules" },
