@@ -116,7 +116,17 @@ export function Tasks() {
         <div>
           <h1 className="text-[20px] font-semibold text-[#37352f]">Tasks</h1>
           <p className="text-[14px] text-[#787774] mt-1">
-            {tasks.length} root tasks
+            {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+            {tasks.length > 0 && (() => {
+              const done = tasks.filter((t: any) => t.status === "completed").length
+              const failed = tasks.filter((t: any) => t.status === "failed").length
+              const running = tasks.filter((t: any) => t.status === "running").length
+              const parts = []
+              if (running > 0) parts.push(`${running} running`)
+              if (done > 0) parts.push(`${done} done`)
+              if (failed > 0) parts.push(`${failed} failed`)
+              return parts.length > 0 ? ` · ${parts.join(" · ")}` : ""
+            })()}
           </p>
         </div>
 
@@ -314,31 +324,37 @@ export function Tasks() {
           </TabsList>
         </Tabs>
 
-        <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-40 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent className="bg-white border border-[#e8e5df]">
-            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All statuses</SelectItem>
-            {["pending", "running", "paused", "completed", "failed"].map((s) => (
-              <SelectItem key={s} value={s} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px] capitalize">{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] text-[#9b9a97] font-medium">Status</span>
+          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-36 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent className="bg-white border border-[#e8e5df]">
+              <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All statuses</SelectItem>
+              {["pending", "running", "paused", "completed", "failed"].map((s) => (
+                <SelectItem key={s} value={s} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px] capitalize">{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-44 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
-            <SelectValue placeholder="All workspaces" />
-          </SelectTrigger>
-          <SelectContent className="bg-white border-[#e8e5df]">
-            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
-            {workspaces.map((ws: any) => (
-              <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
-                {ws.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] text-[#9b9a97] font-medium">Workspace</span>
+          <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-40 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
+              <SelectValue placeholder="All workspaces" />
+            </SelectTrigger>
+            <SelectContent className="bg-white border-[#e8e5df]">
+              <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
+              {workspaces.map((ws: any) => (
+                <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
+                  {ws.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="flex items-center gap-2">
           <Switch checked={showSystem} onCheckedChange={setShowSystem} />
