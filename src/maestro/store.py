@@ -1122,14 +1122,12 @@ class Store:
 
     async def get_schedule(self, name: str) -> dict | None:
         async with self._conn() as db:
-            db.row_factory = aiosqlite.Row
             cur = await db.execute("SELECT * FROM schedules WHERE name = ?", (name,))
             row = await cur.fetchone()
             return dict(row) if row else None
 
     async def list_schedules(self, *, enabled_only: bool = False) -> list[dict]:
         async with self._conn() as db:
-            db.row_factory = aiosqlite.Row
             sql = "SELECT * FROM schedules"
             if enabled_only:
                 sql += " WHERE enabled = 1"
@@ -1270,7 +1268,6 @@ class Store:
 
     async def get_extract_rule(self, workspace: str, task_type: str) -> dict | None:
         async with self._conn() as db:
-            db.row_factory = aiosqlite.Row
             cur = await db.execute(
                 "SELECT * FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
                 (workspace, task_type),
@@ -1285,7 +1282,6 @@ class Store:
 
     async def list_extract_rules(self, *, workspace: str | None = None) -> list[dict]:
         async with self._conn() as db:
-            db.row_factory = aiosqlite.Row
             if workspace:
                 cur = await db.execute(
                     "SELECT * FROM auto_extract_rules WHERE workspace = ? ORDER BY task_type",
