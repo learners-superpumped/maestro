@@ -76,8 +76,8 @@ export function Rules() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-50">Rules</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <h1 className="text-[20px] font-semibold text-[#37352f]">Rules</h1>
+          <p className="text-[14px] text-[#787774] mt-1">
             {data?.count != null ? `${data.count} rules` : ""}
           </p>
         </div>
@@ -85,70 +85,70 @@ export function Rules() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
             render={
-              <Button className="bg-indigo-600 hover:bg-indigo-500 text-white">
-                <Plus className="h-4 w-4 mr-1" />
+              <Button className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3">
+                <Plus className="h-3.5 w-3.5 mr-1" />
                 Add Rule
               </Button>
             }
           />
-          <DialogContent className="bg-gray-900 border-gray-800 text-gray-50 max-w-lg">
+          <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add Rule</DialogTitle>
+              <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Add Rule</DialogTitle>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4 mt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Workspace *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
                   <Input
                     {...register("workspace")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                     placeholder="default"
                   />
                   {errors.workspace && (
-                    <p className="text-xs text-red-400">{errors.workspace.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Task Type *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Task Type *</Label>
                   <Input
                     {...register("task_type")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                   />
                   {errors.task_type && (
-                    <p className="text-xs text-red-400">{errors.task_type.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.task_type.message}</p>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Asset Type *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Asset Type *</Label>
                   <Input
                     {...register("asset_type")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                   />
                   {errors.asset_type && (
-                    <p className="text-xs text-red-400">{errors.asset_type.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.asset_type.message}</p>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Title Field *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Title Field *</Label>
                   <Input
                     {...register("title_field")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                     placeholder="title"
                   />
                   {errors.title_field && (
-                    <p className="text-xs text-red-400">{errors.title_field.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.title_field.message}</p>
                   )}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-gray-400 text-xs">Tags From (comma-separated fields)</Label>
+                <Label className="text-[12px] text-[#9b9a97]">Tags From (comma-separated fields)</Label>
                 <Input
                   {...register("tags_from")}
-                  className="bg-gray-800 border-gray-700 text-gray-50"
+                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                   placeholder="field1, field2"
                 />
               </div>
@@ -157,9 +157,9 @@ export function Rules() {
                 <Switch
                   checked={iterateValue}
                   onCheckedChange={(checked) => setValue("iterate", checked)}
-                  className="data-[state=checked]:bg-indigo-500"
+                  className="data-[state=checked]:bg-[#2383e2]"
                 />
-                <Label className="text-gray-400 text-xs">Iterate over asset list</Label>
+                <Label className="text-[12px] text-[#9b9a97]">Iterate over asset list</Label>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -167,17 +167,17 @@ export function Rules() {
                   type="button"
                   variant="ghost"
                   onClick={() => setOpen(false)}
-                  className="text-gray-400"
+                  className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={createRule.isPending}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                  className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
                 >
                   {createRule.isPending && (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                   )}
                   Create
                 </Button>
@@ -193,30 +193,30 @@ export function Rules() {
           placeholder="Filter by workspace..."
           value={workspaceFilter}
           onChange={(e) => setWorkspaceFilter(e.target.value)}
-          className="w-52 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
+          className="w-52 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[14px] rounded placeholder:text-[#9b9a97]"
         />
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-gray-800 overflow-hidden">
+      <div className="rounded border border-[#e8e5df] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-800 hover:bg-transparent">
-              <TableHead className="text-gray-400 text-xs">Workspace</TableHead>
-              <TableHead className="text-gray-400 text-xs">Task Type</TableHead>
-              <TableHead className="text-gray-400 text-xs">Asset Type</TableHead>
-              <TableHead className="text-gray-400 text-xs">Title Field</TableHead>
-              <TableHead className="text-gray-400 text-xs">Iterate</TableHead>
-              <TableHead className="text-gray-400 text-xs w-12">Del</TableHead>
+            <TableRow className="border-[#e8e5df] hover:bg-transparent">
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Task Type</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Asset Type</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Title Field</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Iterate</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-12">Del</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i} className="border-gray-800">
+                  <TableRow key={i} className="border-[#e8e5df]">
                     {Array.from({ length: 6 }).map((_, j) => (
                       <TableCell key={j}>
-                        <Skeleton className="h-4 bg-gray-800" />
+                        <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
                     ))}
                   </TableRow>
@@ -224,17 +224,17 @@ export function Rules() {
               : rules.map((rule: any) => (
                   <TableRow
                     key={`${rule.workspace}-${rule.task_type}`}
-                    className="border-gray-800 hover:bg-gray-800/30"
+                    className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]"
                   >
-                    <TableCell className="text-gray-50 text-sm">{rule.workspace}</TableCell>
-                    <TableCell className="text-gray-400 text-xs font-mono">
+                    <TableCell className="text-[#37352f] text-[14px]">{rule.workspace}</TableCell>
+                    <TableCell className="font-mono text-[13px] text-[#787774]">
                       {rule.task_type}
                     </TableCell>
-                    <TableCell className="text-gray-400 text-xs font-mono">
+                    <TableCell className="font-mono text-[13px] text-[#787774]">
                       {rule.asset_type}
                     </TableCell>
-                    <TableCell className="text-gray-400 text-sm">{rule.title_field}</TableCell>
-                    <TableCell className="text-gray-400 text-sm">
+                    <TableCell className="text-[14px] text-[#787774]">{rule.title_field}</TableCell>
+                    <TableCell className="text-[14px] text-[#787774]">
                       {rule.iterate ? "Yes" : "No"}
                     </TableCell>
                     <TableCell>
@@ -248,7 +248,7 @@ export function Rules() {
                           })
                         }
                         disabled={deleteRule.isPending}
-                        className="h-7 w-7 text-gray-500 hover:text-red-400"
+                        className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-red-50"
                         title="Delete"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -257,8 +257,8 @@ export function Rules() {
                   </TableRow>
                 ))}
             {!isLoading && rules.length === 0 && (
-              <TableRow className="border-gray-800">
-                <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+              <TableRow className="border-[#e8e5df]">
+                <TableCell colSpan={6} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No rules found
                 </TableCell>
               </TableRow>

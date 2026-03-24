@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -60,8 +59,8 @@ export function Workspaces() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-50">Workspaces</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <h1 className="text-[20px] font-semibold text-[#37352f]">Workspaces</h1>
+          <p className="text-[14px] text-[#787774] mt-1">
             {data != null
               ? `${workspaces.length} workspace${workspaces.length !== 1 ? "s" : ""}`
               : ""}
@@ -70,38 +69,38 @@ export function Workspaces() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
             render={
-              <Button className="bg-indigo-600 hover:bg-indigo-500 text-white">
-                <Plus className="h-4 w-4 mr-1" />
+              <Button className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3">
+                <Plus className="h-3.5 w-3.5 mr-1" />
                 New Workspace
               </Button>
             }
           />
-          <DialogContent className="bg-gray-900 border-gray-800 text-gray-50 max-w-sm">
+          <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-sm">
             <DialogHeader>
-              <DialogTitle>New Workspace</DialogTitle>
+              <DialogTitle className="text-[16px] font-semibold text-[#37352f]">New Workspace</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="space-y-1">
-                <Label className="text-gray-400 text-xs">Name *</Label>
+                <Label className="text-[12px] text-[#9b9a97]">Name *</Label>
                 <Input
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value)
                     setNameError("")
                   }}
-                  className="bg-gray-800 border-gray-700 text-gray-50"
+                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                   placeholder="my-workspace"
                 />
                 {nameError && (
-                  <p className="text-xs text-red-400">{nameError}</p>
+                  <p className="text-[12px] text-[#eb5757]">{nameError}</p>
                 )}
               </div>
               <div className="space-y-1">
-                <Label className="text-gray-400 text-xs">Template</Label>
+                <Label className="text-[12px] text-[#9b9a97]">Template</Label>
                 <Input
                   value={template}
                   onChange={(e) => setTemplate(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-gray-50"
+                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                   placeholder="default"
                 />
               </div>
@@ -115,17 +114,17 @@ export function Workspaces() {
                     setTemplate("default")
                     setNameError("")
                   }}
-                  className="text-gray-400"
+                  className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleCreate}
                   disabled={createWorkspace.isPending}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                  className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
                 >
                   {createWorkspace.isPending && (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                   )}
                   Create
                 </Button>
@@ -135,23 +134,23 @@ export function Workspaces() {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border border-gray-800 overflow-hidden">
+      <div className="rounded border border-[#e8e5df] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-800 hover:bg-transparent">
-              <TableHead className="text-gray-400 text-xs">Name</TableHead>
-              <TableHead className="text-gray-400 text-xs">Status</TableHead>
-              <TableHead className="text-gray-400 text-xs">Warnings</TableHead>
-              <TableHead className="text-gray-400 text-xs w-24">Actions</TableHead>
+            <TableRow className="border-[#e8e5df] hover:bg-transparent">
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Name</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Status</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Warnings</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i} className="border-gray-800">
+                  <TableRow key={i} className="border-[#e8e5df]">
                     {Array.from({ length: 4 }).map((_, j) => (
                       <TableCell key={j}>
-                        <Skeleton className="h-4 bg-gray-800" />
+                        <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
                     ))}
                   </TableRow>
@@ -166,27 +165,27 @@ export function Workspaces() {
                     ? ws.warnings.join(", ")
                     : (ws.warnings ?? "")
                   return (
-                    <TableRow key={ws.name} className="border-gray-800 hover:bg-gray-800/30">
-                      <TableCell className="text-gray-50 text-sm font-medium">
+                    <TableRow key={ws.name} className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]">
+                      <TableCell className="text-[#37352f] text-[14px] font-medium">
                         <div className="flex items-center gap-2">
-                          <FolderOpen className="h-4 w-4 text-gray-500" />
+                          <FolderOpen className="h-4 w-4 text-[#9b9a97]" />
                           {ws.name}
                         </div>
                       </TableCell>
                       <TableCell>
                         {hasWarnings ? (
-                          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 border">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1 text-[11px] bg-[#f7f6f3] text-[#cb912f] border border-[#e8e5df] rounded px-1.5 py-0.5">
+                            <AlertTriangle className="h-3 w-3" />
                             warnings
-                          </Badge>
+                          </span>
                         ) : (
-                          <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 border">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1 text-[11px] bg-[#f7f6f3] text-[#4dab9a] border border-[#e8e5df] rounded px-1.5 py-0.5">
+                            <CheckCircle2 className="h-3 w-3" />
                             valid
-                          </Badge>
+                          </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-gray-400 text-xs max-w-xs truncate">
+                      <TableCell className="text-[12px] text-[#9b9a97] max-w-xs truncate">
                         {warningsText || "—"}
                       </TableCell>
                       <TableCell>
@@ -195,7 +194,7 @@ export function Workspaces() {
                           variant="ghost"
                           onClick={() => validateWorkspace.mutate(ws.name)}
                           disabled={validateWorkspace.isPending}
-                          className="h-7 w-7 text-gray-500 hover:text-indigo-400"
+                          className="h-7 w-7 text-[#9b9a97] hover:text-[#2383e2] hover:bg-[#f7f6f3]"
                           title="Re-validate"
                         >
                           {validateWorkspace.isPending ? (
@@ -209,8 +208,8 @@ export function Workspaces() {
                   )
                 })}
             {!isLoading && workspaces.length === 0 && (
-              <TableRow className="border-gray-800">
-                <TableCell colSpan={4} className="text-center text-gray-500 py-8">
+              <TableRow className="border-[#e8e5df]">
+                <TableCell colSpan={4} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No workspaces found
                 </TableCell>
               </TableRow>

@@ -12,7 +12,7 @@ function WsIndicator() {
 
   if (status === "connected") {
     return (
-      <div className="flex items-center gap-1.5 text-green-500 text-xs">
+      <div className="flex items-center gap-1.5 text-[12px] text-[#4dab9a]">
         <Wifi className="h-3 w-3" />
         <span className="hidden sm:inline">Live</span>
       </div>
@@ -20,14 +20,14 @@ function WsIndicator() {
   }
   if (status === "connecting") {
     return (
-      <div className="flex items-center gap-1.5 text-amber-500 text-xs">
+      <div className="flex items-center gap-1.5 text-[12px] text-[#cb912f]">
         <Loader2 className="h-3 w-3 animate-spin" />
         <span className="hidden sm:inline">Connecting</span>
       </div>
     )
   }
   return (
-    <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+    <div className="flex items-center gap-1.5 text-[12px] text-[#9b9a97]">
       <WifiOff className="h-3 w-3" />
       <span className="hidden sm:inline">Offline</span>
     </div>
@@ -45,19 +45,19 @@ export function Layout() {
   })
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-white text-[#37352f] overflow-hidden">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center justify-end gap-3 h-14 px-4 border-b border-gray-800 bg-gray-900 shrink-0">
+        <header className="flex items-center justify-end gap-3 h-11 px-4 border-b border-[#e8e5df] bg-white shrink-0">
           <span className={cn(
-            "inline-flex items-center gap-1.5 text-xs",
-            healthError ? "text-red-400" : "text-green-400"
+            "inline-flex items-center gap-1.5 text-[12px]",
+            healthError ? "text-[#eb5757]" : "text-[#4dab9a]"
           )}>
             <span className={cn(
               "h-1.5 w-1.5 rounded-full",
-              healthError ? "bg-red-400" : "bg-green-400"
+              healthError ? "bg-[#eb5757]" : "bg-[#4dab9a]"
             )} />
             {healthError ? "Server offline" : "Server online"}
           </span>
@@ -65,11 +65,7 @@ export function Layout() {
         </header>
 
         {/* Page content */}
-        <main
-          className={cn(
-            "flex-1 overflow-auto p-6"
-          )}
-        >
+        <main className="flex-1 overflow-auto p-6 bg-white">
           <Outlet />
         </main>
       </div>

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", to: "/" },
-{ icon: ListTodo, label: "Tasks", to: "/tasks" },
+  { icon: ListTodo, label: "Tasks", to: "/tasks" },
   { icon: Package, label: "Assets", to: "/assets" },
   { icon: Clock, label: "Schedules", to: "/schedules" },
   { icon: GitBranch, label: "Rules", to: "/rules" },
@@ -33,14 +33,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex flex-col h-full bg-gray-900 border-r border-gray-800 transition-all duration-200",
-        collapsed ? "w-14" : "w-52"
+        "flex flex-col h-full bg-[#f7f6f3] border-r border-[#e8e5df] transition-all duration-200",
+        collapsed ? "w-[44px]" : "w-[240px]"
       )}
     >
       {/* Logo */}
-      <div className="flex items-center h-14 px-3 border-b border-gray-800">
+      <div className="flex items-center h-11 px-2 border-b border-[#e8e5df]">
         {!collapsed && (
-          <span className="text-gray-50 font-semibold text-sm tracking-wide truncate">
+          <span className="text-[14px] font-semibold text-[#37352f] truncate flex-1 px-1">
             Maestro
           </span>
         )}
@@ -49,8 +49,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           size="icon"
           onClick={onToggle}
           className={cn(
-            "ml-auto h-7 w-7 text-gray-400 hover:text-gray-50 hover:bg-gray-800",
-            collapsed && "mx-auto"
+            "h-7 w-7 text-[#9b9a97] hover:text-[#37352f] hover:bg-[#ebebea] rounded shrink-0",
+            collapsed ? "mx-auto" : "ml-auto"
           )}
         >
           {collapsed ? (
@@ -62,7 +62,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-2 space-y-1">
+      <nav className="flex-1 p-2 space-y-0.5">
         {navItems.map(({ icon: Icon, label, to }) => {
           const isActive =
             to === "/"
@@ -73,10 +73,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               key={to}
               to={to}
               className={cn(
-                "flex items-center gap-3 px-2 py-2 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-2 px-2 py-1 rounded h-[30px] text-[14px] transition-colors",
                 isActive
-                  ? "bg-indigo-500/20 text-indigo-400"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-gray-50"
+                  ? "bg-[#ebebea] text-[#37352f]"
+                  : "text-[#787774] hover:bg-[#ebebea] hover:text-[#37352f]"
               )}
               title={collapsed ? label : undefined}
             >

@@ -101,8 +101,8 @@ export function Assets() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-50">Assets</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <h1 className="text-[20px] font-semibold text-[#37352f]">Assets</h1>
+          <p className="text-[14px] text-[#787774] mt-1">
             {data?.count != null ? `${data.count} assets` : ""}
           </p>
         </div>
@@ -111,98 +111,98 @@ export function Assets() {
             variant="outline"
             size="sm"
             onClick={() => setCleanupOpen(true)}
-            className="border-gray-700 text-gray-400 hover:bg-gray-800"
+            className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] border-[#e8e5df] rounded px-3"
           >
-            <RefreshCw className="h-4 w-4 mr-1" />
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
             Cleanup
           </Button>
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger
               render={
-                <Button className="bg-indigo-600 hover:bg-indigo-500 text-white">
-                  <Plus className="h-4 w-4 mr-1" />
+                <Button className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
                   Register
                 </Button>
               }
             />
-            <DialogContent className="bg-gray-900 border-gray-800 text-gray-50 max-w-lg">
+            <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-lg">
               <DialogHeader>
-                <DialogTitle>Register Asset</DialogTitle>
+                <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Register Asset</DialogTitle>
               </DialogHeader>
               <form onSubmit={onSubmit} className="space-y-4 mt-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <Label className="text-gray-400 text-xs">Title *</Label>
+                    <Label className="text-[12px] text-[#9b9a97]">Title *</Label>
                     <Input
                       {...register("title")}
-                      className="bg-gray-800 border-gray-700 text-gray-50"
+                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                     />
                     {errors.title && (
-                      <p className="text-xs text-red-400">{errors.title.message}</p>
+                      <p className="text-[12px] text-[#eb5757]">{errors.title.message}</p>
                     )}
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-gray-400 text-xs">Asset Type *</Label>
+                    <Label className="text-[12px] text-[#9b9a97]">Asset Type *</Label>
                     <Input
                       {...register("asset_type")}
-                      className="bg-gray-800 border-gray-700 text-gray-50"
+                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                       placeholder="document, config..."
                     />
                     {errors.asset_type && (
-                      <p className="text-xs text-red-400">{errors.asset_type.message}</p>
+                      <p className="text-[12px] text-[#eb5757]">{errors.asset_type.message}</p>
                     )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <Label className="text-gray-400 text-xs">Workspace *</Label>
+                    <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
                     <Input
                       {...register("workspace")}
-                      className="bg-gray-800 border-gray-700 text-gray-50"
+                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                       placeholder="default"
                     />
                     {errors.workspace && (
-                      <p className="text-xs text-red-400">{errors.workspace.message}</p>
+                      <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
                     )}
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-gray-400 text-xs">TTL Days (0=forever)</Label>
+                    <Label className="text-[12px] text-[#9b9a97]">TTL Days (0=forever)</Label>
                     <Input
                       type="number"
                       {...register("ttl_days", { valueAsNumber: true })}
-                      className="bg-gray-800 border-gray-700 text-gray-50"
+                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Tags (comma-separated)</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Tags (comma-separated)</Label>
                   <Input
                     {...register("tags")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                     placeholder="tag1, tag2"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Description</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Description</Label>
                   <Input
                     {...register("description")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Content (JSON or text) *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Content (JSON or text) *</Label>
                   <Textarea
                     {...register("content")}
-                    className="bg-gray-800 border-gray-700 text-gray-50 font-mono text-xs min-h-24"
+                    className="bg-white border-[#e8e5df] text-[#37352f] font-mono text-[13px] min-h-24 rounded"
                     placeholder='{"key": "value"}'
                   />
                   {errors.content && (
-                    <p className="text-xs text-red-400">{errors.content.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.content.message}</p>
                   )}
                 </div>
 
@@ -211,17 +211,17 @@ export function Assets() {
                     type="button"
                     variant="ghost"
                     onClick={() => setOpen(false)}
-                    className="text-gray-400"
+                    className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={registerAsset.isPending}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                    className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
                   >
                     {registerAsset.isPending && (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                     )}
                     Register
                   </Button>
@@ -238,13 +238,13 @@ export function Assets() {
           placeholder="Filter by type..."
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="w-44 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
+          className="w-44 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[14px] rounded placeholder:text-[#9b9a97]"
         />
         <Input
           placeholder="Filter by workspace..."
           value={workspaceFilter}
           onChange={(e) => setWorkspaceFilter(e.target.value)}
-          className="w-52 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
+          className="w-52 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[14px] rounded placeholder:text-[#9b9a97]"
         />
         <Input
           placeholder="Semantic search..."
@@ -258,14 +258,14 @@ export function Assets() {
               )
             }
           }}
-          className="w-64 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
+          className="w-64 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[14px] rounded placeholder:text-[#9b9a97]"
         />
         {searchResults !== null && (
           <Button
             size="sm"
             variant="ghost"
             onClick={() => { setSearchResults(null); setSearchQuery("") }}
-            className="text-gray-400 text-xs"
+            className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
           >
             Clear search
           </Button>
@@ -273,46 +273,46 @@ export function Assets() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border border-gray-800 overflow-hidden">
+      <div className="rounded border border-[#e8e5df] overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-800 hover:bg-transparent">
-              <TableHead className="text-gray-400 text-xs">Type</TableHead>
-              <TableHead className="text-gray-400 text-xs">Title</TableHead>
-              <TableHead className="text-gray-400 text-xs">Workspace</TableHead>
-              <TableHead className="text-gray-400 text-xs">Tags</TableHead>
-              <TableHead className="text-gray-400 text-xs">Created By</TableHead>
-              <TableHead className="text-gray-400 text-xs">Created At</TableHead>
-              <TableHead className="text-gray-400 text-xs w-20">Actions</TableHead>
+            <TableRow className="border-[#e8e5df] hover:bg-transparent">
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Type</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Title</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Tags</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Created By</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Created At</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading
               ? Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="border-gray-800">
+                  <TableRow key={i} className="border-[#e8e5df]">
                     {Array.from({ length: 7 }).map((_, j) => (
                       <TableCell key={j}>
-                        <Skeleton className="h-4 bg-gray-800" />
+                        <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
                     ))}
                   </TableRow>
                 ))
               : displayAssets.map((asset: any) => (
-                  <TableRow key={asset.id} className="border-gray-800 hover:bg-gray-800/30">
-                    <TableCell className="text-gray-400 text-xs font-mono">
+                  <TableRow key={asset.id} className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]">
+                    <TableCell className="text-[#787774] font-mono text-[13px]">
                       {asset.asset_type}
                     </TableCell>
-                    <TableCell className="text-gray-50 text-sm max-w-xs truncate">
+                    <TableCell className="text-[#37352f] text-[14px] max-w-xs truncate">
                       {asset.title}
                     </TableCell>
-                    <TableCell className="text-gray-400 text-sm">{asset.workspace}</TableCell>
-                    <TableCell className="text-gray-400 text-xs">
+                    <TableCell className="text-[14px] text-[#787774]">{asset.workspace}</TableCell>
+                    <TableCell className="text-[12px] text-[#9b9a97]">
                       {Array.isArray(asset.tags) ? asset.tags.join(", ") : (asset.tags ?? "—")}
                     </TableCell>
-                    <TableCell className="text-gray-400 text-xs font-mono">
+                    <TableCell className="font-mono text-[13px] text-[#9b9a97]">
                       {asset.created_by ?? "—"}
                     </TableCell>
-                    <TableCell className="text-gray-400 text-xs">
+                    <TableCell className="text-[12px] text-[#9b9a97]">
                       {asset.created_at
                         ? new Date(asset.created_at).toLocaleString()
                         : "—"}
@@ -324,7 +324,7 @@ export function Assets() {
                           variant="ghost"
                           onClick={() => archiveAsset.mutate(asset.id)}
                           disabled={archiveAsset.isPending}
-                          className="h-7 w-7 text-gray-500 hover:text-amber-400"
+                          className="h-7 w-7 text-[#9b9a97] hover:text-[#cb912f] hover:bg-[#f7f6f3]"
                           title="Archive"
                         >
                           <Archive className="h-3.5 w-3.5" />
@@ -334,7 +334,7 @@ export function Assets() {
                           variant="ghost"
                           onClick={() => deleteAsset.mutate(asset.id)}
                           disabled={deleteAsset.isPending}
-                          className="h-7 w-7 text-gray-500 hover:text-red-400"
+                          className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-red-50"
                           title="Delete"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -344,8 +344,8 @@ export function Assets() {
                   </TableRow>
                 ))}
             {!isLoading && displayAssets.length === 0 && (
-              <TableRow className="border-gray-800">
-                <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+              <TableRow className="border-[#e8e5df]">
+                <TableCell colSpan={7} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No assets found
                 </TableCell>
               </TableRow>
@@ -356,20 +356,20 @@ export function Assets() {
 
       {/* Cleanup dialog */}
       <Dialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-gray-50 max-w-sm">
+        <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-sm">
           <DialogHeader>
-            <DialogTitle>Cleanup Assets</DialogTitle>
+            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Cleanup Assets</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="space-y-1">
-              <Label className="text-gray-400 text-xs">Grace Days</Label>
+              <Label className="text-[12px] text-[#9b9a97]">Grace Days</Label>
               <Input
                 type="number"
                 value={graceDays}
                 onChange={(e) => setGraceDays(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-gray-50"
+                className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-[12px] text-[#9b9a97]">
                 Archive/purge assets older than this many days
               </p>
             </div>
@@ -377,7 +377,7 @@ export function Assets() {
               <Button
                 variant="ghost"
                 onClick={() => setCleanupOpen(false)}
-                className="text-gray-400"
+                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
               >
                 Cancel
               </Button>
@@ -387,10 +387,10 @@ export function Assets() {
                   setCleanupOpen(false)
                 }}
                 disabled={cleanup.isPending}
-                className="bg-amber-600 hover:bg-amber-500 text-white"
+                className="h-[28px] text-[13px] bg-[#cb912f] hover:bg-[#b8821f] text-white rounded px-3"
               >
                 {cleanup.isPending && (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                 )}
                 Run Cleanup
               </Button>

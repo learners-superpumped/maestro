@@ -14,16 +14,16 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon: Icon, iconColor, loading }: StatCardProps) {
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-gray-400">{title}</CardTitle>
+        <CardTitle className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">{title}</CardTitle>
         <Icon className={cn("h-4 w-4", iconColor)} />
       </CardHeader>
       <CardContent>
         {loading ? (
-          <Skeleton className="h-8 w-24 bg-gray-800" />
+          <Skeleton className="h-8 w-24 bg-[#f7f6f3]" />
         ) : (
-          <div className="text-2xl font-bold text-gray-50">
+          <div className="text-[24px] font-semibold text-[#37352f]">
             {value ?? "—"}
           </div>
         )}
@@ -43,8 +43,8 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-gray-50">Dashboard</h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <h1 className="text-[20px] font-semibold text-[#37352f]">Dashboard</h1>
+        <p className="text-[14px] text-[#787774] mt-1">
           Overview of your Maestro workspace
         </p>
       </div>
@@ -55,37 +55,37 @@ export function Dashboard() {
           title="Running Tasks"
           value={data?.running}
           icon={Activity}
-          iconColor="text-blue-500"
+          iconColor="text-[#2383e2]"
           loading={isLoading}
         />
         <StatCard
           title="Pending Approvals"
           value={data?.pending_approvals}
           icon={AlertTriangle}
-          iconColor="text-amber-500"
+          iconColor="text-[#cb912f]"
           loading={isLoading}
         />
         <StatCard
           title="Today's Spend"
           value={todaySpend}
           icon={DollarSign}
-          iconColor="text-green-500"
+          iconColor="text-[#4dab9a]"
           loading={isLoading}
         />
         <StatCard
           title="Total Tasks"
           value={data?.total_tasks}
           icon={ListTodo}
-          iconColor="text-indigo-500"
+          iconColor="text-[#9065b0]"
           loading={isLoading}
         />
       </div>
 
       {/* Status breakdown */}
       {(isLoading || data?.status_counts) && (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-gray-400 flex items-center gap-2">
+            <CardTitle className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
               Status Breakdown
             </CardTitle>
@@ -94,7 +94,7 @@ export function Dashboard() {
             {isLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-5 w-full bg-gray-800" />
+                  <Skeleton key={i} className="h-5 w-full bg-[#f7f6f3]" />
                 ))}
               </div>
             ) : (
@@ -103,12 +103,12 @@ export function Dashboard() {
                   ([status, count]) => (
                     <div
                       key={status}
-                      className="flex items-center justify-between px-3 py-2 bg-gray-800 rounded-md"
+                      className="flex items-center justify-between px-3 py-2 bg-[#f7f6f3] rounded"
                     >
-                      <span className="text-xs text-gray-400 capitalize">
+                      <span className="text-[12px] text-[#787774] capitalize">
                         {status.replace("_", " ")}
                       </span>
-                      <span className="text-sm font-semibold text-gray-50">
+                      <span className="text-[14px] font-semibold text-[#37352f]">
                         {count as number}
                       </span>
                     </div>
@@ -122,7 +122,7 @@ export function Dashboard() {
 
       {/* Date */}
       {data?.date && (
-        <p className="text-xs text-gray-500">
+        <p className="text-[12px] text-[#9b9a97]">
           Stats as of {data.date}
         </p>
       )}
