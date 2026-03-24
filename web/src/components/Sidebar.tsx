@@ -5,6 +5,7 @@ import {
   Package,
   Clock,
   GitBranch,
+  ClipboardCheck,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", to: "/" },
+  { icon: ClipboardCheck, label: "Approvals", to: "/approvals" },
   { icon: ListTodo, label: "Tasks", to: "/tasks" },
   { icon: Package, label: "Assets", to: "/assets" },
   { icon: Clock, label: "Schedules", to: "/schedules" },

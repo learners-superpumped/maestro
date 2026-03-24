@@ -13,6 +13,7 @@ import { TaskDetail } from "@/pages/TaskDetail"
 import { Assets } from "@/pages/Assets"
 import { Schedules } from "@/pages/Schedules"
 import { Rules } from "@/pages/Rules"
+import { Approvals } from "@/pages/Approvals"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +64,12 @@ const rulesRoute = createRoute({
   component: Rules,
 })
 
+const approvalsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/approvals",
+  component: Approvals,
+})
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   tasksRoute,
@@ -70,6 +77,7 @@ const routeTree = rootRoute.addChildren([
   assetsRoute,
   schedulesRoute,
   rulesRoute,
+  approvalsRoute,
 ])
 
 const router = createRouter({ routeTree })
