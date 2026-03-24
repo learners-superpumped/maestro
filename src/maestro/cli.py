@@ -958,11 +958,16 @@ def asset_register(
 @click.option("--type", "asset_type", default=None, help="Filter by asset_type")
 @click.option("--workspace", default=None, help="Filter by workspace")
 @click.option("--tags", default=None, help="Filter by comma-separated tags")
-def asset_list(asset_type: str | None, workspace: str | None, tags: str | None) -> None:
+@click.option("--limit", "-L", "limit", default=20, type=int, help="Max number of assets to show (default: 20)")
+def asset_list(asset_type: str | None, workspace: str | None, tags: str | None, limit: int) -> None:
     """List assets."""
     config_file = _config_path()
     if not config_file.exists():
         click.echo("Error: maestro.yaml not found. Run 'maestro init' first.", err=True)
+        sys.exit(1)
+
+    if limit <= 0:
+        click.echo("Error: --limit must be a positive integer.", err=True)
         sys.exit(1)
 
     from maestro.config import load_config
@@ -979,20 +984,26 @@ def asset_list(asset_type: str | None, workspace: str | None, tags: str | None) 
             asset_type=asset_type,
             workspace=workspace,
             tags=tag_list,
-            limit=200,
+            limit=limit + 1,
         )
         if not assets:
             click.echo("No assets found.")
             return
 
+        has_more = len(assets) > limit
+        display_assets = assets[:limit]
+
         click.echo(f"{'ID':<14} {'TYPE':<12} {'WORKSPACE':<16} {'CREATED_BY':<12} {'TITLE'}")
         click.echo("-" * 80)
-        for a in assets:
+        for a in display_assets:
             click.echo(
                 f"{a['id']:<14} {a.get('asset_type', ''):<12}"
                 f" {a.get('workspace', ''):<16} {a.get('created_by', ''):<12}"
                 f" {a.get('title', '')}"
             )
+
+        if has_more:
+            click.echo(f"\nShowing {limit} assets. Use --limit to show more.")
 
     asyncio.run(_run())
 
@@ -1001,7 +1012,7 @@ def asset_list(asset_type: str | None, workspace: str | None, tags: str | None) 
 @click.argument("query")
 @click.option("--workspace", default=None, help="Filter by workspace")
 @click.option("--type", "asset_type", default=None, help="Filter by asset_type")
-@click.option("--limit", default=10, type=int, help="Max results")
+@click.option("--limit", "-L", default=10, type=int, help="Max results")
 def asset_search_cmd(
     query: str,
     workspace: str | None,

@@ -349,3 +349,35 @@ class TestTaskCommands:
             # Child must appear even though limit cuts root count
             assert "Child-0" in result.output
             assert "root tasks" in result.output.lower()
+
+    def test_asset_list_limit(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            # Register 5 assets via CLI
+            for i in range(5):
+                runner.invoke(main, [
+                    "asset", "register",
+                    "--workspace", "ws1",
+                    "--type", "post",
+                    "--title", f"Asset-{i}",
+                    "--content", f'{{"body": "body {i}"}}',
+                ])
+            # Default limit=20 shows all 5
+            result = runner.invoke(main, ["asset", "list"])
+            assert result.exit_code == 0
+            for i in range(5):
+                assert f"Asset-{i}" in result.output
+
+            # Limit to 3
+            result = runner.invoke(main, ["asset", "list", "--limit", "3"])
+            assert result.exit_code == 0
+            assert "Use --limit to show more" in result.output
+
+    def test_asset_list_limit_validation(self) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._init_project()
+            result = runner.invoke(main, ["asset", "list", "--limit", "0"])
+            assert result.exit_code != 0
+            assert "positive integer" in result.output.lower()
