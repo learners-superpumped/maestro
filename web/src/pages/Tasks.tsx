@@ -1,15 +1,18 @@
 import { useState } from "react"
-import { useNavigate } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react"
-import { useTasks, useCreateTask } from "@/hooks/queries/use-tasks"
-import { StatusBadge } from "@/components/StatusBadge"
+import { useRootTasks, useCreateTask } from "@/hooks/queries/use-tasks"
+import { ActionRequired } from "@/components/ActionRequired"
+import { TaskBoard } from "@/components/TaskBoard"
+import { TaskListTree } from "@/components/TaskListTree"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -24,15 +27,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Skeleton } from "@/components/ui/skeleton"
 
 const taskSchema = z.object({
   workspace: z.string().min(1, "Required"),
@@ -55,26 +49,15 @@ const APPROVAL_LEVELS = [
 
 type TaskFormValues = z.infer<typeof taskSchema>
 
-const STATUS_OPTIONS = [
-  "running",
-  "completed",
-  "failed",
-  "pending",
-  "paused",
-  "cancelled",
-  "approved",
-  "claimed",
-  "retry_queued",
-]
-
 export function Tasks() {
-  const navigate = useNavigate()
-  const [statusFilter, setStatusFilter] = useState<string>("")
+  const [view, setView] = useState<"list" | "board">("list")
+  const [statusFilter, setStatusFilter] = useState("")
   const [workspaceFilter, setWorkspaceFilter] = useState("")
+  const [showSystem, setShowSystem] = useState(false)
   const [open, setOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const { data, isLoading } = useTasks({
+  const { data, isLoading } = useRootTasks({
     status: statusFilter || undefined,
     workspace: workspaceFilter || undefined,
   })
@@ -110,15 +93,20 @@ export function Tasks() {
     setOpen(false)
   })
 
-  const tasks: any[] = data?.tasks ?? []
+  const allTasks: any[] = data?.tasks ?? []
+  // Filter out system workspaces unless toggled on
+  const tasks = showSystem ? allTasks : allTasks.filter((t: any) =>
+    !t.workspace?.startsWith("_")
+  )
 
   return (
     <div className="space-y-5">
+      {/* Header + New Task button */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-50">Tasks</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {data?.count != null ? `${data.count} tasks` : ""}
+            {tasks.length} root tasks
           </p>
         </div>
 
@@ -296,108 +284,53 @@ export function Tasks() {
         </Dialog>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => setStatusFilter(v === "all" ? "" : (v ?? ""))}
-        >
-          <SelectTrigger className="w-44 bg-gray-900 border-gray-800 text-gray-50">
+      {/* Action Required section */}
+      <ActionRequired />
+
+      {/* View toggle + Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Tabs value={view} onValueChange={(v) => setView(v as "list" | "board")}>
+          <TabsList className="bg-gray-800 border border-gray-700">
+            <TabsTrigger value="list" className="text-xs data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-400">
+              List
+            </TabsTrigger>
+            <TabsTrigger value="board" className="text-xs data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-400">
+              Board
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-40 bg-gray-900 border-gray-800 text-gray-50 text-xs">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent className="bg-gray-800 border-gray-700">
-            <SelectItem value="all" className="text-gray-50">
-              All statuses
-            </SelectItem>
-            {STATUS_OPTIONS.map((s) => (
-              <SelectItem key={s} value={s} className="text-gray-50 capitalize">
-                {s.replace("_", " ")}
-              </SelectItem>
+            <SelectItem value="all" className="text-gray-50 text-xs">All statuses</SelectItem>
+            {["pending", "running", "paused", "completed", "failed"].map((s) => (
+              <SelectItem key={s} value={s} className="text-gray-50 text-xs capitalize">{s}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Input
-          placeholder="Filter by workspace..."
+          placeholder="Workspace..."
           value={workspaceFilter}
           onChange={(e) => setWorkspaceFilter(e.target.value)}
-          className="w-52 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
+          className="w-40 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500 text-xs"
         />
+
+        <div className="flex items-center gap-2">
+          <Switch checked={showSystem} onCheckedChange={setShowSystem} />
+          <span className="text-xs text-gray-500">System</span>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border border-gray-800 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-gray-800 hover:bg-transparent">
-              <TableHead className="text-gray-400 text-xs">Status</TableHead>
-              <TableHead className="text-gray-400 text-xs">ID</TableHead>
-              <TableHead className="text-gray-400 text-xs">Title</TableHead>
-              <TableHead className="text-gray-400 text-xs">Workspace</TableHead>
-              <TableHead className="text-gray-400 text-xs">Priority</TableHead>
-              <TableHead className="text-gray-400 text-xs">Cost</TableHead>
-              <TableHead className="text-gray-400 text-xs">Updated</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="border-gray-800">
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-4 bg-gray-800" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              : tasks.map((task: any) => (
-                  <TableRow
-                    key={task.id}
-                    className="border-gray-800 hover:bg-gray-800/50 cursor-pointer"
-                    onClick={() =>
-                      navigate({ to: "/tasks/$id", params: { id: String(task.id) } })
-                    }
-                  >
-                    <TableCell>
-                      <StatusBadge status={task.status} />
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-gray-400">
-                      {String(task.id).slice(0, 8)}
-                    </TableCell>
-                    <TableCell className="text-gray-50 max-w-xs truncate">
-                      {task.title}
-                    </TableCell>
-                    <TableCell className="text-gray-400 text-sm">
-                      {task.workspace}
-                    </TableCell>
-                    <TableCell className="text-gray-400 text-sm">
-                      {task.priority ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-gray-400 text-sm font-mono">
-                      {task.cost_usd != null
-                        ? `$${Number(task.cost_usd).toFixed(4)}`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-gray-400 text-xs">
-                      {task.updated_at
-                        ? new Date(task.updated_at).toLocaleString()
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-            {!isLoading && tasks.length === 0 && (
-              <TableRow className="border-gray-800">
-                <TableCell
-                  colSpan={7}
-                  className="text-center text-gray-500 py-8"
-                >
-                  No tasks found
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {/* View content */}
+      {view === "board" ? (
+        <TaskBoard tasks={tasks} />
+      ) : (
+        <TaskListTree tasks={tasks} isLoading={isLoading} />
+      )}
     </div>
   )
 }
