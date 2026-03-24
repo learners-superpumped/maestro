@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { useTasks, useCreateTask } from "@/hooks/queries/use-tasks"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Button } from "@/components/ui/button"
@@ -40,8 +40,18 @@ const taskSchema = z.object({
   title: z.string().min(1, "Required"),
   instruction: z.string().min(1, "Required"),
   priority: z.number().int().min(0).max(100),
-  approval_level: z.string(),
+  approval_level: z.number().int().min(0).max(2),
+  budget_usd: z.number().min(0).optional(),
+  max_retries: z.number().int().min(0).optional(),
+  parent_task_id: z.string().optional(),
+  goal_id: z.string().optional(),
 })
+
+const APPROVAL_LEVELS = [
+  { value: "0", label: "Auto (0)" },
+  { value: "1", label: "Post-notify (1)" },
+  { value: "2", label: "Pre-approve (2)" },
+]
 
 type TaskFormValues = z.infer<typeof taskSchema>
 
@@ -62,6 +72,7 @@ export function Tasks() {
   const [statusFilter, setStatusFilter] = useState<string>("")
   const [workspaceFilter, setWorkspaceFilter] = useState("")
   const [open, setOpen] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const { data, isLoading } = useTasks({
     status: statusFilter || undefined,
@@ -78,11 +89,23 @@ export function Tasks() {
     formState: { errors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
-    defaultValues: { priority: 50, approval_level: "none" },
+    defaultValues: { priority: 50, approval_level: 2 },
   })
 
   const onSubmit = handleSubmit(async (values) => {
-    await createTask.mutateAsync(values)
+    const payload: any = {
+      workspace: values.workspace,
+      type: values.type,
+      title: values.title,
+      instruction: values.instruction,
+      priority: values.priority,
+      approval_level: values.approval_level,
+    }
+    if (values.budget_usd) payload.budget_usd = values.budget_usd
+    if (values.max_retries) payload.max_retries = values.max_retries
+    if (values.parent_task_id?.trim()) payload.parent_task_id = values.parent_task_id.trim()
+    if (values.goal_id?.trim()) payload.goal_id = values.goal_id.trim()
+    await createTask.mutateAsync(payload)
     reset()
     setOpen(false)
   })
@@ -172,21 +195,80 @@ export function Tasks() {
                 <div className="space-y-1">
                   <Label className="text-gray-400 text-xs">Approval Level</Label>
                   <Select
-                    defaultValue="none"
-                    onValueChange={(v) => setValue("approval_level", v ?? "none")}
+                    defaultValue="2"
+                    onValueChange={(v) => setValue("approval_level", Number(v))}
                   >
                     <SelectTrigger className="bg-gray-800 border-gray-700 text-gray-50">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-gray-800 border-gray-700">
-                      {["none", "before_start", "after_complete"].map((v) => (
-                        <SelectItem key={v} value={v} className="text-gray-50">
-                          {v}
+                      {APPROVAL_LEVELS.map((level) => (
+                        <SelectItem key={level.value} value={level.value} className="text-gray-50">
+                          {level.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                >
+                  {showAdvanced ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                  Advanced options
+                </button>
+
+                {showAdvanced && (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-gray-400 text-xs">Budget (USD)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...register("budget_usd", { valueAsNumber: true })}
+                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          placeholder="5.00"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-gray-400 text-xs">Max Retries</Label>
+                        <Input
+                          type="number"
+                          {...register("max_retries", { valueAsNumber: true })}
+                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          placeholder="3"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-gray-400 text-xs">Parent Task ID</Label>
+                        <Input
+                          {...register("parent_task_id")}
+                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-gray-400 text-xs">Goal ID</Label>
+                        <Input
+                          {...register("goal_id")}
+                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          placeholder="Optional"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
