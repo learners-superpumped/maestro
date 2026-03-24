@@ -2,13 +2,14 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, Trash2, Archive, Loader2, RefreshCw } from "lucide-react"
+import { Plus, Trash2, Archive, Loader2, RefreshCw, Search } from "lucide-react"
 import {
   useAssets,
   useRegisterAsset,
   useDeleteAsset,
   useArchiveAsset,
   useCleanupAssets,
+  useSearchAssets,
 } from "@/hooks/queries/use-assets"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,6 +47,8 @@ type AssetFormValues = z.infer<typeof assetSchema>
 export function Assets() {
   const [typeFilter, setTypeFilter] = useState("")
   const [workspaceFilter, setWorkspaceFilter] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<any[] | null>(null)
   const [open, setOpen] = useState(false)
   const [cleanupOpen, setCleanupOpen] = useState(false)
   const [graceDays, setGraceDays] = useState("7")
@@ -59,6 +62,7 @@ export function Assets() {
   const deleteAsset = useDeleteAsset()
   const archiveAsset = useArchiveAsset()
   const cleanup = useCleanupAssets()
+  const searchAssets = useSearchAssets()
 
   const {
     register,
@@ -91,6 +95,7 @@ export function Assets() {
   })
 
   const assets: any[] = data?.assets ?? []
+  const displayAssets = searchResults ?? assets
 
   return (
     <div className="space-y-5">
@@ -228,7 +233,7 @@ export function Assets() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <Input
           placeholder="Filter by type..."
           value={typeFilter}
@@ -241,6 +246,30 @@ export function Assets() {
           onChange={(e) => setWorkspaceFilter(e.target.value)}
           className="w-52 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
         />
+        <Input
+          placeholder="Semantic search..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && searchQuery.trim()) {
+              searchAssets.mutate(
+                { query: searchQuery, workspace: workspaceFilter || undefined, asset_type: typeFilter || undefined },
+                { onSuccess: (data) => setSearchResults(data?.results ?? []) }
+              )
+            }
+          }}
+          className="w-64 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500"
+        />
+        {searchResults !== null && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => { setSearchResults(null); setSearchQuery("") }}
+            className="text-gray-400 text-xs"
+          >
+            Clear search
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -268,7 +297,7 @@ export function Assets() {
                     ))}
                   </TableRow>
                 ))
-              : assets.map((asset: any) => (
+              : displayAssets.map((asset: any) => (
                   <TableRow key={asset.id} className="border-gray-800 hover:bg-gray-800/30">
                     <TableCell className="text-gray-400 text-xs font-mono">
                       {asset.asset_type}
@@ -314,7 +343,7 @@ export function Assets() {
                     </TableCell>
                   </TableRow>
                 ))}
-            {!isLoading && assets.length === 0 && (
+            {!isLoading && displayAssets.length === 0 && (
               <TableRow className="border-gray-800">
                 <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                   No assets found
