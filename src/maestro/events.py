@@ -56,7 +56,7 @@ class EventEmittingStore(Store):
     # -- Tasks --
     async def create_task(self, task) -> None:
         await super().create_task(task)
-        actor = getattr(task, "created_by", None) or "system"
+        actor = getattr(task, "created_by", None) or "human"
         detail = (
             {"parent_task_id": task.parent_task_id} if task.parent_task_id else None
         )
@@ -77,8 +77,11 @@ class EventEmittingStore(Store):
         await super().update_task_status(task_id, status, **kwargs)
 
         # Record task event
-        session_id = kwargs.get("session_id")
-        actor = f"agent:{session_id}" if session_id else "system"
+        # actor can be explicitly passed, derived from session_id, or default to "system"
+        actor = kwargs.pop("actor", None)
+        if not actor:
+            session_id = kwargs.get("session_id")
+            actor = f"agent:{session_id}" if session_id else "system"
         detail = {}
         if kwargs.get("error"):
             detail["error"] = str(kwargs["error"])

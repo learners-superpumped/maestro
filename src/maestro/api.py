@@ -449,11 +449,7 @@ async def task_approve_handler(request: web.Request) -> web.Response:
     if approval and approval["status"] == "pending":
         await mgr.approve(task_id)
     else:
-        await store.update_task_status(task_id, TaskStatus.APPROVED)
-
-    await store.record_task_event(
-        task_id, "approved", "human", {"note": note} if note else None
-    )
+        await store.update_task_status(task_id, TaskStatus.APPROVED, actor="human")
 
     return web.json_response({"ok": True})
 
@@ -481,11 +477,7 @@ async def task_reject_handler(request: web.Request) -> web.Response:
     if approval and approval["status"] == "pending":
         await mgr.reject(task_id, note=note)
     else:
-        await store.update_task_status(task_id, TaskStatus.CANCELLED)
-
-    await store.record_task_event(
-        task_id, "rejected", "human", {"note": note} if note else None
-    )
+        await store.update_task_status(task_id, TaskStatus.CANCELLED, actor="human")
 
     return web.json_response({"ok": True})
 
@@ -513,8 +505,6 @@ async def task_revise_handler(request: web.Request) -> web.Response:
         await mgr.revise(task_id, note=note, revised_content=revised_content)
     except ValueError as exc:
         raise web.HTTPNotFound(reason=str(exc)) from exc
-
-    await store.record_task_event(task_id, "revised", "human", {"note": note})
 
     return web.json_response({"ok": True})
 
@@ -559,7 +549,6 @@ async def task_create_handler(request: web.Request) -> web.Response:
         budget_usd=float(body.get("budget_usd", 5.0)),
     )
     await store.create_task(task)
-    await store.record_task_event(task.id, "created", body.get("created_by", "human"))
     return web.json_response({"ok": True, "task_id": task.id}, status=201)
 
 
