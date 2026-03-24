@@ -370,6 +370,7 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
                     "cost_usd": t.cost_usd,
                     "error": t.error,
                     "session_id": t.session_id,
+                    "parent_task_id": t.parent_task_id,
                     "created_at": t.created_at.isoformat() if t.created_at else None,
                     "updated_at": t.updated_at.isoformat() if t.updated_at else None,
                 }
@@ -476,6 +477,211 @@ async def task_revise_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Task create & children
+# ---------------------------------------------------------------------------
+
+
+async def task_create_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/task — create a new task."""
+    store: Store = request.app["store"]
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+    for field in ("workspace", "title", "instruction"):
+        if not body.get(field):
+            raise web.HTTPBadRequest(reason=f"'{field}' is required")
+    import uuid
+
+    task = Task(
+        id=uuid.uuid4().hex[:8],
+        type=body.get("type", "claude"),
+        workspace=body["workspace"],
+        title=body["title"],
+        instruction=body["instruction"],
+        priority=int(body.get("priority", 3)),
+        approval_level=int(body.get("approval_level", 2)),
+        parent_task_id=body.get("parent_task_id"),
+        goal_id=body.get("goal_id"),
+        budget_usd=float(body.get("budget_usd", 5.0)),
+    )
+    await store.create_task(task)
+    return web.json_response({"ok": True, "task_id": task.id}, status=201)
+
+
+async def task_children_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/task/{task_id}/children — list child tasks."""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+    children = await store.list_children(task_id)
+    return web.json_response(
+        {
+            "children": [
+                {
+                    "id": c.id,
+                    "type": c.type,
+                    "title": c.title,
+                    "status": c.status.value,
+                    "priority": c.priority,
+                    "cost_usd": c.cost_usd,
+                    "parent_task_id": c.parent_task_id,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                }
+                for c in children
+            ]
+        },
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schedule CRUD
+# ---------------------------------------------------------------------------
+
+
+async def schedules_list_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/schedules — list all schedules."""
+    store: Store = request.app["store"]
+    schedules = await store.list_schedules()
+    return web.json_response(
+        {"schedules": schedules, "count": len(schedules)},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def schedule_create_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/schedule — create a new schedule."""
+    store: Store = request.app["store"]
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+    for field in ("name", "workspace", "task_type"):
+        if not body.get(field):
+            raise web.HTTPBadRequest(reason=f"'{field}' is required")
+    await store.create_schedule(
+        name=body["name"],
+        workspace=body["workspace"],
+        task_type=body["task_type"],
+        cron=body.get("cron"),
+        interval_ms=body.get("interval_ms"),
+        approval_level=body.get("approval_level", 0),
+    )
+    return web.json_response({"ok": True})
+
+
+async def schedule_delete_handler(request: web.Request) -> web.Response:
+    """DELETE /api/internal/schedule/{name} — delete a schedule."""
+    store: Store = request.app["store"]
+    name = request.match_info["name"]
+    await store.delete_schedule(name)
+    return web.json_response({"ok": True})
+
+
+async def schedule_enable_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/schedule/{name}/enable — enable a schedule."""
+    store: Store = request.app["store"]
+    name = request.match_info["name"]
+    await store.update_schedule(name, enabled=True)
+    return web.json_response({"ok": True})
+
+
+async def schedule_disable_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/schedule/{name}/disable — disable a schedule."""
+    store: Store = request.app["store"]
+    name = request.match_info["name"]
+    await store.update_schedule(name, enabled=False)
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Rule CRUD
+# ---------------------------------------------------------------------------
+
+
+async def rules_list_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/rules — list extract rules."""
+    store: Store = request.app["store"]
+    workspace = request.query.get("workspace")
+    rules = await store.list_extract_rules(workspace=workspace)
+    return web.json_response(
+        {"rules": rules, "count": len(rules)},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def rule_create_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/rule — create an extract rule."""
+    store: Store = request.app["store"]
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+    for field in ("workspace", "task_type", "asset_type"):
+        if not body.get(field):
+            raise web.HTTPBadRequest(reason=f"'{field}' is required")
+    await store.create_extract_rule(
+        workspace=body["workspace"],
+        task_type=body["task_type"],
+        asset_type=body["asset_type"],
+        title_field=body.get("title_field"),
+        iterate=body.get("iterate"),
+        tags_from=body.get("tags_from"),
+    )
+    return web.json_response({"ok": True})
+
+
+async def rule_delete_handler(request: web.Request) -> web.Response:
+    """DELETE /api/internal/rule/{workspace}/{task_type} — delete an extract rule."""
+    store: Store = request.app["store"]
+    workspace = request.match_info["workspace"]
+    task_type = request.match_info["task_type"]
+    await store.delete_extract_rule(workspace, task_type)
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Asset delete / archive / cleanup
+# ---------------------------------------------------------------------------
+
+
+async def asset_delete_handler(request: web.Request) -> web.Response:
+    """DELETE /api/internal/asset/{asset_id} — delete an asset."""
+    store: Store = request.app["store"]
+    asset_id = request.match_info["asset_id"]
+    asset = await store.get_asset(asset_id)
+    if asset is None:
+        raise web.HTTPNotFound(reason=f"Asset not found: {asset_id}")
+    await store.delete_asset(asset_id)
+    return web.json_response({"ok": True})
+
+
+async def asset_archive_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/asset/{asset_id}/archive — archive an asset."""
+    store: Store = request.app["store"]
+    asset_id = request.match_info["asset_id"]
+    asset = await store.get_asset(asset_id)
+    if asset is None:
+        raise web.HTTPNotFound(reason=f"Asset not found: {asset_id}")
+    await store.update_asset(asset_id, archived=1)
+    return web.json_response({"ok": True})
+
+
+async def assets_cleanup_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/assets/cleanup — archive expired and purge old assets."""
+    store: Store = request.app["store"]
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    grace = int(body.get("grace_days", 30))
+    archived = await store.archive_expired_assets()
+    purged = await store.purge_archived_assets(grace_days=grace)
+    return web.json_response({"archived": archived, "purged": purged})
+
+
+# ---------------------------------------------------------------------------
 # Webhook handlers
 # ---------------------------------------------------------------------------
 
@@ -579,6 +785,31 @@ def create_api_app(store: Store, slack: object | None = None) -> web.Application
     app.router.add_post("/api/internal/asset/search", asset_search_handler)
     app.router.add_get("/api/internal/asset/{asset_id}", asset_get_handler)
     app.router.add_get("/api/internal/assets", asset_list_handler)
+
+    # Task create + children
+    app.router.add_post("/api/internal/task", task_create_handler)
+    app.router.add_get("/api/internal/task/{task_id}/children", task_children_handler)
+
+    # Schedules
+    app.router.add_get("/api/internal/schedules", schedules_list_handler)
+    app.router.add_post("/api/internal/schedule", schedule_create_handler)
+    app.router.add_delete("/api/internal/schedule/{name}", schedule_delete_handler)
+    app.router.add_post("/api/internal/schedule/{name}/enable", schedule_enable_handler)
+    app.router.add_post(
+        "/api/internal/schedule/{name}/disable", schedule_disable_handler
+    )
+
+    # Rules
+    app.router.add_get("/api/internal/rules", rules_list_handler)
+    app.router.add_post("/api/internal/rule", rule_create_handler)
+    app.router.add_delete(
+        "/api/internal/rule/{workspace}/{task_type}", rule_delete_handler
+    )
+
+    # Asset delete/archive/cleanup
+    app.router.add_delete("/api/internal/asset/{asset_id}", asset_delete_handler)
+    app.router.add_post("/api/internal/asset/{asset_id}/archive", asset_archive_handler)
+    app.router.add_post("/api/internal/assets/cleanup", assets_cleanup_handler)
 
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)
