@@ -99,6 +99,48 @@ class Daemon:
         }
 
     # ------------------------------------------------------------------
+    # Seed helpers
+    # ------------------------------------------------------------------
+
+    async def _seed_from_yaml(self) -> None:
+        """One-time migration: seed DB from YAML schedules if DB is empty."""
+        existing = await self._store.list_schedules()
+        if existing:
+            return  # Already has schedules in DB, skip seeding
+
+        # Check if config still has schedules in YAML (old format)
+        yaml_path = self._base_path / "maestro.yaml"
+        if not yaml_path.exists():
+            return
+        import yaml
+        raw = yaml.safe_load(yaml_path.read_text()) or {}
+        for s in raw.get("schedules", []):
+            await self._store.create_schedule(
+                name=s["name"],
+                workspace=s["workspace"],
+                task_type=s["task_type"],
+                cron=s.get("cron"),
+                interval_ms=s.get("interval_ms"),
+                approval_level=s.get("approval_level", 0),
+            )
+            logger.info("Seeded schedule from YAML: %s", s["name"])
+
+        # Seed auto_extract rules
+        assets_cfg = raw.get("assets", {})
+        for workspace, type_rules in assets_cfg.get("auto_extract", {}).items():
+            for task_type, rule in type_rules.items():
+                tags = rule.get("tags_from", [])
+                await self._store.create_extract_rule(
+                    workspace=workspace,
+                    task_type=task_type,
+                    asset_type=rule["asset_type"],
+                    title_field=rule.get("title_field"),
+                    iterate=rule.get("iterate"),
+                    tags_from=tags if tags else None,
+                )
+                logger.info("Seeded extract rule from YAML: %s/%s", workspace, task_type)
+
+    # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
@@ -136,7 +178,10 @@ class Daemon:
         pid_file.write_text(str(os.getpid()))
         logger.info("PID %d written to %s", os.getpid(), pid_file)
 
-        # 5. Restore scheduler state from DB
+        # 5. Seed DB from YAML on first run (backward compatibility)
+        await self._seed_from_yaml()
+
+        # 6. Restore scheduler state from DB
         schedules = await self._store.list_schedules(enabled_only=True)
         restored: dict[str, str] = {}
         for s in schedules:
