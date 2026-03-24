@@ -25,7 +25,7 @@ from maestro.approval import ApprovalManager
 from maestro.assets import AssetManager
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
-from maestro.dispatcher import Dispatcher
+from maestro.dispatcher import AgentLogProcessor, Dispatcher
 from maestro.events import EventBus, EventEmittingStore
 from maestro.integrations.slack import SlackNotifier
 from maestro.models import Task, TaskResult, TaskStatus
