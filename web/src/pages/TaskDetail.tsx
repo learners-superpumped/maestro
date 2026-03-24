@@ -10,6 +10,8 @@ import {
 } from "@/hooks/queries/use-tasks"
 import { TaskTree } from "@/components/TaskTree"
 import { StatusBadge } from "@/components/StatusBadge"
+import { ActivityTimeline } from "@/components/ActivityTimeline"
+import { AgentLogPanel } from "@/components/AgentLogPanel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -175,8 +177,18 @@ export function TaskDetail() {
           <Field label="Updated At" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
           <Field label="Created By" value={task.created_by} mono />
           <Field label="Claimed By" value={task.claimed_by} mono />
+          <Field label="Attempt" value={task.max_retries ? `${task.attempt ?? 0}/${task.max_retries}` : undefined} />
+          <Field label="Reviews" value={task.review_count || undefined} />
         </CardContent>
       </Card>
+
+      {/* Agent Log Panel */}
+      {(task.status === "running" || task.status === "completed" || task.status === "failed" || task.status === "paused") && (
+        <AgentLogPanel taskId={id} taskStatus={task.status} />
+      )}
+
+      {/* Activity Timeline */}
+      <ActivityTimeline taskId={id} />
 
       {/* Instruction */}
       {task.instruction && (
