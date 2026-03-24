@@ -100,12 +100,12 @@ export function Tasks() {
   )
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header + New Task button */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-50">Tasks</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <h1 className="text-[20px] font-semibold text-[#37352f]">Tasks</h1>
+          <p className="text-[14px] text-[#787774] mt-1">
             {tasks.length} root tasks
           </p>
         </div>
@@ -113,85 +113,85 @@ export function Tasks() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
             render={
-              <Button className="bg-indigo-600 hover:bg-indigo-500 text-white">
+              <Button className="bg-[#2383e2] hover:bg-[#1a73cc] text-white h-[32px] text-[13px] rounded px-3">
                 <Plus className="h-4 w-4 mr-1" />
                 New Task
               </Button>
             }
           />
-          <DialogContent className="bg-gray-900 border-gray-800 text-gray-50 max-w-lg">
+          <DialogContent className="bg-white border border-[#e8e5df] max-w-lg">
             <DialogHeader>
-              <DialogTitle>Create Task</DialogTitle>
+              <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Create Task</DialogTitle>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4 mt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Workspace *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
                   <Input
                     {...register("workspace")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                     placeholder="default"
                   />
                   {errors.workspace && (
-                    <p className="text-xs text-red-400">{errors.workspace.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Type *</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Type *</Label>
                   <Input
                     {...register("type")}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                     placeholder="task_type"
                   />
                   {errors.type && (
-                    <p className="text-xs text-red-400">{errors.type.message}</p>
+                    <p className="text-[12px] text-[#eb5757]">{errors.type.message}</p>
                   )}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-gray-400 text-xs">Title *</Label>
+                <Label className="text-[12px] text-[#9b9a97]">Title *</Label>
                 <Input
                   {...register("title")}
-                  className="bg-gray-800 border-gray-700 text-gray-50"
+                  className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                 />
                 {errors.title && (
-                  <p className="text-xs text-red-400">{errors.title.message}</p>
+                  <p className="text-[12px] text-[#eb5757]">{errors.title.message}</p>
                 )}
               </div>
 
               <div className="space-y-1">
-                <Label className="text-gray-400 text-xs">Instruction *</Label>
+                <Label className="text-[12px] text-[#9b9a97]">Instruction *</Label>
                 <Textarea
                   {...register("instruction")}
-                  className="bg-gray-800 border-gray-700 text-gray-50 min-h-24"
+                  className="bg-white border-[#e8e5df] text-[#37352f] min-h-24 text-[13px]"
                 />
                 {errors.instruction && (
-                  <p className="text-xs text-red-400">{errors.instruction.message}</p>
+                  <p className="text-[12px] text-[#eb5757]">{errors.instruction.message}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Priority (0-100)</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Priority (0-100)</Label>
                   <Input
                     type="number"
                     {...register("priority", { valueAsNumber: true })}
-                    className="bg-gray-800 border-gray-700 text-gray-50"
+                    className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-gray-400 text-xs">Approval Level</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Approval Level</Label>
                   <Select
                     defaultValue="2"
                     onValueChange={(v) => setValue("approval_level", Number(v))}
                   >
-                    <SelectTrigger className="bg-gray-800 border-gray-700 text-gray-50">
+                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectContent className="bg-white border border-[#e8e5df]">
                       {APPROVAL_LEVELS.map((level) => (
-                        <SelectItem key={level.value} value={level.value} className="text-gray-50">
+                        <SelectItem key={level.value} value={level.value} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
                           {level.label}
                         </SelectItem>
                       ))}
@@ -204,7 +204,7 @@ export function Tasks() {
                 <button
                   type="button"
                   onClick={() => setShowAdvanced((v) => !v)}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                  className="flex items-center gap-1 text-[12px] text-[#9b9a97] hover:text-[#37352f] transition-colors"
                 >
                   {showAdvanced ? (
                     <ChevronUp className="h-3 w-3" />
@@ -218,39 +218,39 @@ export function Tasks() {
                   <div className="mt-3 space-y-3">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <Label className="text-gray-400 text-xs">Budget (USD)</Label>
+                        <Label className="text-[12px] text-[#9b9a97]">Budget (USD)</Label>
                         <Input
                           type="number"
                           step="0.01"
                           {...register("budget_usd", { valueAsNumber: true })}
-                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                           placeholder="5.00"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-gray-400 text-xs">Max Retries</Label>
+                        <Label className="text-[12px] text-[#9b9a97]">Max Retries</Label>
                         <Input
                           type="number"
                           {...register("max_retries", { valueAsNumber: true })}
-                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                           placeholder="3"
                         />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <Label className="text-gray-400 text-xs">Parent Task ID</Label>
+                        <Label className="text-[12px] text-[#9b9a97]">Parent Task ID</Label>
                         <Input
                           {...register("parent_task_id")}
-                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                           placeholder="Optional"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-gray-400 text-xs">Goal ID</Label>
+                        <Label className="text-[12px] text-[#9b9a97]">Goal ID</Label>
                         <Input
                           {...register("goal_id")}
-                          className="bg-gray-800 border-gray-700 text-gray-50"
+                          className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]"
                           placeholder="Optional"
                         />
                       </div>
@@ -264,14 +264,14 @@ export function Tasks() {
                   type="button"
                   variant="ghost"
                   onClick={() => setOpen(false)}
-                  className="text-gray-400"
+                  className="text-[#787774] hover:bg-[#f7f6f3]"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={createTask.isPending}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                  className="bg-[#2383e2] hover:bg-[#1a73cc] text-white h-[32px] text-[13px]"
                 >
                   {createTask.isPending && (
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -290,24 +290,30 @@ export function Tasks() {
       {/* View toggle + Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <Tabs value={view} onValueChange={(v) => setView(v as "list" | "board")}>
-          <TabsList className="bg-gray-800 border border-gray-700">
-            <TabsTrigger value="list" className="text-xs data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-400">
+          <TabsList className="bg-white border border-[#e8e5df] rounded p-0.5 h-auto">
+            <TabsTrigger
+              value="list"
+              className="text-[13px] h-[28px] px-3 data-[state=active]:bg-[#f7f6f3] data-[state=active]:text-[#37352f] data-[state=inactive]:text-[#9b9a97]"
+            >
               List
             </TabsTrigger>
-            <TabsTrigger value="board" className="text-xs data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-400">
+            <TabsTrigger
+              value="board"
+              className="text-[13px] h-[28px] px-3 data-[state=active]:bg-[#f7f6f3] data-[state=active]:text-[#37352f] data-[state=inactive]:text-[#9b9a97]"
+            >
               Board
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
         <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-40 bg-gray-900 border-gray-800 text-gray-50 text-xs">
+          <SelectTrigger className="w-40 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
-          <SelectContent className="bg-gray-800 border-gray-700">
-            <SelectItem value="all" className="text-gray-50 text-xs">All statuses</SelectItem>
+          <SelectContent className="bg-white border border-[#e8e5df]">
+            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All statuses</SelectItem>
             {["pending", "running", "paused", "completed", "failed"].map((s) => (
-              <SelectItem key={s} value={s} className="text-gray-50 text-xs capitalize">{s}</SelectItem>
+              <SelectItem key={s} value={s} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px] capitalize">{s}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -316,12 +322,12 @@ export function Tasks() {
           placeholder="Workspace..."
           value={workspaceFilter}
           onChange={(e) => setWorkspaceFilter(e.target.value)}
-          className="w-40 bg-gray-900 border-gray-800 text-gray-50 placeholder:text-gray-500 text-xs"
+          className="w-40 bg-white border-[#e8e5df] text-[#37352f] placeholder:text-[#9b9a97] text-[13px] h-[32px]"
         />
 
         <div className="flex items-center gap-2">
           <Switch checked={showSystem} onCheckedChange={setShowSystem} />
-          <span className="text-xs text-gray-500">System</span>
+          <span className="text-[12px] text-[#9b9a97]">System</span>
         </div>
       </div>
 
