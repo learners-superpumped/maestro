@@ -226,6 +226,30 @@ class Store:
         except Exception:
             pass
 
+        # tasks: add created_by and claimed_by
+        try:
+            async with self._conn() as db:
+                await db.execute(
+                    "ALTER TABLE tasks ADD COLUMN created_by TEXT DEFAULT 'system'"
+                )
+                await db.commit()
+        except Exception:
+            pass
+        try:
+            async with self._conn() as db:
+                await db.execute("ALTER TABLE tasks ADD COLUMN claimed_by TEXT")
+                await db.commit()
+        except Exception:
+            pass
+
+        # approvals: add reviewed_by
+        try:
+            async with self._conn() as db:
+                await db.execute("ALTER TABLE approvals ADD COLUMN reviewed_by TEXT")
+                await db.commit()
+        except Exception:
+            pass
+
         # Migrate old assets schema to new asset pipeline schema
         try:
             async with self._conn() as db:

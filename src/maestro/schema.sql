@@ -164,3 +164,26 @@ CREATE TABLE IF NOT EXISTS auto_extract_rules (
     updated_at  TEXT NOT NULL,
     UNIQUE(workspace, task_type)
 );
+
+CREATE TABLE IF NOT EXISTS task_events (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    event_type TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    detail_json TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_events_created ON task_events(created_at);
+
+CREATE TABLE IF NOT EXISTS task_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    seq INTEGER NOT NULL,
+    log_type TEXT NOT NULL,
+    tool_name TEXT,
+    summary TEXT NOT NULL,
+    content TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task_logs_task ON task_logs(task_id);
