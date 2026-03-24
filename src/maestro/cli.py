@@ -1102,5 +1102,160 @@ def asset_cleanup(grace_days: int) -> None:
 main.add_command(asset)
 
 
+# ---------------------------------------------------------------------------
+# schedule
+# ---------------------------------------------------------------------------
+
+@main.group()
+def schedule():
+    """Manage schedules."""
+    pass
+
+@schedule.command("add")
+@click.option("--name", required=True, help="Unique schedule name")
+@click.option("--workspace", required=True)
+@click.option("--type", "task_type", required=True, help="Task type to create")
+@click.option("--cron", default=None, help='Cron expression (e.g. "0 9 * * *")')
+@click.option("--interval", "interval_ms", type=int, default=None, help="Interval in ms")
+@click.option("--approval", "approval_level", type=int, default=0)
+def schedule_add(name, workspace, task_type, cron, interval_ms, approval_level):
+    """Add a new schedule."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.create_schedule(
+            name=name, workspace=workspace, task_type=task_type,
+            cron=cron, interval_ms=interval_ms, approval_level=approval_level,
+        )
+        click.echo(f"Created schedule: {name}")
+    asyncio.run(_run())
+
+@schedule.command("list")
+def schedule_list():
+    """List all schedules."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        schedules = await store.list_schedules()
+        if not schedules:
+            click.echo("No schedules.")
+            return
+        click.echo(f"{'NAME':<25} {'TYPE':<15} {'WORKSPACE':<15} {'TRIGGER':<20} {'ENABLED'}")
+        click.echo("-" * 85)
+        for s in schedules:
+            trigger = s["cron"] or f"every {s['interval_ms']}ms"
+            enabled = "✓" if s["enabled"] else "✗"
+            click.echo(f"{s['name']:<25} {s['task_type']:<15} {s['workspace']:<15} {trigger:<20} {enabled}")
+    asyncio.run(_run())
+
+@schedule.command("remove")
+@click.argument("name")
+def schedule_remove(name):
+    """Remove a schedule."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.delete_schedule(name)
+        click.echo(f"Removed schedule: {name}")
+    asyncio.run(_run())
+
+@schedule.command("enable")
+@click.argument("name")
+def schedule_enable(name):
+    """Enable a schedule."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.update_schedule(name, enabled=True)
+        click.echo(f"Enabled: {name}")
+    asyncio.run(_run())
+
+@schedule.command("disable")
+@click.argument("name")
+def schedule_disable(name):
+    """Disable a schedule."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.update_schedule(name, enabled=False)
+        click.echo(f"Disabled: {name}")
+    asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# extract-rule
+# ---------------------------------------------------------------------------
+
+@main.group("extract-rule")
+def extract_rule():
+    """Manage auto-extract rules."""
+    pass
+
+@extract_rule.command("add")
+@click.option("--workspace", required=True)
+@click.option("--task-type", required=True)
+@click.option("--asset-type", required=True)
+@click.option("--title-field", default=None)
+@click.option("--iterate", default=None)
+@click.option("--tags-from", default=None, help="Comma-separated dot-paths")
+def rule_add(workspace, task_type, asset_type, title_field, iterate, tags_from):
+    """Add or update an auto-extract rule."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        tf = [t.strip() for t in tags_from.split(",")] if tags_from else None
+        await store.create_extract_rule(
+            workspace=workspace, task_type=task_type, asset_type=asset_type,
+            title_field=title_field, iterate=iterate, tags_from=tf,
+        )
+        click.echo(f"Rule set: {workspace}/{task_type} → {asset_type}")
+    asyncio.run(_run())
+
+@extract_rule.command("list")
+@click.option("--workspace", default=None)
+def rule_list(workspace):
+    """List auto-extract rules."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        rules = await store.list_extract_rules(workspace=workspace)
+        if not rules:
+            click.echo("No rules.")
+            return
+        click.echo(f"{'WORKSPACE':<20} {'TASK_TYPE':<15} {'ASSET_TYPE':<10} {'TITLE_FIELD':<20}")
+        click.echo("-" * 70)
+        for r in rules:
+            click.echo(f"{r['workspace']:<20} {r['task_type']:<15} {r['asset_type']:<10} {r.get('title_field') or '':<20}")
+    asyncio.run(_run())
+
+@extract_rule.command("remove")
+@click.option("--workspace", required=True)
+@click.option("--task-type", required=True)
+def rule_remove(workspace, task_type):
+    """Remove an auto-extract rule."""
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.delete_extract_rule(workspace, task_type)
+        click.echo(f"Removed rule: {workspace}/{task_type}")
+    asyncio.run(_run())
+
+
 if __name__ == "__main__":
     main()
