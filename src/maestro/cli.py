@@ -324,14 +324,37 @@ def task_list(filter_status, filter_workspace, flat, limit):
                 click.echo(f"Invalid status: {filter_status}. Valid: {valid}")
                 return
 
-        # Fetch all tasks (needed for tree detection and tree mode)
+        if flat:
+            # Flat mode: use SQL LIMIT for efficiency
+            tasks = await store.list_tasks(status=ts, workspace=filter_workspace, limit=limit + 1)
+
+            if not tasks:
+                click.echo("No tasks found.")
+                return
+
+            has_more = len(tasks) > limit
+            display_tasks = tasks[:limit]
+
+            for t in display_tasks:
+                emoji = _STATUS_EMOJI.get(t.status.value, " ")
+                click.echo(
+                    f"{emoji} {t.id:<10} {t.status.value:<14}"
+                    f" {t.priority:>3} {t.workspace:<20} {t.title}"
+                )
+
+            if has_more:
+                status_label = f" {filter_status}" if filter_status else ""
+                click.echo(f"\nShowing {limit}{status_label} tasks. Use --limit to show more.")
+            return
+
+        # Tree auto-detection: fetch all tasks
         all_tasks = await store.list_tasks(status=ts, workspace=filter_workspace)
 
         if not all_tasks:
             click.echo("No tasks found.")
             return
 
-        has_tree = not flat and any(t.parent_task_id for t in all_tasks)
+        has_tree = any(t.parent_task_id for t in all_tasks)
 
         if has_tree:
             # Tree mode: limit applies to root tasks
