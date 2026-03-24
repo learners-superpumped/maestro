@@ -135,3 +135,32 @@ CREATE TABLE IF NOT EXISTS notifications (
     channel TEXT DEFAULT 'log',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS schedules (
+    id             TEXT PRIMARY KEY,
+    name           TEXT UNIQUE NOT NULL,
+    workspace      TEXT NOT NULL,
+    task_type      TEXT NOT NULL,
+    cron           TEXT,
+    interval_ms    INTEGER,
+    approval_level INTEGER NOT NULL DEFAULT 0,
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
+CREATE INDEX IF NOT EXISTS idx_schedules_workspace ON schedules(workspace);
+
+CREATE TABLE IF NOT EXISTS auto_extract_rules (
+    id          TEXT PRIMARY KEY,
+    workspace   TEXT NOT NULL,
+    task_type   TEXT NOT NULL,
+    asset_type  TEXT NOT NULL,
+    title_field TEXT,
+    iterate     TEXT,
+    tags_from   TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(workspace, task_type)
+);

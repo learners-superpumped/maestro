@@ -11,6 +11,7 @@ import json
 import pathlib
 import secrets
 import struct
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
@@ -996,6 +997,26 @@ class Store:
                 "INSERT INTO scheduler_state (key, value) VALUES (?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (key, value),
+            )
+            await db.commit()
+
+    async def seed_schedule(self, schedule: dict) -> None:
+        """Insert a schedule if name doesn't already exist (for YAML migration)."""
+        async with self._conn() as db:
+            existing = await db.execute(
+                "SELECT id FROM schedules WHERE name = ?", (schedule["name"],)
+            )
+            if await existing.fetchone():
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            sid = str(uuid.uuid4())[:8]
+            await db.execute(
+                """INSERT INTO schedules
+                   (id, name, workspace, task_type, cron, interval_ms, approval_level, enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                (sid, schedule["name"], schedule["workspace"], schedule["task_type"],
+                 schedule.get("cron"), schedule.get("interval_ms"),
+                 schedule.get("approval_level", 0), now, now),
             )
             await db.commit()
 
