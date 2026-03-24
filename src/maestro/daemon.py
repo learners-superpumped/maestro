@@ -14,7 +14,6 @@ import asyncio
 import json
 import logging
 import os
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,6 +26,7 @@ from maestro.assets import AssetManager
 from maestro.budget import BudgetManager
 from maestro.config import MaestroConfig
 from maestro.dispatcher import Dispatcher
+from maestro.events import EventBus, EventEmittingStore
 from maestro.integrations.slack import SlackNotifier
 from maestro.models import Task, TaskResult, TaskStatus
 from maestro.notifications import NotificationManager
@@ -36,6 +36,7 @@ from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
 from maestro.store import Store
 from maestro.workspace import WorkspaceManager
+from maestro.ws import WebSocketManager
 
 logger = logging.getLogger("maestro.daemon")
 
@@ -59,7 +60,14 @@ class Daemon:
 
     def __init__(self, config: MaestroConfig, store: Store, base_path: Path) -> None:
         self._config = config
-        self._store = store
+        # Wrap store with event emission
+        self._bus = EventBus()
+        if isinstance(store, EventEmittingStore):
+            self._store = store
+            self._bus = store._bus
+        else:
+            self._store = EventEmittingStore(store._db_path, self._bus)
+        self._ws_manager = WebSocketManager(self._bus)
         self._base_path = base_path
         self._runner = AgentRunner()
         self._scheduler = Scheduler(store)
@@ -113,6 +121,7 @@ class Daemon:
         if not yaml_path.exists():
             return
         import yaml
+
         raw = yaml.safe_load(yaml_path.read_text()) or {}
         for s in raw.get("schedules", []):
             await self._store.create_schedule(
@@ -138,7 +147,9 @@ class Daemon:
                     iterate=rule.get("iterate"),
                     tags_from=tags if tags else None,
                 )
-                logger.info("Seeded extract rule from YAML: %s/%s", workspace, task_type)
+                logger.info(
+                    "Seeded extract rule from YAML: %s/%s", workspace, task_type
+                )
 
     # ------------------------------------------------------------------
     # Public interface
@@ -154,6 +165,7 @@ class Daemon:
         # 1. Create the aiohttp app
         app = create_api_app(self._store, slack=self._slack)
         app["asset_manager"] = self._asset_manager
+        app.router.add_get("/ws", self._ws_manager.handle)
 
         # 2. Start TCP site on loopback
         runner = web.AppRunner(app)
@@ -658,6 +670,7 @@ class Daemon:
             pass
         # Try extracting from markdown code block (```json ... ```)
         import re
+
         match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", stripped)
         if match:
             try:
@@ -753,9 +766,7 @@ class Daemon:
     ) -> None:
         review_data = self._extract_json(result.result_json)
         if not isinstance(review_data, dict):
-            logger.error(
-                "Review result not valid JSON for task %s", review_task.id
-            )
+            logger.error("Review result not valid JSON for task %s", review_task.id)
             return
 
         instruction_data = self._extract_json(review_task.instruction)

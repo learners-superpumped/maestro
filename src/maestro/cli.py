@@ -139,12 +139,13 @@ def start(port: int) -> None:
 
     from maestro.config import load_config
     from maestro.daemon import Daemon
+    from maestro.events import EventBus, EventEmittingStore
     from maestro.log import setup_logging
-    from maestro.store import Store
 
     cfg = load_config(config_file)
     setup_logging(cfg.logging)
-    store = Store(cfg.project.store_path)
+    bus = EventBus()
+    store = EventEmittingStore(cfg.project.store_path, bus)
 
     root = _project_root()
     daemon = Daemon(config=cfg, store=store, base_path=root)
