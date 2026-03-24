@@ -12,10 +12,10 @@ import pytest
 from maestro.models import Task, TaskStatus
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _task(**kwargs) -> Task:
     """Create a minimal Task with sensible defaults."""
@@ -33,6 +33,7 @@ def _task(**kwargs) -> Task:
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
+
 
 async def test_schema_applies_cleanly(db_path: pathlib.Path) -> None:
     """All expected tables must exist after init_db()."""
@@ -59,6 +60,7 @@ async def test_schema_applies_cleanly(db_path: pathlib.Path) -> None:
 # create_task / get_task
 # ---------------------------------------------------------------------------
 
+
 async def test_create_and_get_task(db_path: pathlib.Path) -> None:
     store = Store(db_path)
     task = _task(title="Create test", instruction="ls -la")
@@ -84,6 +86,7 @@ async def test_get_nonexistent_returns_none(db_path: pathlib.Path) -> None:
 # ---------------------------------------------------------------------------
 # update_task_status
 # ---------------------------------------------------------------------------
+
 
 async def test_update_task_status(db_path: pathlib.Path) -> None:
     store = Store(db_path)
@@ -120,6 +123,7 @@ async def test_update_task_status_with_extra_fields(db_path: pathlib.Path) -> No
 # ---------------------------------------------------------------------------
 # list_tasks
 # ---------------------------------------------------------------------------
+
 
 async def test_list_tasks_by_status(db_path: pathlib.Path) -> None:
     store = Store(db_path)
@@ -171,6 +175,7 @@ async def test_list_tasks_no_filter(db_path: pathlib.Path) -> None:
 # list_dispatchable_tasks
 # ---------------------------------------------------------------------------
 
+
 async def test_list_dispatchable_tasks_priority_order(db_path: pathlib.Path) -> None:
     store = Store(db_path)
 
@@ -197,12 +202,17 @@ async def test_list_dispatchable_tasks_priority_order(db_path: pathlib.Path) -> 
     assert dispatchable[2].id == low.id
 
 
-async def test_list_dispatchable_excludes_future_scheduled(db_path: pathlib.Path) -> None:
+async def test_list_dispatchable_excludes_future_scheduled(
+    db_path: pathlib.Path,
+) -> None:
     """Tasks with a future scheduled_at must not be dispatched."""
     store = Store(db_path)
 
     future_ts = "2099-01-01T00:00:00+00:00"
-    future_task = _task(status=TaskStatus.APPROVED, scheduled_at=datetime(2099, 1, 1, tzinfo=timezone.utc))
+    future_task = _task(
+        status=TaskStatus.APPROVED,
+        scheduled_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
+    )
     now_task = _task(status=TaskStatus.APPROVED)
 
     for t in (future_task, now_task):
@@ -217,6 +227,7 @@ async def test_list_dispatchable_excludes_future_scheduled(db_path: pathlib.Path
 # ---------------------------------------------------------------------------
 # count_running
 # ---------------------------------------------------------------------------
+
 
 async def test_count_running(db_path: pathlib.Path) -> None:
     store = Store(db_path)
@@ -238,6 +249,7 @@ async def test_count_running(db_path: pathlib.Path) -> None:
 # ---------------------------------------------------------------------------
 # budget_daily
 # ---------------------------------------------------------------------------
+
 
 async def test_get_daily_spend_empty(db_path: pathlib.Path) -> None:
     store = Store(db_path)
@@ -264,6 +276,7 @@ async def test_record_spend_accumulation(db_path: pathlib.Path) -> None:
 # ---------------------------------------------------------------------------
 # Asset CRUD
 # ---------------------------------------------------------------------------
+
 
 def _asset(**kwargs) -> dict:
     """Create a minimal asset dict with sensible defaults."""
@@ -360,6 +373,7 @@ async def test_update_asset(db_path: pathlib.Path) -> None:
 # Action History
 # ---------------------------------------------------------------------------
 
+
 def _action(**kwargs) -> dict:
     """Create a minimal action dict."""
     defaults = dict(
@@ -426,6 +440,7 @@ async def test_search_history(db_path: pathlib.Path) -> None:
 # Goal State
 # ---------------------------------------------------------------------------
 
+
 async def test_get_goal_state_none(db_path: pathlib.Path) -> None:
     store = Store(db_path)
     result = await store.get_goal_state("nonexistent")
@@ -464,6 +479,7 @@ async def test_update_goal_state_rejects_unknown_field(db_path: pathlib.Path) ->
 # ---------------------------------------------------------------------------
 # Schema Migration
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_migration_drops_old_assets(tmp_path):
@@ -506,3 +522,31 @@ async def test_assets_vec_table_created(tmp_path):
             "SELECT name FROM sqlite_master WHERE name='assets_vec'"
         )
         assert await cursor.fetchone() is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_asset(db_path) -> None:
+    store = Store(db_path)
+    asset = {
+        "id": "del-test-01",
+        "asset_type": "document",
+        "title": "To Delete",
+        "workspace": "_shared",
+        "created_by": "test",
+    }
+    await store.create_asset(asset)
+    assert await store.get_asset("del-test-01") is not None
+    await store.delete_asset("del-test-01")
+    assert await store.get_asset("del-test-01") is None
+
+
+@pytest.mark.asyncio
+async def test_update_task_fields(db_path) -> None:
+    store = Store(db_path)
+    task = Task(
+        id="utf-01", type="test", workspace="w", title="Original", instruction="do it"
+    )
+    await store.create_task(task)
+    await store.update_task_fields("utf-01", instruction="updated instruction")
+    t = await store.get_task("utf-01")
+    assert t.instruction == "updated instruction"

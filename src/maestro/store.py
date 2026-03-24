@@ -234,7 +234,9 @@ class Store:
                 if "path" in columns:  # Old schema detection
                     await db.execute("DROP TABLE IF EXISTS task_assets")
                     await db.execute("DROP TABLE IF EXISTS assets")
-                    schema_sql = (pathlib.Path(__file__).parent / "schema.sql").read_text()
+                    schema_sql = (
+                        pathlib.Path(__file__).parent / "schema.sql"
+                    ).read_text()
                     await db.executescript(schema_sql)
                 await db.commit()
         except Exception:
@@ -346,6 +348,32 @@ class Store:
         sql = f"UPDATE tasks SET {', '.join(set_clauses)} WHERE id = :id"
         async with self._conn() as db:
             await db.execute(sql, params)
+            await db.commit()
+
+    async def update_task_fields(self, task_id: str, **kwargs: Any) -> None:
+        """Update arbitrary task fields (instruction, title, priority, etc.)."""
+        allowed = {
+            "title",
+            "instruction",
+            "priority",
+            "approval_level",
+            "budget_usd",
+            "max_retries",
+            "deadline",
+        }
+        sets, params = [], []
+        for key, val in kwargs.items():
+            if key not in allowed:
+                raise ValueError(f"update_task_fields: unknown field '{key}'")
+            sets.append(f"{key} = ?")
+            params.append(val)
+        if not sets:
+            return
+        sets.append("updated_at = ?")
+        params.append(_now_iso())
+        params.append(task_id)
+        async with self._conn() as db:
+            await db.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?", params)
             await db.commit()
 
     async def list_tasks(
@@ -473,12 +501,15 @@ class Store:
                     "tags": json.dumps(asset["tags"]) if asset.get("tags") else None,
                     "content_json": (
                         json.dumps(asset["content_json"])
-                        if asset.get("content_json") and not isinstance(asset["content_json"], str)
+                        if asset.get("content_json")
+                        and not isinstance(asset["content_json"], str)
                         else asset.get("content_json")
                     ),
                     "file_path": asset.get("file_path"),
                     "file_size": asset.get("file_size"),
-                    "embedding_model": asset.get("embedding_model", "gemini-embedding-2-preview"),
+                    "embedding_model": asset.get(
+                        "embedding_model", "gemini-embedding-2-preview"
+                    ),
                     "embedded_at": asset.get("embedded_at"),
                     "ttl_days": asset.get("ttl_days"),
                     "expires_at": asset.get("expires_at"),
@@ -557,7 +588,11 @@ class Store:
                 raise ValueError(f"update_asset: unknown field '{key}'")
             if key == "tags" and isinstance(value, list):
                 value = json.dumps(value)
-            if key == "content_json" and not isinstance(value, str) and value is not None:
+            if (
+                key == "content_json"
+                and not isinstance(value, str)
+                and value is not None
+            ):
                 value = json.dumps(value)
             params[key] = value
             set_clauses.append(f"{key} = :{key}")
@@ -565,6 +600,18 @@ class Store:
         sql = f"UPDATE assets SET {', '.join(set_clauses)} WHERE id = :id"
         async with self._conn() as db:
             await db.execute(sql, params)
+            await db.commit()
+
+    async def delete_asset(self, asset_id: str) -> None:
+        """Permanently delete an asset and its embedding vector."""
+        async with self._conn() as db:
+            try:
+                await db.execute(
+                    "DELETE FROM assets_vec WHERE asset_id = ?", (asset_id,)
+                )
+            except Exception:
+                pass  # assets_vec may not exist if sqlite-vec is unavailable
+            await db.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
             await db.commit()
 
     async def list_assets_filtered(
@@ -642,7 +689,9 @@ class Store:
                        ORDER BY distance LIMIT ?""",
                     (blob, limit),
                 )
-            return [{"asset_id": r[0], "distance": r[1]} for r in await cursor.fetchall()]
+            return [
+                {"asset_id": r[0], "distance": r[1]} for r in await cursor.fetchall()
+            ]
 
     async def archive_expired_assets(self) -> int:
         """Archive assets whose expires_at has passed."""
@@ -665,10 +714,13 @@ class Store:
     async def purge_archived_assets(self, grace_days: int = 30) -> int:
         """Permanently delete archived assets older than grace_days."""
         async with self._conn() as db:
-            cursor = await db.execute("""
+            cursor = await db.execute(
+                """
                 DELETE FROM assets WHERE archived = 1
                 AND updated_at < datetime('now', ? || ' days')
-            """, (f"-{grace_days}",))
+            """,
+                (f"-{grace_days}",),
+            )
             await db.commit()
             return cursor.rowcount
 
@@ -677,10 +729,13 @@ class Store:
     ) -> None:
         """Record asset usage in asset_usage table."""
         async with self._conn() as db:
-            await db.execute("""
+            await db.execute(
+                """
                 INSERT INTO asset_usage (id, asset_id, task_id, usage_type, used_at)
                 VALUES (?, ?, ?, ?, datetime('now'))
-            """, (secrets.token_hex(6), asset_id, task_id, usage_type))
+            """,
+                (secrets.token_hex(6), asset_id, task_id, usage_type),
+            )
             await db.commit()
 
     # ------------------------------------------------------------------
@@ -1018,15 +1073,28 @@ class Store:
                 """INSERT INTO schedules
                    (id, name, workspace, task_type, cron, interval_ms, approval_level, enabled, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
-                (sid, schedule["name"], schedule["workspace"], schedule["task_type"],
-                 schedule.get("cron"), schedule.get("interval_ms"),
-                 schedule.get("approval_level", 0), now, now),
+                (
+                    sid,
+                    schedule["name"],
+                    schedule["workspace"],
+                    schedule["task_type"],
+                    schedule.get("cron"),
+                    schedule.get("interval_ms"),
+                    schedule.get("approval_level", 0),
+                    now,
+                    now,
+                ),
             )
             await db.commit()
 
     async def create_schedule(
-        self, *, name: str, workspace: str, task_type: str,
-        cron: str | None = None, interval_ms: int | None = None,
+        self,
+        *,
+        name: str,
+        workspace: str,
+        task_type: str,
+        cron: str | None = None,
+        interval_ms: int | None = None,
         approval_level: int = 0,
     ) -> dict:
         sid = str(uuid.uuid4())[:8]
@@ -1037,8 +1105,17 @@ class Store:
                    (id, name, workspace, task_type, cron, interval_ms,
                     approval_level, enabled, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
-                (sid, name, workspace, task_type, cron, interval_ms,
-                 approval_level, now, now),
+                (
+                    sid,
+                    name,
+                    workspace,
+                    task_type,
+                    cron,
+                    interval_ms,
+                    approval_level,
+                    now,
+                    now,
+                ),
             )
             await db.commit()
         return await self.get_schedule(name)
@@ -1155,8 +1232,13 @@ class Store:
     # ------------------------------------------------------------------
 
     async def create_extract_rule(
-        self, *, workspace: str, task_type: str, asset_type: str,
-        title_field: str | None = None, iterate: str | None = None,
+        self,
+        *,
+        workspace: str,
+        task_type: str,
+        asset_type: str,
+        title_field: str | None = None,
+        iterate: str | None = None,
         tags_from: list[str] | None = None,
     ) -> dict:
         rid = str(uuid.uuid4())[:8]
@@ -1171,7 +1253,17 @@ class Store:
                      asset_type=excluded.asset_type, title_field=excluded.title_field,
                      iterate=excluded.iterate, tags_from=excluded.tags_from,
                      updated_at=excluded.updated_at""",
-                (rid, workspace, task_type, asset_type, title_field, iterate, tags_json, now, now),
+                (
+                    rid,
+                    workspace,
+                    task_type,
+                    asset_type,
+                    title_field,
+                    iterate,
+                    tags_json,
+                    now,
+                    now,
+                ),
             )
             await db.commit()
         return await self.get_extract_rule(workspace, task_type)
