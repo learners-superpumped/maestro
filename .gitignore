@@ -26,3 +26,4 @@ chrome-profiles/
 
 # OS
 .DS_Store
+.worktrees/
