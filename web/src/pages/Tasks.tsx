@@ -42,16 +42,16 @@ const taskSchema = z.object({
 })
 
 const APPROVAL_LEVELS = [
-  { value: "0", label: "Auto-run", desc: "Execute immediately without approval" },
-  { value: "1", label: "Notify after", desc: "Execute first, then notify you" },
-  { value: "2", label: "Require approval", desc: "Ask you before executing" },
+  { value: "0", label: "Auto-run" },
+  { value: "1", label: "Notify after" },
+  { value: "2", label: "Require approval" },
 ]
 
 const PRIORITY_PRESETS = [
-  { value: "1", label: "Urgent", desc: "Run before everything else" },
-  { value: "2", label: "High", desc: "Run soon" },
-  { value: "3", label: "Normal", desc: "Default priority" },
-  { value: "5", label: "Low", desc: "Run when nothing else is queued" },
+  { value: "1", label: "Urgent" },
+  { value: "2", label: "High" },
+  { value: "3", label: "Normal" },
+  { value: "5", label: "Low" },
 ]
 
 type TaskFormValues = z.infer<typeof taskSchema>
@@ -180,15 +180,12 @@ export function Tasks() {
                   <Label className="text-[12px] text-[#9b9a97]">Priority</Label>
                   <Select defaultValue="3" onValueChange={(v) => setValue("priority", Number(v))}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                      <SelectValue />
+                      <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df] min-w-[220px]">
+                    <SelectContent className="bg-white border-[#e8e5df]">
                       {PRIORITY_PRESETS.map((p) => (
-                        <SelectItem key={p.value} value={p.value} className="text-[13px] hover:bg-[#f7f6f3]">
-                          <div>
-                            <span className="text-[#37352f]">{p.label}</span>
-                            <span className="text-[11px] text-[#9b9a97] ml-2">{p.desc}</span>
-                          </div>
+                        <SelectItem key={p.value} value={p.value} className="text-[13px] text-[#37352f] hover:bg-[#f7f6f3]">
+                          {p.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -198,15 +195,12 @@ export function Tasks() {
                   <Label className="text-[12px] text-[#9b9a97]">When to run</Label>
                   <Select defaultValue="2" onValueChange={(v) => setValue("approval_level", Number(v))}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                      <SelectValue />
+                      <SelectValue placeholder="Select" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df] min-w-[260px]">
+                    <SelectContent className="bg-white border-[#e8e5df]">
                       {APPROVAL_LEVELS.map((level) => (
-                        <SelectItem key={level.value} value={level.value} className="text-[13px] hover:bg-[#f7f6f3]">
-                          <div>
-                            <span className="text-[#37352f]">{level.label}</span>
-                            <span className="text-[11px] text-[#9b9a97] ml-2">{level.desc}</span>
-                          </div>
+                        <SelectItem key={level.value} value={level.value} className="text-[13px] text-[#37352f] hover:bg-[#f7f6f3]">
+                          {level.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
