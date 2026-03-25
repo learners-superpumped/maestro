@@ -189,16 +189,16 @@ export function Goals() {
               </PropRow>
 
               <PropRow label="Check every">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-0.5">
                   <Input
                     type="number"
                     min={1}
                     value={freqAmount}
                     onChange={(e) => setFreqAmount(Math.max(1, Number(e.target.value) || 1))}
-                    className="border-[#e8e5df] text-[13px] text-[#37352f] h-[30px] w-[56px] rounded text-center px-1"
+                    className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] w-[44px] rounded text-center px-0 hover:bg-[#f7f6f3] focus-visible:ring-0"
                   />
                   <Select value={freqUnit} onValueChange={(v) => setFreqUnit(v ?? "days")}>
-                    <SelectTrigger className="border-[#e8e5df] text-[13px] text-[#37352f] h-[30px] w-[80px] rounded">
+                    <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] w-[76px] rounded hover:bg-[#f7f6f3] focus:ring-0">
                       <SelectValue>{UNIT_OPTIONS.find((u) => u.value === freqUnit)?.label ?? "days"}</SelectValue>
                     </SelectTrigger>
                     <SelectContent className="bg-white border-[#e8e5df]">
