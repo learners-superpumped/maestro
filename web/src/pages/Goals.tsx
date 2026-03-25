@@ -69,13 +69,10 @@ function parseMetrics(raw: string): { key: string; value: string }[] {
   return []
 }
 
-const FREQUENCY_OPTIONS = [
-  { value: "6", label: "Every 6 hours" },
-  { value: "12", label: "Every 12 hours" },
-  { value: "24", label: "Daily" },
-  { value: "48", label: "Every 2 days" },
-  { value: "72", label: "Every 3 days" },
-  { value: "168", label: "Weekly" },
+const UNIT_OPTIONS = [
+  { value: "hours", label: "hours", multiplier: 1 },
+  { value: "days", label: "days", multiplier: 24 },
+  { value: "weeks", label: "weeks", multiplier: 168 },
 ]
 
 // ---------------------------------------------------------------------------
@@ -99,7 +96,8 @@ export function Goals() {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [workspace, setWorkspace] = useState("")
-  const [frequency, setFrequency] = useState("24")
+  const [freqAmount, setFreqAmount] = useState(1)
+  const [freqUnit, setFreqUnit] = useState("days")
   const [targets, setTargets] = useState<{ key: string; value: string }[]>([])
 
   const { data, isLoading } = useGoals()
@@ -114,9 +112,12 @@ export function Goals() {
   const reset = () => {
     setName("")
     setWorkspace("")
-    setFrequency("24")
+    setFreqAmount(1)
+    setFreqUnit("days")
     setTargets([])
   }
+
+  const cooldownHours = freqAmount * (UNIT_OPTIONS.find((u) => u.value === freqUnit)?.multiplier ?? 24)
 
   const handleCreate = async () => {
     const metrics: Record<string, string> = {}
@@ -128,7 +129,7 @@ export function Goals() {
       workspace,
       description: name,
       metrics,
-      cooldown_hours: Number(frequency) || 24,
+      cooldown_hours: cooldownHours,
     })
     reset()
     setOpen(false)
@@ -188,18 +189,27 @@ export function Goals() {
               </PropRow>
 
               <PropRow label="Check every">
-                <Select value={frequency} onValueChange={(v) => setFrequency(v ?? "24")}>
-                  <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] px-1.5 rounded hover:bg-[#f7f6f3] focus:ring-0">
-                    <SelectValue>{FREQUENCY_OPTIONS.find((o) => o.value === frequency)?.label ?? "Daily"}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-[#e8e5df]">
-                    {FREQUENCY_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={freqAmount}
+                    onChange={(e) => setFreqAmount(Math.max(1, Number(e.target.value) || 1))}
+                    className="border-[#e8e5df] text-[13px] text-[#37352f] h-[30px] w-[56px] rounded text-center px-1"
+                  />
+                  <Select value={freqUnit} onValueChange={(v) => setFreqUnit(v ?? "days")}>
+                    <SelectTrigger className="border-[#e8e5df] text-[13px] text-[#37352f] h-[30px] w-[80px] rounded">
+                      <SelectValue>{UNIT_OPTIONS.find((u) => u.value === freqUnit)?.label ?? "days"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-[#e8e5df]">
+                      {UNIT_OPTIONS.map((u) => (
+                        <SelectItem key={u.value} value={u.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                          {u.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </PropRow>
             </div>
 
