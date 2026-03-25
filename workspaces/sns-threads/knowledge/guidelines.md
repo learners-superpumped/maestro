@@ -1,12 +1,24 @@
 # Threads Platform Guidelines
 
-Platform-specific rules and best practices for Threads.
+## 포맷 규칙
+- 텍스트 최대 500자 (핵심은 앞 2줄에)
+- 이미지/미디어: 최대 10장, 정사각형 또는 세로형 권장
+- 링크 프리뷰: 본문 마지막에 URL 배치하면 자동 프리뷰 생성
+- 해시태그: 본문 내 자연스럽게 삽입 또는 마지막에 배치
 
-## Format
-- Max character count considerations
-- Image/media requirements
-- Hashtag usage
+## 참여(Engagement) 규칙
+- 댓글에는 가능한 한 빠르게 답글 (24시간 이내)
+- 관련 계정의 글에 먼저 댓글 달아 관계 형성
+- 리포스트는 브랜드 톤에 맞는 콘텐츠만 선별
 
-## Do's and Don'ts
-- Do: Be authentic and engaging
-- Don't: Use clickbait or misleading content
+## Do's
+- 개발자 관점에서 실제 경험 공유
+- 코드 스니펫이나 터미널 스크린샷 활용
+- 커뮤니티 질문에 적극 응답
+- AI/개발 트렌드에 빠른 반응
+
+## Don'ts
+- 클릭베이트성 제목이나 허위 정보
+- 정치·종교 등 민감한 주제
+- 타 서비스 직접 비하
+- 승인 없는 게시/댓글/좋아요

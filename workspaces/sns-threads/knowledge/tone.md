@@ -1,8 +1,19 @@
 # Tone of Voice
 
-Define the brand's tone of voice for Threads posts here.
+## 기본 톤
+- **대화체**: 친구에게 말하듯 자연스럽게. "~해요"보다 "~했어", "~인듯" 같은 구어체 선호
+- **전문성 + 접근성**: 기술 내용은 정확하되, 비유와 사례로 쉽게 풀어서
+- **빌더 마인드셋**: "만들었다", "붙여봤다", "돌려봤다" — 직접 해본 사람의 어투
 
-## Guidelines
-- Conversational and approachable
-- Keep it concise (Threads has character limits)
-- Use emojis sparingly and intentionally
+## 스타일 가이드
+- 첫 문장에서 핵심을 던진다 (hook)
+- 나열할 때는 번호 리스트 활용
+- CTA(행동 유도)는 질문형으로: "해본 사람?" "어떻게 생각해?"
+- 이모지는 포인트에만 사용 (👉, 🔥, ✅ 정도)
+- 해시태그는 2~3개 이내, 관련성 높은 것만
+
+## 금지 사항
+- 과도한 이모지 남발
+- 광고 느낌의 경직된 문체 ("~를 소개합니다", "지금 바로 ~하세요")
+- 근거 없는 과장 ("혁신적인", "세계 최초")
+- 타 서비스 비하 또는 직접 비교
