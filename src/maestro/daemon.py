@@ -30,7 +30,7 @@ from maestro.events import EventBus, EventEmittingStore
 from maestro.integrations.slack import SlackNotifier
 from maestro.models import Task, TaskResult, TaskStatus
 from maestro.notifications import NotificationManager
-from maestro.planner import Planner, SignalCollector
+from maestro.planner import Planner
 from maestro.reconciler import Reconciler
 from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
@@ -76,8 +76,7 @@ class Daemon:
         self._notifier = NotificationManager(store)
         self._slack = SlackNotifier(webhook_url=config.integrations.slack.webhook_url)
         self._budget_mgr = BudgetManager(store, config.budget)
-        signal_collector = SignalCollector(store, config.goals)
-        self._planner = Planner(store, config, signal_collector)
+        self._planner = Planner(store, config)
         self._approval_manager = ApprovalManager(store)
 
         # Asset manager (embedding client is optional)
@@ -319,25 +318,31 @@ class Daemon:
         task_specs = await self._planner.plan()
         if not task_specs:
             return
+
+        # Collect signals to know which goals to update
+        signals = await self._planner.collector.collect_signals()
+        goal_ids_with_signals = {s["goal_id"] for s in signals}
+
         for spec in task_specs:
             task = Task(
                 id=str(uuid.uuid4())[:8],
-                type=spec.get("type", "general"),
+                type=spec.get("type", "planning"),
                 workspace=spec["workspace"],
                 title=spec["title"],
                 instruction=spec["instruction"],
-                priority=spec.get("priority", 3),
+                priority=spec.get("priority", 1),
                 approval_level=spec.get("approval_level", 0),
             )
             await self._store.create_task(task)
+            logger.info("Planner created task %s: %s", task.id, task.title)
 
-        # goal_state 업데이트 유지
-        signals = await self._planner.collector.collect_signals()
+        # Update goal state
         for signal in signals:
-            await self._store.update_goal_state(
+            await self._store.update_goal(
                 signal["goal_id"],
                 last_evaluated_at=_now_iso(),
                 current_gap=signal["description"],
+                last_task_created_at=_now_iso(),
             )
 
     # ------------------------------------------------------------------

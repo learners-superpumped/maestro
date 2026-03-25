@@ -2,26 +2,16 @@
 
 from __future__ import annotations
 
-import os
 import pathlib
 
 import pytest
-import yaml
 
 from maestro.config import (
-    AgentConfig,
     AssetsConfig,
-    BudgetConfig,
-    ConcurrencyConfig,
-    DaemonConfig,
-    GoalEntry,
-    LoggingConfig,
     MaestroConfig,
-    ProjectConfig,
     ResourceProfile,
     load_config,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -154,7 +144,6 @@ def test_defaults_applied(tmp_path: pathlib.Path) -> None:
     assert cfg.logging.level == "info"
 
     # collections default to empty
-    assert cfg.goals == []
     assert cfg.resources == {}
 
 
@@ -163,7 +152,9 @@ def test_defaults_applied(tmp_path: pathlib.Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_env_var_substitution(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_env_var_substitution(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """$VAR tokens in string values should be replaced with env-var values."""
     monkeypatch.setenv("MAESTRO_STORE", "/data/maestro.db")
     monkeypatch.setenv("LOG_LEVEL", "debug")
@@ -294,23 +285,16 @@ def test_logging_config_parsed(tmp_path: pathlib.Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Goals parsing
+# Goals removed from config (now in DB)
 # ---------------------------------------------------------------------------
 
 
-def test_goals_parsed(tmp_path: pathlib.Path) -> None:
+def test_goals_not_in_config(tmp_path: pathlib.Path) -> None:
+    """Goals are no longer parsed from config — they live in the DB now."""
     cfg_file = tmp_path / "maestro.yaml"
     cfg_file.write_text(FULL_CONFIG)
     cfg = load_config(cfg_file)
-
-    assert len(cfg.goals) == 1
-
-    goal = cfg.goals[0]
-    assert isinstance(goal, GoalEntry)
-    assert goal.id == "threads-presence"
-    assert goal.description == "Threads brand presence"
-    assert goal.workspace == "sns-threads"
-    assert goal.metrics == {"post_frequency": "3/week", "engagement_check": "daily"}
+    assert not hasattr(cfg, "goals")
 
 
 # ---------------------------------------------------------------------------

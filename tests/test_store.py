@@ -44,7 +44,7 @@ async def test_schema_applies_cleanly(db_path: pathlib.Path) -> None:
         "action_history",
         "approvals",
         "budget_daily",
-        "goal_state",
+        "goals",
         "notifications",
     }
     async with aiosqlite.connect(str(db_path)) as db:
@@ -437,43 +437,71 @@ async def test_search_history(db_path: pathlib.Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Goal State
+# Goals
 # ---------------------------------------------------------------------------
 
 
-async def test_get_goal_state_none(db_path: pathlib.Path) -> None:
+async def test_get_goal_none(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    result = await store.get_goal_state("nonexistent")
+    result = await store.get_goal("nonexistent")
     assert result is None
 
 
-async def test_update_goal_state_insert(db_path: pathlib.Path) -> None:
+async def test_create_goal(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    await store.update_goal_state(
-        "g1", last_evaluated_at="2026-03-23T00:00:00+00:00", current_gap="no posts"
+    goal = await store.create_goal(
+        id="g1", workspace="ws1", description="Test goal", cooldown_hours=12
     )
-    state = await store.get_goal_state("g1")
-    assert state is not None
-    assert state["goal_id"] == "g1"
-    assert state["last_evaluated_at"] == "2026-03-23T00:00:00+00:00"
-    assert state["current_gap"] == "no posts"
-    assert state["updated_at"] is not None
+    assert goal is not None
+    assert goal["id"] == "g1"
+    assert goal["workspace"] == "ws1"
+    assert goal["description"] == "Test goal"
+    assert goal["cooldown_hours"] == 12
+    assert goal["enabled"] == 1
+    assert goal["created_at"] is not None
+    assert goal["updated_at"] is not None
 
 
-async def test_update_goal_state_upsert(db_path: pathlib.Path) -> None:
+async def test_list_goals(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    await store.update_goal_state("g1", current_gap="old gap")
-    await store.update_goal_state("g1", current_gap="new gap")
+    await store.create_goal(id="g1", workspace="ws1")
+    await store.create_goal(id="g2", workspace="ws2", description="Second")
 
-    state = await store.get_goal_state("g1")
-    assert state is not None
-    assert state["current_gap"] == "new gap"
+    all_goals = await store.list_goals()
+    assert len(all_goals) == 2
+    assert all_goals[0]["id"] == "g1"
+    assert all_goals[1]["id"] == "g2"
 
 
-async def test_update_goal_state_rejects_unknown_field(db_path: pathlib.Path) -> None:
+async def test_list_goals_enabled_only(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    with pytest.raises(ValueError, match="unknown field"):
-        await store.update_goal_state("g1", bad_field="value")
+    await store.create_goal(id="g1", workspace="ws1")
+    await store.create_goal(id="g2", workspace="ws2")
+    await store.update_goal("g2", enabled=False)
+
+    enabled = await store.list_goals(enabled_only=True)
+    assert len(enabled) == 1
+    assert enabled[0]["id"] == "g1"
+
+
+async def test_update_goal(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    await store.create_goal(id="g1", workspace="ws1", description="old")
+    await store.update_goal("g1", description="new", current_gap="some gap")
+
+    goal = await store.get_goal("g1")
+    assert goal is not None
+    assert goal["description"] == "new"
+    assert goal["current_gap"] == "some gap"
+
+
+async def test_delete_goal(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+    await store.create_goal(id="g1", workspace="ws1")
+    await store.delete_goal("g1")
+
+    result = await store.get_goal("g1")
+    assert result is None
 
 
 # ---------------------------------------------------------------------------

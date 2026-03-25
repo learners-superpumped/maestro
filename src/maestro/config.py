@@ -81,14 +81,6 @@ class IntegrationsConfig:
 
 
 @dataclass
-class GoalEntry:
-    id: str
-    description: str
-    workspace: str
-    metrics: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class ResourceProfile:
     max_concurrent: int = 1
     path: str = ""
@@ -122,7 +114,6 @@ class MaestroConfig:
     budget: BudgetConfig = field(default_factory=BudgetConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
-    goals: list[GoalEntry] = field(default_factory=list)
     integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     assets: AssetsConfig = field(default_factory=AssetsConfig)
     # dict[resource_type, dict[profile_name, ResourceProfile]]
@@ -208,20 +199,6 @@ def _parse_logging(data: dict[str, Any]) -> LoggingConfig:
     )
 
 
-def _parse_goals(items: list[dict[str, Any]]) -> list[GoalEntry]:
-    entries: list[GoalEntry] = []
-    for item in items:
-        entries.append(
-            GoalEntry(
-                id=item["id"],
-                description=item.get("description", ""),
-                workspace=item.get("workspace", ""),
-                metrics=dict(item.get("metrics") or {}),
-            )
-        )
-    return entries
-
-
 def _parse_integrations(data: dict[str, Any]) -> IntegrationsConfig:
     slack_data = data.get("slack") or {}
     linear_data = data.get("linear") or {}
@@ -277,8 +254,12 @@ def _parse_assets(data: dict[str, Any]) -> AssetsConfig:
         ttl = dict(defaults.default_ttl)
     return AssetsConfig(
         default_ttl=ttl,
-        cleanup_interval_ms=int(data.get("cleanup_interval_ms", defaults.cleanup_interval_ms)),
-        archive_grace_days=int(data.get("archive_grace_days", defaults.archive_grace_days)),
+        cleanup_interval_ms=int(
+            data.get("cleanup_interval_ms", defaults.cleanup_interval_ms)
+        ),
+        archive_grace_days=int(
+            data.get("archive_grace_days", defaults.archive_grace_days)
+        ),
         gemini_api_key=str(data.get("gemini_api_key", "")),
     )
 
@@ -323,7 +304,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     budget = _parse_budget(data.get("budget") or {})
     agent = _parse_agent(data.get("agent") or {})
     logging_cfg = _parse_logging(data.get("logging") or {})
-    goals = _parse_goals(data.get("goals") or [])
     integrations = _parse_integrations(data.get("integrations") or {})
     resources = _parse_resources(data.get("resources") or {})
     assets_raw = data.get("assets", {})
@@ -338,7 +318,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
         budget=budget,
         agent=agent,
         logging=logging_cfg,
-        goals=goals,
         integrations=integrations,
         assets=assets,
         resources=resources,

@@ -1045,54 +1045,62 @@ class Store:
     # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------
-    # Goal State
+    # Goals
     # ------------------------------------------------------------------
 
-    async def get_goal_state(self, goal_id: str) -> dict[str, Any] | None:
-        """Return the goal_state row for *goal_id*, or None."""
-        async with self._conn() as db:
-            cursor = await db.execute(
-                "SELECT * FROM goal_state WHERE goal_id = ?", (goal_id,)
-            )
-            row = await cursor.fetchone()
-        if row is None:
-            return None
-        return dict(row)
-
-    async def update_goal_state(self, goal_id: str, **kwargs: Any) -> None:
-        """Upsert goal state.  Creates the row if it doesn't exist yet."""
-        allowed = {
-            "last_evaluated_at",
-            "current_gap",
-            "last_task_created_at",
-        }
+    async def create_goal(
+        self,
+        *,
+        id: str,
+        workspace: str,
+        description: str = "",
+        metrics: str = "{}",
+        cooldown_hours: int = 24,
+    ) -> dict:
         now = _now_iso()
-
-        for key in kwargs:
-            if key not in allowed:
-                raise ValueError(f"update_goal_state: unknown field '{key}'")
-
         async with self._conn() as db:
-            # Try INSERT first, then UPDATE on conflict
-            cols = ["goal_id", "updated_at"]
-            vals = [goal_id, now]
-            for key, value in kwargs.items():
-                cols.append(key)
-                vals.append(value)
-
-            placeholders = ", ".join(["?"] * len(cols))
-            col_names = ", ".join(cols)
-
-            update_parts = ["updated_at = excluded.updated_at"]
-            for key in kwargs:
-                update_parts.append(f"{key} = excluded.{key}")
-            update_clause = ", ".join(update_parts)
-
-            sql = (
-                f"INSERT INTO goal_state ({col_names}) VALUES ({placeholders}) "
-                f"ON CONFLICT(goal_id) DO UPDATE SET {update_clause}"
+            await db.execute(
+                """INSERT INTO goals
+                   (id, description, workspace, metrics, cooldown_hours,
+                    enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                (id, description, workspace, metrics, cooldown_hours, now, now),
             )
-            await db.execute(sql, vals)
+            await db.commit()
+        return await self.get_goal(id)  # type: ignore[return-value]
+
+    async def get_goal(self, goal_id: str) -> dict | None:
+        async with self._conn() as db:
+            cur = await db.execute("SELECT * FROM goals WHERE id = ?", (goal_id,))
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+    async def list_goals(self, *, enabled_only: bool = False) -> list[dict]:
+        async with self._conn() as db:
+            sql = "SELECT * FROM goals"
+            if enabled_only:
+                sql += " WHERE enabled = 1"
+            sql += " ORDER BY id"
+            cur = await db.execute(sql)
+            return [dict(r) for r in await cur.fetchall()]
+
+    async def update_goal(self, goal_id: str, **fields) -> None:
+        sets, params = [], []
+        for key, val in fields.items():
+            if key == "enabled":
+                val = 1 if val else 0
+            sets.append(f"{key} = ?")
+            params.append(val)
+        sets.append("updated_at = ?")
+        params.append(_now_iso())
+        params.append(goal_id)
+        async with self._conn() as db:
+            await db.execute(f"UPDATE goals SET {', '.join(sets)} WHERE id = ?", params)
+            await db.commit()
+
+    async def delete_goal(self, goal_id: str) -> None:
+        async with self._conn() as db:
+            await db.execute("DELETE FROM goals WHERE id = ?", (goal_id,))
             await db.commit()
 
     # ------------------------------------------------------------------

@@ -105,12 +105,18 @@ CREATE TABLE IF NOT EXISTS budget_daily (
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS goal_state (
-    goal_id TEXT PRIMARY KEY,
-    last_evaluated_at TEXT,
-    current_gap TEXT,
+CREATE TABLE IF NOT EXISTS goals (
+    id                   TEXT PRIMARY KEY,
+    description          TEXT NOT NULL DEFAULT '',
+    workspace            TEXT NOT NULL,
+    metrics              TEXT NOT NULL DEFAULT '{}',
+    cooldown_hours       INTEGER NOT NULL DEFAULT 24,
+    enabled              INTEGER NOT NULL DEFAULT 1,
+    last_evaluated_at    TEXT,
+    current_gap          TEXT,
     last_task_created_at TEXT,
-    updated_at TEXT NOT NULL
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL
 );
 
 -- Schedule execution history

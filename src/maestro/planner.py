@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from maestro.config import GoalEntry, MaestroConfig
+from maestro.config import MaestroConfig
 from maestro.models import Task
 from maestro.store import Store
 
@@ -27,71 +27,59 @@ def _now_iso() -> str:
 class SignalCollector:
     """Detect gaps between declared goals and current system state."""
 
-    def __init__(self, store: Store, goals: list[GoalEntry]) -> None:
+    def __init__(self, store: Store) -> None:
         self._store = store
-        self._goals = goals
 
     async def collect_signals(self) -> list[dict[str, Any]]:
         """Collect signals from DB. Returns list of signal dicts."""
+        goals = await self._store.list_goals(enabled_only=True)
+        now = datetime.now(timezone.utc)
         signals: list[dict[str, Any]] = []
-        for goal in self._goals:
-            history = await self._store.search_history(
-                workspace=goal.workspace, limit=10
-            )
-            last_action_at: str | None = history[0]["created_at"] if history else None
 
-            active_tasks = await self._store.list_tasks(workspace=goal.workspace)
+        for goal in goals:
+            active_tasks = await self._store.list_tasks(workspace=goal["workspace"])
             active_non_terminal = [
                 t
                 for t in active_tasks
                 if t.status.value not in ("completed", "failed", "cancelled")
             ]
 
-            goal_state = await self._store.get_goal_state(goal.id)
+            # Guard 1: active task check
+            if active_non_terminal:
+                continue
 
-            signal = self._evaluate_goal(
-                goal, last_action_at, active_non_terminal, goal_state
-            )
+            # Guard 2: cooldown check
+            if goal.get("last_task_created_at"):
+                last_created = datetime.fromisoformat(goal["last_task_created_at"])
+                elapsed_hours = (now - last_created).total_seconds() / 3600
+                if elapsed_hours < goal["cooldown_hours"]:
+                    continue
+
+            signal = self._evaluate_goal(goal)
             if signal:
                 signals.append(signal)
         return signals
 
     def _evaluate_goal(
         self,
-        goal: GoalEntry,
-        last_action_at: str | None,
-        active_tasks: list[Task],
-        goal_state: dict[str, Any] | None,
+        goal: dict[str, Any],
     ) -> dict[str, Any] | None:
-        if active_tasks:
-            return None
-        if last_action_at is None:
-            return {
-                "goal_id": goal.id,
-                "type": "no_activity",
-                "description": f"No activity ever for {goal.workspace}",
-                "data": {},
-            }
+        """Evaluate a single goal and return a signal or None."""
         return {
-            "goal_id": goal.id,
+            "goal_id": goal["id"],
             "type": "gap_detected",
-            "description": f"Goal gap for {goal.workspace}",
-            "data": {"last_action": last_action_at},
+            "description": f"Goal gap for {goal['workspace']}",
+            "data": {"metrics": goal.get("metrics", "{}")},
         }
 
 
 class Planner:
     """Creates planning tasks based on goal signals."""
 
-    def __init__(
-        self,
-        store: Store,
-        config: MaestroConfig,
-        signal_collector: SignalCollector,
-    ) -> None:
+    def __init__(self, store: Store, config: MaestroConfig) -> None:
         self._store = store
         self._config = config
-        self._collector = signal_collector
+        self._collector = SignalCollector(store)
 
     @property
     def collector(self) -> SignalCollector:
@@ -107,10 +95,7 @@ class Planner:
     def _build_planning_task(self, signals: list[dict[str, Any]]) -> dict[str, Any]:
         """Build a planning task spec for the _planner workspace agent."""
         goals_text = json.dumps(
-            [
-                {"id": g.id, "description": g.description, "workspace": g.workspace}
-                for g in self._config.goals
-            ],
+            [{"id": s["goal_id"], "description": s["description"]} for s in signals],
             ensure_ascii=False,
         )
         signals_text = json.dumps(signals, ensure_ascii=False)
