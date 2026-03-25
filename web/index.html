@@ -1,10 +1,117 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+
+    <!-- SEO: Optimized Title & Description -->
+    <title>ClawOps – AI Agent 전화·문자 통신 API | 한국 개발자 플랫폼</title>
+    <meta name="description" content="ClawOps는 AI Agent에 한국 전화·문자 기능을 연결하는 통신 API 플랫폼입니다. SIP 서버 없이 API 호출만으로 한국어 음성 통화와 SMS를 구현하세요. Python, Node.js SDK 및 MCP 지원." />
+
+    <!-- SEO: Canonical URL -->
+    <link rel="canonical" href="https://claw-ops.com/" />
+
+    <!-- SEO: Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ClawOps" />
+    <meta property="og:title" content="ClawOps – AI Agent 전화·문자 통신 API" />
+    <meta property="og:description" content="AI Agent에 한국 전화·문자 기능을 간편하게 연결하는 통신 API 플랫폼. SIP 서버 없이 API 호출만으로 통화 가능." />
+    <meta property="og:url" content="https://claw-ops.com/" />
+    <meta property="og:locale" content="ko_KR" />
+
+    <!-- SEO: Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ClawOps – AI Agent 전화·문자 통신 API" />
+    <meta name="twitter:description" content="AI Agent에 한국 전화·문자 기능을 간편하게 연결하는 통신 API 플랫폼." />
+
+    <!-- SEO: Additional Meta -->
+    <meta name="robots" content="index, follow" />
+    <meta name="keywords" content="AI Agent, 통신 API, 한국어 음성, 개발자 도구, 전화 API, 문자 API, SMS API, ClawOps, MCP, Python SDK, Node.js SDK" />
+
+    <!-- Schema.org: Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "ClawOps",
+      "url": "https://claw-ops.com",
+      "description": "한국 AI 개발자를 위한 전화·문자 통신 API 플랫폼",
+      "sameAs": []
+    }
+    </script>
+
+    <!-- Schema.org: WebSite (enables Google Sitelinks Search Box) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "ClawOps",
+      "url": "https://claw-ops.com",
+      "description": "AI Agent에 전화·문자 기능을 연결하는 통신 API 플랫폼",
+      "inLanguage": "ko"
+    }
+    </script>
+
+    <!-- Schema.org: SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "ClawOps",
+      "url": "https://claw-ops.com",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web",
+      "description": "AI Agent에 한국 전화·문자 기능을 연결하는 통신 API 플랫폼. SIP 서버 없이 API 호출만으로 한국어 음성 통화와 SMS를 구현할 수 있습니다.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "KRW"
+      }
+    }
+    </script>
+
+    <!-- Schema.org: FAQPage -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "ClawOps는 어떤 서비스인가요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "ClawOps는 AI Agent에 한국 전화·문자 기능을 간편하게 연결할 수 있는 통신 API 플랫폼입니다. SIP 서버 없이 API 호출만으로 한국어 음성 통화와 SMS를 구현할 수 있습니다."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "어떤 SDK를 지원하나요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Python SDK, Node.js SDK를 지원하며, Model Context Protocol(MCP)도 지원합니다."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "SIP 서버가 필요한가요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "아닙니다. ClawOps는 SIP 서버 없이 API 호출만으로 한국어 음성에 최적화된 고품질 통화를 제공합니다."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "실시간 이벤트 수신이 가능한가요?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "네, Webhook으로 통화 이벤트를 실시간으로 수신할 수 있습니다."
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
