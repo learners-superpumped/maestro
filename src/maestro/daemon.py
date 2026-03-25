@@ -389,8 +389,13 @@ class Daemon:
                             f"## 지시\n\n{task.instruction}"
                         )
 
-            # Transition to CLAIMED
-            await self._store.update_task_status(task.id, TaskStatus.CLAIMED)
+            # Transition to CLAIMED (persist enriched instruction if modified)
+            claim_kwargs: dict = {}
+            if task.depends_on and "이전 단계 결과" in task.instruction:
+                claim_kwargs["instruction"] = task.instruction
+            await self._store.update_task_status(
+                task.id, TaskStatus.CLAIMED, **claim_kwargs
+            )
             task.status = TaskStatus.CLAIMED
 
             # Spawn an asyncio task for execution

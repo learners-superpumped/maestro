@@ -376,6 +376,7 @@ class Store:
             "error",
             "cost_usd",
             "result_json",
+            "instruction",
             "started_at",
             "completed_at",
             "timeout_at",
