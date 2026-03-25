@@ -75,6 +75,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         status=TaskStatus(d["status"]),
         goal_id=d.get("goal_id"),
         parent_task_id=d.get("parent_task_id"),
+        depends_on=d.get("depends_on"),
         priority=d.get("priority", 3),
         approval_level=d.get("approval_level", 2),
         schedule=d.get("schedule"),
@@ -277,14 +278,14 @@ class Store:
                 """
                 INSERT INTO tasks (
                     id, type, status, workspace, title, instruction,
-                    goal_id, parent_task_id, priority, approval_level,
+                    goal_id, parent_task_id, depends_on, priority, approval_level,
                     schedule, deadline, session_id, attempt, max_retries,
                     budget_usd, result_json, error, cost_usd, review_count,
                     created_at, scheduled_at, started_at, completed_at,
                     timeout_at, updated_at
                 ) VALUES (
                     :id, :type, :status, :workspace, :title, :instruction,
-                    :goal_id, :parent_task_id, :priority, :approval_level,
+                    :goal_id, :parent_task_id, :depends_on, :priority, :approval_level,
                     :schedule, :deadline, :session_id, :attempt, :max_retries,
                     :budget_usd, :result_json, :error, :cost_usd, :review_count,
                     :created_at, :scheduled_at, :started_at, :completed_at,
@@ -300,6 +301,7 @@ class Store:
                     "instruction": task.instruction,
                     "goal_id": task.goal_id,
                     "parent_task_id": task.parent_task_id,
+                    "depends_on": task.depends_on,
                     "priority": task.priority,
                     "approval_level": task.approval_level,
                     "schedule": task.schedule,
@@ -342,6 +344,19 @@ class Store:
             )
             row = await cursor.fetchone()
         return row[0] if row else 0
+
+    async def list_dependents(self, task_id: str) -> list[Task]:
+        """Find all tasks whose depends_on contains the given task_id."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """SELECT * FROM tasks
+                   WHERE depends_on IS NOT NULL
+                     AND depends_on LIKE ?
+                     AND status IN ('pending', 'approved', 'retry_queued')""",
+                (f'%"{task_id}"%',),
+            )
+            rows = await cursor.fetchall()
+        return [_row_to_task(dict(r)) for r in rows]
 
     async def update_task_status(
         self,

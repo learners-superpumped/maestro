@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     instruction TEXT NOT NULL,
     goal_id TEXT,
     parent_task_id TEXT,
+    depends_on TEXT,
     priority INTEGER DEFAULT 3,
     approval_level INTEGER DEFAULT 2,
     schedule TEXT,

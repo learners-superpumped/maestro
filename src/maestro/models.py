@@ -132,6 +132,7 @@ class Task:
     # --- Optional identifiers ---
     goal_id: Optional[str] = None
     parent_task_id: Optional[str] = None
+    depends_on: Optional[str] = None  # JSON array of task IDs
 
     # --- State ---
     status: TaskStatus = TaskStatus.PENDING
