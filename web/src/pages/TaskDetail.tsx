@@ -416,16 +416,17 @@ export function TaskDetail() {
               <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} />
               <Field label="Attempt" value={task.max_retries ? `${(task.attempt ?? 0) + 1}/${task.max_retries}` : undefined} />
               {task.depends_on && task.depends_on.length > 0 && (
-                <div className="col-span-2">
-                  <span className="text-[12px] text-[#9b9a97]">Depends On</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
+                <div className="col-span-2 mt-1">
+                  <span className="text-[12px] text-[#9b9a97]">Blocked by</span>
+                  <div className="space-y-1 mt-1">
                     {task.depends_on.map((depId: string) => (
                       <a
                         key={depId}
                         href={`/tasks/${depId}`}
-                        className="inline-flex items-center text-[12px] bg-[#f7f6f3] text-[#2383e2] border border-[#e8e5df] rounded px-1.5 py-0.5 hover:bg-[#ebebea] transition-colors"
+                        className="flex items-center gap-1.5 text-[13px] text-[#37352f] hover:bg-[#f7f6f3] rounded px-1.5 py-0.5 -mx-1.5 transition-colors"
                       >
-                        {depId}
+                        <span className="text-[12px] text-[#9b9a97] font-mono">{depId.slice(0, 8)}</span>
+                        <span className="text-[#2383e2]">→</span>
                       </a>
                     ))}
                   </div>
