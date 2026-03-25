@@ -375,13 +375,17 @@ class Daemon:
                     context_parts = []
                     for dep_id in dep_ids:
                         dep_task = await self._store.get_task(dep_id)
-                        if dep_task and dep_task.result_json:
-                            result_str = (
-                                json.dumps(dep_task.result_json, ensure_ascii=False)
-                                if not isinstance(dep_task.result_json, str)
-                                else dep_task.result_json
-                            )
-                            context_parts.append(f"### {dep_task.title}\n{result_str}")
+                        if not dep_task:
+                            continue
+                        rj = dep_task.result_json
+                        if not rj or (isinstance(rj, str) and not rj.strip()):
+                            continue
+                        result_str = (
+                            json.dumps(rj, ensure_ascii=False)
+                            if not isinstance(rj, str)
+                            else rj
+                        )
+                        context_parts.append(f"### {dep_task.title}\n{result_str}")
                     if context_parts:
                         context = "\n\n".join(context_parts)
                         task.instruction = (

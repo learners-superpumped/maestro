@@ -153,6 +153,7 @@ class AgentRunner:
         success: bool = False
         error: Optional[str] = None
         result_json: Optional[object] = None
+        last_assistant_text: Optional[str] = None
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -194,6 +195,12 @@ class AgentRunner:
                         if "session_id" in event:
                             session_id = event["session_id"]
                             logger.debug("Captured session_id=%s", session_id)
+
+                    elif event_type == "assistant":
+                        # Capture last assistant text as fallback
+                        msg = event.get("message", "")
+                        if isinstance(msg, str) and msg.strip():
+                            last_assistant_text = msg
 
                     elif event_type == "result":
                         cost_usd = float(event.get("total_cost_usd", 0.0))
@@ -242,6 +249,12 @@ class AgentRunner:
             logger.exception("Unexpected error running Claude CLI: %s", exc)
             error = str(exc)
             success = False
+
+        # Treat empty/whitespace-only results as None; fallback to last assistant text
+        if isinstance(result_json, str) and not result_json.strip():
+            result_json = None
+        if result_json is None and last_assistant_text:
+            result_json = last_assistant_text
 
         return TaskResult(
             task_id="",  # Filled in by callers
