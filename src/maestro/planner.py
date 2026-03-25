@@ -90,20 +90,39 @@ class Planner:
         signals = await self._collector.collect_signals()
         if not signals:
             return []
-        return [self._build_planning_task(signals)]
+        return [await self._build_planning_task(signals)]
 
-    def _build_planning_task(self, signals: list[dict[str, Any]]) -> dict[str, Any]:
+    async def _build_planning_task(
+        self, signals: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Build a planning task spec for the _planner workspace agent."""
-        goals_text = json.dumps(
-            [{"id": s["goal_id"], "description": s["description"]} for s in signals],
-            ensure_ascii=False,
-        )
+        # Enrich signals with goal details from DB
+        goals_info = []
+        for s in signals:
+            goal = await self._store.get_goal(s["goal_id"])
+            goals_info.append(
+                {
+                    "id": s["goal_id"],
+                    "description": goal["description"] if goal else s["description"],
+                    "workspace": goal["workspace"] if goal else "unknown",
+                    "metrics": goal.get("metrics", "{}") if goal else "{}",
+                }
+            )
+
+        goals_text = json.dumps(goals_info, ensure_ascii=False)
         signals_text = json.dumps(signals, ensure_ascii=False)
+
+        # Available workspaces
+        all_goals = await self._store.list_goals(enabled_only=True)
+        valid_workspaces = sorted({g["workspace"] for g in all_goals})
 
         instruction = (
             "다음 목표와 신호를 분석하여 실행 태스크를 생성하라.\n\n"
             f"## Goals\n{goals_text}\n\n"
             f"## Signals\n{signals_text}\n\n"
+            f"## 사용 가능한 Workspace\n{json.dumps(valid_workspaces)}\n\n"
+            "중요: 각 태스크의 workspace는 반드시 위 목록에서 선택하라. "
+            "목록에 없는 workspace를 사용하면 실행이 실패한다.\n\n"
             "JSON 배열로 반환하라."
         )
 
