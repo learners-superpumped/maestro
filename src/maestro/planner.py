@@ -123,6 +123,14 @@ class Planner:
             f"## 사용 가능한 Workspace\n{json.dumps(valid_workspaces)}\n\n"
             "중요: 각 태스크의 workspace는 반드시 위 목록에서 선택하라. "
             "목록에 없는 workspace를 사용하면 실행이 실패한다.\n\n"
+            "## 태스크 순서 지정\n"
+            "각 태스크에 depends_on_steps 필드로 선행 태스크의 배열 인덱스(0부터)를 지정하라.\n"
+            "선행 태스크의 결과가 필요한 경우에만 의존성을 추가하라.\n"
+            "병렬 실행 가능한 태스크는 depends_on_steps를 비워두라.\n\n"
+            "예시:\n"
+            '[{"title": "리서치", "workspace": "seo"},\n'
+            ' {"title": "감사", "workspace": "seo"},\n'
+            ' {"title": "최적화", "workspace": "seo", "depends_on_steps": [0, 1]}]\n\n'
             "JSON 배열로 반환하라."
         )
 
@@ -138,17 +146,30 @@ class Planner:
     async def create_planned_tasks(self, task_specs: list[dict[str, Any]]) -> list[str]:
         """Create tasks from planner agent output. Returns task IDs."""
         ids: list[str] = []
-        for spec in task_specs:
+        id_map: dict[int, str] = {}  # step_index → task_id
+
+        for i, spec in enumerate(task_specs):
+            # Convert depends_on_steps (indices) to depends_on (task IDs)
+            depends_on = None
+            dep_steps = spec.get("depends_on_steps")
+            if dep_steps:
+                dep_ids = [id_map[s] for s in dep_steps if s in id_map]
+                if dep_ids:
+                    depends_on = json.dumps(dep_ids)
+
             task = Task(
                 id=str(uuid.uuid4())[:8],
                 type=spec.get("type", "general"),
                 workspace=spec["workspace"],
                 title=spec["title"],
                 instruction=spec["instruction"],
+                depends_on=depends_on,
                 priority=spec.get("priority", 3),
                 goal_id=spec.get("goal_id"),
                 approval_level=spec.get("approval_level", 2),
             )
             await self._store.create_task(task)
             ids.append(task.id)
+            id_map[i] = task.id
+
         return ids
