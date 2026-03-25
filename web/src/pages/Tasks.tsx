@@ -54,11 +54,22 @@ const PRIORITY_PRESETS = [
 
 type TaskFormValues = z.infer<typeof taskSchema>
 
+function usePersisted<T>(key: string, defaultValue: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key)
+      return stored !== null ? JSON.parse(stored) : defaultValue
+    } catch { return defaultValue }
+  })
+  const set = (v: T) => { setValue(v); localStorage.setItem(key, JSON.stringify(v)) }
+  return [value, set]
+}
+
 export function Tasks() {
-  const [view, setView] = useState<"list" | "board">("list")
-  const [statusFilter, setStatusFilter] = useState("")
-  const [workspaceFilter, setWorkspaceFilter] = useState("")
-  const [showSystem, setShowSystem] = useState(false)
+  const [view, setView] = usePersisted<"list" | "board">("maestro:tasks:view", "list")
+  const [statusFilter, setStatusFilter] = usePersisted("maestro:tasks:status", "")
+  const [workspaceFilter, setWorkspaceFilter] = usePersisted("maestro:tasks:workspace", "")
+  const [showSystem, setShowSystem] = usePersisted("maestro:tasks:showSystem", false)
   const [open, setOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
