@@ -85,6 +85,7 @@ async def task_get_handler(request: web.Request) -> web.Response:
             "result_json": task.result_json,
             "error": task.error,
             "session_id": task.session_id,
+            "depends_on": json.loads(task.depends_on) if task.depends_on else None,
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None,
         }
@@ -394,6 +395,7 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
                     "cost_usd": t.cost_usd,
                     "error": t.error,
                     "session_id": t.session_id,
+                    "depends_on": json.loads(t.depends_on) if t.depends_on else None,
                     "parent_task_id": t.parent_task_id,
                     "created_at": t.created_at.isoformat() if t.created_at else None,
                     "updated_at": t.updated_at.isoformat() if t.updated_at else None,

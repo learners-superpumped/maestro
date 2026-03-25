@@ -466,6 +466,12 @@ def task_get(task_id: str, full: bool) -> None:
         click.echo(f"Priority:       {t.priority}")
         click.echo(f"Approval Level: {t.approval_level}")
         click.echo(f"Attempt:        {t.attempt + 1}/{t.max_retries}")
+        if t.depends_on:
+            try:
+                dep_ids = json.loads(t.depends_on)
+                click.echo(f"Depends On:     {', '.join(dep_ids)}")
+            except (json.JSONDecodeError, TypeError):
+                pass
         click.echo(f"Budget:         ${t.budget_usd:.2f}")
         click.echo(f"Cost:           ${t.cost_usd:.2f}")
         click.echo(f"Created:        {t.created_at}")

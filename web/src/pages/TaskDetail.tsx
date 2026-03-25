@@ -415,6 +415,22 @@ export function TaskDetail() {
               <Field label="Approval" value={task.approval_level === 0 ? "Auto" : task.approval_level === 1 ? "Notify" : "Required"} />
               <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} />
               <Field label="Attempt" value={task.max_retries ? `${(task.attempt ?? 0) + 1}/${task.max_retries}` : undefined} />
+              {task.depends_on && task.depends_on.length > 0 && (
+                <div className="col-span-2">
+                  <span className="text-[12px] text-[#9b9a97]">Depends On</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {task.depends_on.map((depId: string) => (
+                      <a
+                        key={depId}
+                        href={`/tasks/${depId}`}
+                        className="inline-flex items-center text-[12px] bg-[#f7f6f3] text-[#2383e2] border border-[#e8e5df] rounded px-1.5 py-0.5 hover:bg-[#ebebea] transition-colors"
+                      >
+                        {depId}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Field label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
               <Field label="Updated" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
               {task.claimed_by && <Field label="Claimed By" value={task.claimed_by} mono />}
