@@ -4,7 +4,6 @@ import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal } from "@/hooks/q
 import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import {
   Select,
@@ -30,6 +29,10 @@ import {
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return "\u2014"
   const diff = Date.now() - new Date(iso).getTime()
@@ -42,50 +45,18 @@ function formatRelativeTime(iso: string | null): string {
   return `${days}d ago`
 }
 
-const COOLDOWN_PRESETS = [
-  { value: "6", label: "6 hours" },
-  { value: "12", label: "12 hours" },
-  { value: "24", label: "1 day" },
-  { value: "48", label: "2 days" },
-  { value: "72", label: "3 days" },
-  { value: "168", label: "1 week" },
-]
-
-function MetricRow({ label, value, onChangeLabel, onChangeValue, onRemove }: {
-  label: string
-  value: string
-  onChangeLabel: (v: string) => void
-  onChangeValue: (v: string) => void
-  onRemove: () => void
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Input
-        value={label}
-        onChange={(e) => onChangeLabel(e.target.value)}
-        className="bg-white border-[#e8e5df] text-[#37352f] text-[13px] rounded flex-1"
-        placeholder="e.g. post_frequency"
-      />
-      <Input
-        value={value}
-        onChange={(e) => onChangeValue(e.target.value)}
-        className="bg-white border-[#e8e5df] text-[#37352f] text-[13px] rounded flex-1"
-        placeholder="e.g. 3/week"
-      />
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        onClick={onRemove}
-        className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#eb5757]/5 shrink-0"
-      >
-        <X className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  )
+function formatCooldown(h: number): string {
+  if (h < 24) return `${h}h`
+  if (h === 24) return "Daily"
+  if (h < 168) return `${h / 24}d`
+  return `${h / 168}w`
 }
 
-function formatMetrics(raw: string): { key: string; value: string }[] {
+function toSlug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+}
+
+function parseMetrics(raw: string): { key: string; value: string }[] {
   try {
     const obj = typeof raw === "string" ? JSON.parse(raw) : raw
     if (typeof obj === "object" && obj !== null) {
@@ -98,16 +69,38 @@ function formatMetrics(raw: string): { key: string; value: string }[] {
   return []
 }
 
-function toSlug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+const FREQUENCY_OPTIONS = [
+  { value: "6", label: "Every 6 hours" },
+  { value: "12", label: "Every 12 hours" },
+  { value: "24", label: "Daily" },
+  { value: "48", label: "Every 2 days" },
+  { value: "72", label: "Every 3 days" },
+  { value: "168", label: "Weekly" },
+]
+
+// ---------------------------------------------------------------------------
+// Notion-style property row
+// ---------------------------------------------------------------------------
+
+function PropRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center min-h-[34px]">
+      <span className="text-[13px] text-[#9b9a97] w-[100px] shrink-0">{label}</span>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  )
 }
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export function Goals() {
   const [open, setOpen] = useState(false)
-  const [formName, setFormName] = useState("")
-  const [formWorkspace, setFormWorkspace] = useState("")
-  const [formMetrics, setFormMetrics] = useState<{ key: string; value: string }[]>([])
-  const [formFrequency, setFormFrequency] = useState("24")
+  const [name, setName] = useState("")
+  const [workspace, setWorkspace] = useState("")
+  const [frequency, setFrequency] = useState("24")
+  const [targets, setTargets] = useState<{ key: string; value: string }[]>([])
 
   const { data, isLoading } = useGoals()
   const createGoal = useCreateGoal()
@@ -116,35 +109,34 @@ export function Goals() {
 
   const { data: wsData } = useWorkspaces()
   const workspaces: any[] = wsData?.workspaces ?? []
-
   const goals: any[] = data?.goals ?? []
 
-  const resetForm = () => {
-    setFormName("")
-    setFormWorkspace("")
-    setFormMetrics([])
-    setFormFrequency("24")
+  const reset = () => {
+    setName("")
+    setWorkspace("")
+    setFrequency("24")
+    setTargets([])
   }
 
   const handleCreate = async () => {
     const metrics: Record<string, string> = {}
-    for (const m of formMetrics) {
-      if (m.key.trim()) metrics[m.key.trim()] = m.value.trim()
+    for (const t of targets) {
+      if (t.key.trim()) metrics[t.key.trim()] = t.value.trim()
     }
-    const id = toSlug(formName)
     await createGoal.mutateAsync({
-      id,
-      workspace: formWorkspace,
-      description: formName,
+      id: toSlug(name),
+      workspace,
+      description: name,
       metrics,
-      cooldown_hours: Number(formFrequency) || 24,
+      cooldown_hours: Number(frequency) || 24,
     })
-    resetForm()
+    reset()
     setOpen(false)
   }
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[20px] font-semibold text-[#37352f]">Goals</h1>
@@ -153,134 +145,140 @@ export function Goals() {
           </p>
         </div>
 
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset() }}>
           <DialogTrigger
             render={
               <Button className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3">
                 <Plus className="h-3.5 w-3.5 mr-1" />
-                Add Goal
+                New Goal
               </Button>
             }
           />
-          <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-md">
+          <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-[420px]">
             <DialogHeader>
               <DialogTitle className="text-[16px] font-semibold text-[#37352f]">New Goal</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 mt-2">
-              {/* Goal name — primary input */}
-              <div className="space-y-1">
-                <Label className="text-[12px] text-[#9b9a97]">Goal *</Label>
-                <Input
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                  placeholder="Threads brand presence"
-                  autoFocus
-                />
-                {formName && (
-                  <p className="text-[12px] text-[#9b9a97]">
-                    ID: <span className="font-mono text-[#787774]">{toSlug(formName)}</span>
-                  </p>
-                )}
-              </div>
 
-              {/* Workspace + Frequency */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v ?? "")}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {workspaces.map((ws: any) => (
-                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {ws.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Evaluate every</Label>
-                  <Select value={formFrequency} onValueChange={(v) => setFormFrequency(v ?? "24")}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {COOLDOWN_PRESETS.map((p) => (
-                        <SelectItem key={p.value} value={p.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            <div className="mt-3 space-y-1">
+              {/* Name — big, prominent, Notion page-title style */}
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="border-0 shadow-none text-[18px] font-medium text-[#37352f] px-0 h-auto py-1 placeholder:text-[#c4c3c0] focus-visible:ring-0"
+                placeholder="What do you want to achieve?"
+                autoFocus
+              />
+            </div>
 
-              {/* Metrics — key-value pairs */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-[12px] text-[#9b9a97]">Targets</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setFormMetrics([...formMetrics, { key: "", value: "" }])}
-                    className="h-6 text-[12px] text-[#2383e2] hover:bg-[#2383e2]/5 px-2"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add
-                  </Button>
-                </div>
-                {formMetrics.length === 0 ? (
-                  <p className="text-[12px] text-[#9b9a97] bg-[#f7f6f3] rounded px-3 py-2">
-                    Optional. Help the planner understand what to aim for.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {formMetrics.map((m, i) => (
-                      <MetricRow
-                        key={i}
-                        label={m.key}
-                        value={m.value}
-                        onChangeLabel={(v) => {
-                          const next = [...formMetrics]
-                          next[i] = { ...next[i], key: v }
-                          setFormMetrics(next)
-                        }}
-                        onChangeValue={(v) => {
-                          const next = [...formMetrics]
-                          next[i] = { ...next[i], value: v }
-                          setFormMetrics(next)
-                        }}
-                        onRemove={() => setFormMetrics(formMetrics.filter((_, j) => j !== i))}
-                      />
+            {/* Properties — Notion inline style */}
+            <div className="mt-4 space-y-0 border-t border-[#e8e5df] pt-3">
+              <PropRow label="Workspace">
+                <Select value={workspace} onValueChange={(v) => setWorkspace(v ?? "")}>
+                  <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] px-1.5 rounded hover:bg-[#f7f6f3] focus:ring-0">
+                    <SelectValue placeholder="Select workspace..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-[#e8e5df]">
+                    {workspaces.map((ws: any) => (
+                      <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                        {ws.name}
+                      </SelectItem>
                     ))}
-                  </div>
-                )}
+                  </SelectContent>
+                </Select>
+              </PropRow>
+
+              <PropRow label="Check every">
+                <Select value={frequency} onValueChange={(v) => setFrequency(v ?? "24")}>
+                  <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] px-1.5 rounded hover:bg-[#f7f6f3] focus:ring-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-[#e8e5df]">
+                    {FREQUENCY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </PropRow>
+            </div>
+
+            {/* Targets section */}
+            <div className="mt-3 border-t border-[#e8e5df] pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[13px] text-[#9b9a97]">Targets</span>
+                <button
+                  type="button"
+                  onClick={() => setTargets([...targets, { key: "", value: "" }])}
+                  className="text-[12px] text-[#2383e2] hover:underline"
+                >
+                  + Add target
+                </button>
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => { setOpen(false); resetForm() }}
-                  className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleCreate}
-                  disabled={createGoal.isPending || !formName.trim() || !formWorkspace}
-                  className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
-                >
-                  {createGoal.isPending && (
-                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                  )}
-                  Create
-                </Button>
-              </div>
+              {targets.length === 0 ? (
+                <p className="text-[12px] text-[#9b9a97] leading-relaxed">
+                  Targets tell the planner what to aim for. For example:<br />
+                  <span className="text-[#787774]">Posts per week</span>
+                  <span className="text-[#9b9a97]"> = </span>
+                  <span className="text-[#787774]">3</span>
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {targets.map((t, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <Input
+                        value={t.key}
+                        onChange={(e) => {
+                          const next = [...targets]
+                          next[i] = { ...next[i], key: e.target.value }
+                          setTargets(next)
+                        }}
+                        className="border-[#e8e5df] text-[13px] text-[#37352f] rounded h-[30px] flex-1"
+                        placeholder="Posts per week"
+                      />
+                      <span className="text-[12px] text-[#9b9a97]">=</span>
+                      <Input
+                        value={t.value}
+                        onChange={(e) => {
+                          const next = [...targets]
+                          next[i] = { ...next[i], value: e.target.value }
+                          setTargets(next)
+                        }}
+                        className="border-[#e8e5df] text-[13px] text-[#37352f] rounded h-[30px] w-[80px]"
+                        placeholder="3"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTargets(targets.filter((_, j) => j !== i))}
+                        className="text-[#9b9a97] hover:text-[#eb5757] p-0.5"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[#e8e5df]">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { setOpen(false); reset() }}
+                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreate}
+                disabled={createGoal.isPending || !name.trim() || !workspace}
+                className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
+              >
+                {createGoal.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                Create
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -291,13 +289,13 @@ export function Goals() {
         <Table>
           <TableHeader>
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">ID</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Goal</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Metrics</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Cooldown</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Last Evaluated</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Enabled</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-12">Del</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Targets</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Frequency</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Last Run</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Active</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -312,29 +310,31 @@ export function Goals() {
                   </TableRow>
                 ))
               : goals.map((g: any) => {
-                  const metrics = formatMetrics(g.metrics)
+                  const metrics = parseMetrics(g.metrics)
                   return (
                     <TableRow key={g.id} className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]">
-                      <TableCell className="text-[#37352f] text-[14px] font-medium">
+                      <TableCell className="text-[14px]">
                         <div className="flex items-center gap-2">
                           <Target className="h-4 w-4 text-[#9b9a97] shrink-0" />
                           <div className="min-w-0">
-                            <div className="truncate">{g.id}</div>
-                            {g.description && (
-                              <div className="text-[12px] text-[#9b9a97] truncate">{g.description}</div>
+                            <div className="text-[#37352f] font-medium truncate">
+                              {g.description || g.id}
+                            </div>
+                            {g.description && g.description !== g.id && (
+                              <div className="text-[12px] text-[#9b9a97] font-mono truncate">{g.id}</div>
                             )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-[14px] text-[#787774]">{g.workspace}</TableCell>
+                      <TableCell className="text-[13px] text-[#787774]">{g.workspace}</TableCell>
                       <TableCell>
                         {metrics.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {metrics.map((m) => (
                               <span key={m.key} className="inline-flex items-center text-[12px] bg-[#f7f6f3] text-[#787774] border border-[#e8e5df] rounded px-1.5 py-0.5">
-                                <span className="text-[#37352f] font-medium">{m.key}</span>
-                                <span className="mx-1 text-[#9b9a97]">=</span>
-                                {m.value}
+                                {m.key}
+                                <span className="mx-0.5 text-[#9b9a97]">=</span>
+                                <span className="text-[#37352f]">{m.value}</span>
                               </span>
                             ))}
                           </div>
@@ -342,7 +342,9 @@ export function Goals() {
                           <span className="text-[12px] text-[#9b9a97]">{"\u2014"}</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-[14px] text-[#787774]">{g.cooldown_hours}h</TableCell>
+                      <TableCell className="text-[13px] text-[#787774]">
+                        {formatCooldown(g.cooldown_hours)}
+                      </TableCell>
                       <TableCell className="text-[12px] text-[#9b9a97]">
                         {formatRelativeTime(g.last_evaluated_at)}
                       </TableCell>
@@ -374,7 +376,7 @@ export function Goals() {
             {!isLoading && goals.length === 0 && (
               <TableRow className="border-[#e8e5df]">
                 <TableCell colSpan={7} className="text-center text-[14px] text-[#9b9a97] py-8">
-                  No goals found
+                  No goals yet
                 </TableCell>
               </TableRow>
             )}
