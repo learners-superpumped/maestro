@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- SEO: Optimized Title & Description -->
-    <title>ClawOps – AI Agent 전화·문자 통신 API | 한국 개발자 플랫폼</title>
-    <meta name="description" content="ClawOps는 AI Agent에 한국 전화·문자 기능을 연결하는 통신 API 플랫폼입니다. SIP 서버 없이 API 호출만으로 한국어 음성 통화와 SMS를 구현하세요. Python, Node.js SDK 및 MCP 지원." />
+    <title>ClawOps – AI Agent 전화·문자 API | 한국 통신 개발자 플랫폼</title>
+    <meta name="description" content="ClawOps는 AI Agent에 한국 전화·문자 기능을 연결하는 통신 API입니다. SIP 서버 없이 API만으로 한국어 음성 통화·SMS 구현. Python, Node.js SDK 및 MCP 지원." />
 
     <!-- SEO: Canonical URL -->
     <link rel="canonical" href="https://claw-ops.com/" />
@@ -36,8 +36,42 @@
       "@type": "Organization",
       "name": "ClawOps",
       "url": "https://claw-ops.com",
+      "logo": "https://claw-ops.com/favicon.svg",
       "description": "한국 AI 개발자를 위한 전화·문자 통신 API 플랫폼",
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "technical support",
+        "availableLanguage": ["Korean", "English"]
+      },
       "sameAs": []
+    }
+    </script>
+
+    <!-- Schema.org: BreadcrumbList -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "홈",
+          "item": "https://claw-ops.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "문서",
+          "item": "https://claw-ops.com/docs"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "대시보드",
+          "item": "https://claw-ops.com/dashboard"
+        }
+      ]
     }
     </script>
 
@@ -115,6 +149,34 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <header>
+        <h1>ClawOps – AI Agent 전화·문자 통신 API 플랫폼</h1>
+        <p>한국 AI 개발자를 위한 전화·문자 통신 API. SIP 서버 없이 API 호출만으로 한국어 음성 통화와 SMS를 구현하세요.</p>
+      </header>
+      <main>
+        <section>
+          <h2>주요 기능</h2>
+          <ul>
+            <li>AI Agent에 전화·문자 기능을 간편하게 연결</li>
+            <li>SIP 서버 없이 한국어 음성에 최적화된 고품질 통화</li>
+            <li>Webhook으로 통화 이벤트 실시간 수신</li>
+          </ul>
+        </section>
+        <section>
+          <h2>지원 SDK</h2>
+          <ul>
+            <li>Python SDK</li>
+            <li>Node.js SDK</li>
+            <li>MCP (Model Context Protocol) 지원</li>
+          </ul>
+        </section>
+        <section>
+          <h2>시작하기</h2>
+          <p>ClawOps API를 사용하면 몇 줄의 코드로 AI Agent에 전화·문자 기능을 추가할 수 있습니다.</p>
+        </section>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

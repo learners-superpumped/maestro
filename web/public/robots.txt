@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /_internal/
+
+Sitemap: https://claw-ops.com/sitemap.xml
