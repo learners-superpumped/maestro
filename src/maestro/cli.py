@@ -1333,6 +1333,155 @@ def schedule_disable(name):
 
 
 # ---------------------------------------------------------------------------
+# goal
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def goal():
+    """Manage goals."""
+    pass
+
+
+@goal.command("add")
+@click.option("--id", "goal_id", required=True, help="Unique goal ID")
+@click.option("--workspace", required=True)
+@click.option("--description", default="", help="Goal description")
+@click.option("--metrics", default="{}", help="Metrics JSON")
+@click.option(
+    "--cooldown", "cooldown_hours", type=int, default=24, help="Cooldown hours"
+)
+def goal_add(goal_id, workspace, description, metrics, cooldown_hours):
+    """Add a new goal."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.create_goal(
+            id=goal_id,
+            workspace=workspace,
+            description=description,
+            metrics=metrics,
+            cooldown_hours=cooldown_hours,
+        )
+        click.echo(f"Created goal: {goal_id}")
+
+    asyncio.run(_run())
+
+
+@goal.command("list")
+def goal_list():
+    """List all goals."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        goals = await store.list_goals()
+        if not goals:
+            click.echo("No goals.")
+            return
+        click.echo(
+            f"{'ID':<25} {'WORKSPACE':<15} {'COOLDOWN':<10} {'ENABLED':<9} {'LAST EVALUATED'}"
+        )
+        click.echo("-" * 85)
+        for g in goals:
+            enabled = "✓" if g["enabled"] else "✗"
+            last_eval = g.get("last_evaluated_at") or "—"
+            if last_eval != "—":
+                last_eval = last_eval[:19]
+            click.echo(
+                f"{g['id']:<25} {g['workspace']:<15} {g['cooldown_hours']:<10} {enabled:<9} {last_eval}"
+            )
+
+    asyncio.run(_run())
+
+
+@goal.command("show")
+@click.argument("goal_id")
+def goal_show(goal_id):
+    """Show goal details including state."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        g = await store.get_goal(goal_id)
+        if not g:
+            click.echo(f"Goal not found: {goal_id}")
+            return
+        click.echo(f"ID:                 {g['id']}")
+        click.echo(f"Description:        {g['description']}")
+        click.echo(f"Workspace:          {g['workspace']}")
+        click.echo(f"Metrics:            {g['metrics']}")
+        click.echo(f"Cooldown:           {g['cooldown_hours']}h")
+        click.echo(f"Enabled:            {'✓' if g['enabled'] else '✗'}")
+        click.echo(f"Last Evaluated:     {g.get('last_evaluated_at') or '—'}")
+        click.echo(f"Current Gap:        {g.get('current_gap') or '—'}")
+        click.echo(f"Last Task Created:  {g.get('last_task_created_at') or '—'}")
+
+    asyncio.run(_run())
+
+
+@goal.command("enable")
+@click.argument("goal_id")
+def goal_enable(goal_id):
+    """Enable a goal."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.update_goal(goal_id, enabled=True)
+        click.echo(f"Enabled: {goal_id}")
+
+    asyncio.run(_run())
+
+
+@goal.command("disable")
+@click.argument("goal_id")
+def goal_disable(goal_id):
+    """Disable a goal."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.update_goal(goal_id, enabled=False)
+        click.echo(f"Disabled: {goal_id}")
+
+    asyncio.run(_run())
+
+
+@goal.command("remove")
+@click.argument("goal_id")
+def goal_remove(goal_id):
+    """Remove a goal."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        await store.delete_goal(goal_id)
+        click.echo(f"Removed goal: {goal_id}")
+
+    asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
 # extract-rule
 # ---------------------------------------------------------------------------
 
