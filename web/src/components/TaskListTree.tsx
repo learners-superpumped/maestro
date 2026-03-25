@@ -108,7 +108,7 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
                     className="border-b border-[#e8e5df] hover:bg-[#f7f6f3] cursor-pointer h-[36px]"
                     onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
                   >
-                    <TableCell><StatusBadge status={task.status} /></TableCell>
+                    <TableCell><StatusBadge status={task.effective_status ?? task.status} /></TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {hasChildren && (

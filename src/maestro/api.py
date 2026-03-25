@@ -60,6 +60,13 @@ async def task_get_handler(request: web.Request) -> web.Response:
     if task is None:
         raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
 
+    # 부모가 completed이지만 자식이 아직 활성이면 effective_status를 running으로
+    effective_status = task.status.value
+    if task.status == TaskStatus.COMPLETED:
+        active_children = await store.count_active_children(task_id)
+        if active_children > 0:
+            effective_status = "running"
+
     return web.json_response(
         {
             "id": task.id,
@@ -68,6 +75,7 @@ async def task_get_handler(request: web.Request) -> web.Response:
             "title": task.title,
             "instruction": task.instruction,
             "status": task.status.value,
+            "effective_status": effective_status,
             "priority": task.priority,
             "approval_level": task.approval_level,
             "attempt": task.attempt,

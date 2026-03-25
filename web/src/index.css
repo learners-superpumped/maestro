@@ -153,6 +153,25 @@
 .prose a:hover {
   text-decoration: underline;
 }
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 0.5em 0;
+}
+.prose th, .prose td {
+  border: 1px solid #e8e5df;
+  padding: 6px 10px;
+  text-align: left;
+  color: #37352f;
+}
+.prose th {
+  background: #f7f6f3;
+  font-weight: 600;
+}
+.prose tr:hover {
+  background: #f7f6f3;
+}
 
 /* Entry animations */
 @keyframes fade-in-up {

@@ -307,7 +307,7 @@ export function Rules() {
                           })
                         }
                         disabled={deleteRule.isPending}
-                        className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-red-50"
+                        className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#eb5757]/5"
                         title="Delete"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

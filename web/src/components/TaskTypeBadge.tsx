@@ -34,7 +34,7 @@ export function TaskTypeBadge({ type, className }: { type: string; className?: s
 
   return (
     <span className={cn(
-      "inline-flex items-center gap-1 text-[11px] font-medium border rounded px-1.5 py-0.5",
+      "inline-flex items-center gap-1 text-[12px] font-medium border rounded px-1.5 py-0.5",
       config.bg,
       config.color,
       className,

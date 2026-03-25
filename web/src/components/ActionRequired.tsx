@@ -109,7 +109,7 @@ function ApprovalCard({ task }: { task: any }) {
                   <PenLine className="h-3 w-3 mr-1" /> Revise
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => { setDialogType("reject"); setNote("") }}
-                  className="border border-[#e8e5df] text-[#eb5757] hover:bg-red-50 h-[28px] text-[12px] rounded px-2.5">
+                  className="border border-[#e8e5df] text-[#eb5757] hover:bg-[#eb5757]/5 h-[28px] text-[12px] rounded px-2.5">
                   <X className="h-3 w-3 mr-1" /> Reject
                 </Button>
               </>
@@ -215,7 +215,7 @@ function ApprovalCard({ task }: { task: any }) {
                   "text-white",
                   dialogType === "approve" && "bg-[#4dab9a] hover:bg-[#3d9b8b]",
                   dialogType === "revise" && "bg-[#2383e2] hover:bg-[#1a73cc]",
-                  dialogType === "reject" && "bg-[#eb5757] hover:bg-red-600",
+                  dialogType === "reject" && "bg-[#eb5757] hover:bg-[#d44646]",
                 )}>
                 {(approve.isPending || reject.isPending || revise.isPending) && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                 {dialogType === "approve" ? "Approve" : dialogType === "revise" ? "Send Revision" : "Reject"}

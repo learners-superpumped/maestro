@@ -7,10 +7,10 @@ interface TaskBoardProps {
 }
 
 export function TaskBoard({ tasks }: TaskBoardProps) {
-  // Group tasks by status
+  // Group tasks by effective_status (falls back to raw status)
   const grouped: Record<string, any[]> = {}
   for (const task of tasks) {
-    const s = task.status
+    const s = task.effective_status ?? task.status
     if (!grouped[s]) grouped[s] = []
     grouped[s].push(task)
   }

@@ -36,6 +36,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import Markdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { cn } from "@/lib/utils"
@@ -150,7 +151,7 @@ function ResultCard({ task, defaultExpanded }: { task: any; defaultExpanded: boo
       {expanded && (
         <CardContent>
           <div className="prose max-w-none overflow-auto max-h-[600px]">
-            <Markdown>{content}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
           </div>
         </CardContent>
       )}
@@ -210,9 +211,9 @@ export function TaskDetail() {
   }
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div>
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-5">
         <Button
           variant="ghost"
           size="icon"
@@ -221,10 +222,10 @@ export function TaskDetail() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-[20px] font-semibold text-[#37352f]">{task.title}</h1>
-            <StatusBadge status={task.status} />
+            <StatusBadge status={task.effective_status ?? task.status} />
             <TaskTypeBadge type={task.type} />
           </div>
           <div className="flex items-center gap-2 mt-0.5 text-[12px] text-[#9b9a97]">
@@ -239,239 +240,239 @@ export function TaskDetail() {
             <span className="font-mono">{task.id}</span>
           </div>
         </div>
+
+        {/* Action buttons in header row */}
+        {(canApprove || canReject || canRevise || task.status === "failed") && (
+          <div className="flex gap-2 shrink-0">
+            {task.status === "failed" && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    await createTask.mutateAsync({
+                      workspace: task.workspace,
+                      type: task.type,
+                      title: task.title,
+                      instruction: task.instruction,
+                      priority: task.priority,
+                      approval_level: task.approval_level,
+                    })
+                    await api.tasks.dismiss(id)
+                    navigate({ to: "/tasks" })
+                  }}
+                  disabled={createTask.isPending}
+                  className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
+                >
+                  {createTask.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                  Retry
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRejectOpen(true)}
+                  className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
+                >
+                  Dismiss
+                </Button>
+              </>
+            )}
+            {task.status === "pending" && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setApproveOpen(true)}
+                  className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  Start
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRejectOpen(true)}
+                  className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+            {task.status === "paused" && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setApproveOpen(true)}
+                  className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setReviseOpen(true)}
+                  className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
+                >
+                  Revise
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRejectOpen(true)}
+                  className="h-[28px] text-[13px] text-[#eb5757] hover:bg-[#eb5757]/5 px-3"
+                >
+                  Reject
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Action buttons — context-dependent labels */}
-      {(canApprove || canReject || canRevise || task.status === "failed") && (
-        <div className="flex gap-2 flex-wrap">
-          {task.status === "failed" && (
-            <>
-              <Button
-                size="sm"
-                onClick={async () => {
-                  await createTask.mutateAsync({
-                    workspace: task.workspace,
-                    type: task.type,
-                    title: task.title,
-                    instruction: task.instruction,
-                    priority: task.priority,
-                    approval_level: task.approval_level,
-                  })
-                  await api.tasks.dismiss(id)
-                  navigate({ to: "/tasks" })
-                }}
-                disabled={createTask.isPending}
-                className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
-              >
-                {createTask.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                Retry
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setRejectOpen(true)}
-                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
-              >
-                Dismiss
-              </Button>
-            </>
+      {/* Two-column layout: Main content + Sidebar */}
+      <div className="flex flex-col lg:flex-row gap-5">
+        {/* ── Main column ── */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Status-specific primary content */}
+          {task.status === "running" && (
+            <AgentLogPanel taskId={id} taskStatus="running" />
           )}
-          {task.status === "pending" && (
-            <>
-              <Button
-                size="sm"
-                onClick={() => setApproveOpen(true)}
-                className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
-              >
-                <Play className="h-3 w-3 mr-1" />
-                Start
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setRejectOpen(true)}
-                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
-              >
-                Cancel
-              </Button>
-            </>
-          )}
-          {task.status === "paused" && (
-            <>
-              <Button
-                size="sm"
-                onClick={() => setApproveOpen(true)}
-                className="h-[28px] text-[13px] rounded bg-[#2383e2] hover:bg-[#1a73cc] text-white px-3"
-              >
-                <Check className="h-3 w-3 mr-1" />
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setReviseOpen(true)}
-                className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3] px-3"
-              >
-                Revise
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setRejectOpen(true)}
-                className="h-[28px] text-[13px] text-[#eb5757] hover:bg-red-50 px-3"
-              >
-                Reject
-              </Button>
-            </>
-          )}
-        </div>
-      )}
 
-      {/* Status-specific primary content */}
-      {task.status === "running" && (
-        <AgentLogPanel taskId={id} taskStatus="running" />
-      )}
-
-      {task.status === "failed" && task.error && (
-        <Card className="bg-[#eb5757]/5 border border-[#eb5757]/20 rounded">
-          <CardContent className="py-4">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-[#eb5757] mt-0.5 shrink-0" />
-              <div>
-                <p className="text-[14px] font-medium text-[#eb5757] mb-1">Task Failed</p>
-                <p className="text-[14px] text-[#787774]">{task.error}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {task.status === "failed" && (
-        <AgentLogPanel taskId={id} taskStatus="failed" />
-      )}
-
-      {task.status === "paused" && approvalInfo.reviewSummary && (
-        <ReviewSummaryCard approvalInfo={approvalInfo} />
-      )}
-
-      {/* Result — always expanded when it exists so the user sees agent output immediately */}
-      {(task.result_json != null || task.result != null) && (
-        <ResultCard task={task} defaultExpanded={true} />
-      )}
-
-      {task.status === "pending" && (
-        <>
-          <p className="text-[14px] text-[#9b9a97]">
-            Waiting to start. Click <strong className="text-[#37352f]">Start</strong> to let the agent begin.
-          </p>
-          {task.instruction && (
-            <Card className="bg-white border border-[#e8e5df] rounded">
-              <CardHeader>
-                <CardTitle className="text-[14px] font-semibold text-[#37352f]">Instruction</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose max-w-none">
-                  <Markdown>{task.instruction}</Markdown>
+          {task.status === "failed" && task.error && (
+            <Card className="bg-[#eb5757]/5 border border-[#eb5757]/20 rounded">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-[#eb5757] mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[14px] font-medium text-[#eb5757] mb-1">Task Failed</p>
+                    <p className="text-[14px] text-[#787774]">{task.error}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
-        </>
-      )}
 
-      {/* Collapsible sections with consistent spacing */}
-      <div className="space-y-3">
-        {/* Children */}
-        {children.length > 0 && (
-          <CollapsibleSection title="Children" count={children.length} defaultOpen>
-            <div className="space-y-2 pt-2">
-              {children.map((child: any) => {
-                const review = child.type === "review" ? parseReviewVerdict(child.result_json) : null
-                return (
-                  <div
-                    key={child.id}
-                    className="flex items-start gap-3 px-3 py-2.5 rounded bg-[#f7f6f3] hover:bg-[#ebebea] cursor-pointer transition-colors"
-                    onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
-                  >
-                    <StatusBadge status={child.status} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[14px] text-[#37352f]">{child.title}</span>
-                        <TaskTypeBadge type={child.type} />
-                        {child.cost_usd > 0 && (
-                          <span className="text-[12px] text-[#9b9a97] font-mono">${Number(child.cost_usd).toFixed(4)}</span>
+          {task.status === "failed" && (
+            <AgentLogPanel taskId={id} taskStatus="failed" />
+          )}
+
+          {task.status === "paused" && approvalInfo.reviewSummary && (
+            <ReviewSummaryCard approvalInfo={approvalInfo} />
+          )}
+
+          {/* Result */}
+          {(task.result_json != null || task.result != null) && (
+            <ResultCard task={task} defaultExpanded={true} />
+          )}
+
+          {task.status === "pending" && (
+            <>
+              <p className="text-[14px] text-[#9b9a97]">
+                Waiting to start. Click <strong className="text-[#37352f]">Start</strong> to let the agent begin.
+              </p>
+              {task.instruction && (
+                <Card className="bg-white border border-[#e8e5df] rounded">
+                  <CardHeader>
+                    <CardTitle className="text-[14px] font-semibold text-[#37352f]">Instruction</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none">
+                      <Markdown remarkPlugins={[remarkGfm]}>{task.instruction}</Markdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
+          {/* Instruction (if not shown as primary) */}
+          {task.status !== "pending" && task.instruction && (
+            <CollapsibleSection title="Instruction">
+              <div className="prose max-w-none pt-2">
+                <Markdown remarkPlugins={[remarkGfm]}>{task.instruction}</Markdown>
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Agent Log (if not already shown as primary) */}
+          {task.status !== "running" && task.status !== "failed" && (
+            <CollapsibleSection title="Agent Log">
+              <div className="pt-2">
+                <AgentLogPanel taskId={id} taskStatus={task.status} embedded />
+              </div>
+            </CollapsibleSection>
+          )}
+        </div>
+
+        {/* ── Sidebar ── */}
+        <div className="lg:w-[320px] shrink-0 space-y-4">
+          {/* Properties — always visible */}
+          <div className="border border-[#e8e5df] rounded p-4">
+            <h3 className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97] mb-3">Properties</h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <Field label="Status" value={task.effective_status ?? task.status} />
+              <Field label="Priority" value={task.priority} />
+              <Field label="Type" value={getTaskTypeLabel(task.type)} />
+              <Field label="Approval" value={task.approval_level === 0 ? "Auto" : task.approval_level === 1 ? "Notify" : "Required"} />
+              <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} />
+              <Field label="Attempt" value={task.max_retries ? `${task.attempt ?? 0}/${task.max_retries}` : undefined} />
+              <Field label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
+              <Field label="Updated" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
+              {task.claimed_by && <Field label="Claimed By" value={task.claimed_by} mono />}
+              {task.created_by && <Field label="Created By" value={task.created_by} mono />}
+            </div>
+          </div>
+
+          {/* Children */}
+          {children.length > 0 && (
+            <div className="border border-[#e8e5df] rounded p-4">
+              <h3 className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97] mb-3">
+                Children <span className="text-[#9b9a97]">{children.length}</span>
+              </h3>
+              <div className="space-y-2">
+                {children.map((child: any) => {
+                  const review = child.type === "review" ? parseReviewVerdict(child.result_json) : null
+                  return (
+                    <div
+                      key={child.id}
+                      className="flex items-start gap-2.5 px-2.5 py-2 rounded bg-[#f7f6f3] hover:bg-[#ebebea] cursor-pointer transition-colors"
+                      onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
+                    >
+                      <StatusBadge status={child.status} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13px] text-[#37352f] truncate">{child.title}</span>
+                          <TaskTypeBadge type={child.type} />
+                        </div>
+                        {review?.verdict && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {review.verdict === "pass" ? (
+                              <CheckCircle2 className="h-3 w-3 text-[#4dab9a]" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-[#eb5757]" />
+                            )}
+                            <span className={cn(
+                              "text-[12px]",
+                              review.verdict === "pass" ? "text-[#4dab9a]" : "text-[#eb5757]"
+                            )}>
+                              {review.verdict === "pass" ? "Passed" : "Failed"}
+                            </span>
+                          </div>
                         )}
                       </div>
-                      {review?.verdict && (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {review.verdict === "pass" ? (
-                            <CheckCircle2 className="h-3 w-3 text-[#4dab9a]" />
-                          ) : (
-                            <XCircle className="h-3 w-3 text-[#eb5757]" />
-                          )}
-                          <span className={cn(
-                            "text-[12px]",
-                            review.verdict === "pass" ? "text-[#4dab9a]" : "text-[#eb5757]"
-                          )}>
-                            {review.verdict === "pass" ? "Passed" : "Failed"}
-                          </span>
-                          {review.summary && (
-                            <span className="text-[12px] text-[#9b9a97] truncate max-w-md">
-                              — {review.summary}
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </CollapsibleSection>
-        )}
+          )}
 
-        {/* Activity — open by default so users see the timeline immediately */}
-        <CollapsibleSection title="Activity" defaultOpen={true}>
-          <div className="pt-2">
-            <ActivityTimeline taskId={id} />
-          </div>
-        </CollapsibleSection>
-
-        {/* Agent Log (if not already shown as primary content above) */}
-        {task.status !== "running" && task.status !== "failed" && (
-          <CollapsibleSection title="Agent Log">
+          {/* Activity */}
+          <CollapsibleSection title="Activity" defaultOpen={true}>
             <div className="pt-2">
-              <AgentLogPanel taskId={id} taskStatus={task.status} embedded />
+              <ActivityTimeline taskId={id} />
             </div>
           </CollapsibleSection>
-        )}
-
-        {/* Properties */}
-        <CollapsibleSection title="Properties">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
-            <Field label="Workspace" value={task.workspace} />
-            <Field label="Type" value={getTaskTypeLabel(task.type)} />
-            <Field label="Status" value={task.status} />
-            <Field label="Priority" value={task.priority} />
-            <Field label="Approval Level" value={task.approval_level} />
-            <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(6)}` : undefined} />
-            <Field label="Created At" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
-            <Field label="Updated At" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
-            <Field label="Created By" value={task.created_by} mono />
-            <Field label="Claimed By" value={task.claimed_by} mono />
-            <Field label="Attempt" value={task.max_retries ? `${task.attempt ?? 0}/${task.max_retries}` : undefined} />
-            <Field label="Reviews" value={task.review_count || undefined} />
-          </div>
-        </CollapsibleSection>
-
-        {/* Instruction (if not shown as primary) */}
-        {task.status !== "pending" && task.instruction && (
-          <CollapsibleSection title="Instruction">
-            <div className="prose max-w-none pt-2">
-              <Markdown>{task.instruction}</Markdown>
-            </div>
-          </CollapsibleSection>
-        )}
+        </div>
       </div>
 
       {/* Approve/Start dialog */}
@@ -551,7 +552,7 @@ export function TaskDetail() {
                   setRejectNote("")
                 }}
                 disabled={reject.isPending}
-                className="bg-[#eb5757] hover:bg-red-500 text-white"
+                className="bg-[#eb5757] hover:bg-[#eb5757]/50 text-white"
               >
                 {reject.isPending && (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -595,7 +596,7 @@ export function TaskDetail() {
                   setReviseNote("")
                 }}
                 disabled={revise.isPending || !reviseNote.trim()}
-                className="bg-[#2383e2] hover:bg-blue-500 text-white"
+                className="bg-[#2383e2] hover:bg-[#1a73cc] text-white"
               >
                 {revise.isPending && (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />

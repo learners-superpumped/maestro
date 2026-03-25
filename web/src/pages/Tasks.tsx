@@ -114,9 +114,10 @@ export function Tasks() {
           <p className="text-[14px] text-[#787774] mt-1">
             {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
             {tasks.length > 0 && (() => {
-              const done = tasks.filter((t: any) => t.status === "completed").length
-              const failed = tasks.filter((t: any) => t.status === "failed").length
-              const running = tasks.filter((t: any) => t.status === "running").length
+              const es = (t: any) => t.effective_status ?? t.status
+              const done = tasks.filter((t: any) => es(t) === "completed").length
+              const failed = tasks.filter((t: any) => es(t) === "failed").length
+              const running = tasks.filter((t: any) => es(t) === "running").length
               const parts = []
               if (running > 0) parts.push(`${running} running`)
               if (done > 0) parts.push(`${done} done`)

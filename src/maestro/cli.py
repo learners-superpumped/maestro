@@ -386,10 +386,20 @@ def task_list(filter_status, filter_workspace, flat, limit):
             total_roots = len(roots)
             display_roots = roots[:limit]
 
+            def _effective_status(task):
+                """부모가 completed이지만 자식 중 활성 태스크가 있으면 running으로 표시."""
+                if task.status.value == "completed":
+                    kids = children_map.get(task.id, [])
+                    terminal = {"completed", "failed", "cancelled"}
+                    if any(c.status.value not in terminal for c in kids):
+                        return "running"
+                return task.status.value
+
             def _print_tree(task, indent=""):
-                emoji = _STATUS_EMOJI.get(task.status.value, " ")
+                display_status = _effective_status(task)
+                emoji = _STATUS_EMOJI.get(display_status, " ")
                 click.echo(
-                    f"{indent}{emoji} {task.id:<10} {task.status.value:<14}"
+                    f"{indent}{emoji} {task.id:<10} {display_status:<14}"
                     f" {task.priority:>3} {task.workspace:<20} {task.title}"
                 )
                 for child in children_map.get(task.id, []):

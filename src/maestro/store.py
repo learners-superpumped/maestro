@@ -333,6 +333,16 @@ class Store:
             return None
         return _row_to_task(row)
 
+    async def count_active_children(self, task_id: str) -> int:
+        """Return the number of children that are not in a terminal state."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM tasks WHERE parent_task_id = ? AND status NOT IN ('completed', 'failed', 'cancelled')",
+                (task_id,),
+            )
+            row = await cursor.fetchone()
+        return row[0] if row else 0
+
     async def update_task_status(
         self,
         task_id: str,
@@ -431,7 +441,8 @@ class Store:
             sql = f"""
                 SELECT t.*,
                     (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id) as children_total,
-                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.status = 'completed') as children_completed
+                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.status = 'completed') as children_completed,
+                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.status NOT IN ('completed', 'failed', 'cancelled')) as children_active
                 FROM tasks t {where}
                 ORDER BY t.created_at DESC
             """
@@ -450,10 +461,19 @@ class Store:
             results: list[dict] = []
             for r in rows:
                 d: dict[str, Any] = dict(r)
+                children_total = d.pop("children_total", 0)
+                children_completed = d.pop("children_completed", 0)
+                children_active = d.pop("children_active", 0)
                 d["children_summary"] = {
-                    "total": d.pop("children_total", 0),
-                    "completed": d.pop("children_completed", 0),
+                    "total": children_total,
+                    "completed": children_completed,
                 }
+                # 부모가 완료 상태이지만 자식 중 활성 태스크가 있으면
+                # effective_status를 running으로 표시
+                if d.get("status") == "completed" and children_active > 0:
+                    d["effective_status"] = "running"
+                else:
+                    d["effective_status"] = d.get("status")
                 results.append(d)
             return results
 

@@ -194,12 +194,12 @@ export function Workspaces() {
                       </TableCell>
                       <TableCell>
                         {hasWarnings ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] bg-[#f7f6f3] text-[#cb912f] border border-[#e8e5df] rounded px-1.5 py-0.5">
+                          <span className="inline-flex items-center gap-1 text-[12px] bg-[#f7f6f3] text-[#cb912f] border border-[#e8e5df] rounded px-1.5 py-0.5">
                             <AlertTriangle className="h-3 w-3" />
                             warnings
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] bg-[#f7f6f3] text-[#4dab9a] border border-[#e8e5df] rounded px-1.5 py-0.5">
+                          <span className="inline-flex items-center gap-1 text-[12px] bg-[#f7f6f3] text-[#4dab9a] border border-[#e8e5df] rounded px-1.5 py-0.5">
                             <CheckCircle2 className="h-3 w-3" />
                             valid
                           </span>
