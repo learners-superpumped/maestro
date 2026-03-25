@@ -414,7 +414,7 @@ export function TaskDetail() {
               <Field label="Type" value={getTaskTypeLabel(task.type)} />
               <Field label="Approval" value={task.approval_level === 0 ? "Auto" : task.approval_level === 1 ? "Notify" : "Required"} />
               <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} />
-              <Field label="Attempt" value={task.max_retries ? `${task.attempt ?? 0}/${task.max_retries}` : undefined} />
+              <Field label="Attempt" value={task.max_retries ? `${(task.attempt ?? 0) + 1}/${task.max_retries}` : undefined} />
               <Field label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
               <Field label="Updated" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
               {task.claimed_by && <Field label="Claimed By" value={task.claimed_by} mono />}

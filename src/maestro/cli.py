@@ -465,7 +465,7 @@ def task_get(task_id: str, full: bool) -> None:
         click.echo(f"Status:         {_status_str(t.status.value)}")
         click.echo(f"Priority:       {t.priority}")
         click.echo(f"Approval Level: {t.approval_level}")
-        click.echo(f"Attempt:        {t.attempt}/{t.max_retries}")
+        click.echo(f"Attempt:        {t.attempt + 1}/{t.max_retries}")
         click.echo(f"Budget:         ${t.budget_usd:.2f}")
         click.echo(f"Cost:           ${t.cost_usd:.2f}")
         click.echo(f"Created:        {t.created_at}")
