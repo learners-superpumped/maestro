@@ -190,7 +190,7 @@ export function Goals() {
               <PropRow label="Check every">
                 <Select value={frequency} onValueChange={(v) => setFrequency(v ?? "24")}>
                   <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] px-1.5 rounded hover:bg-[#f7f6f3] focus:ring-0">
-                    <SelectValue />
+                    <SelectValue>{FREQUENCY_OPTIONS.find((o) => o.value === frequency)?.label ?? "Daily"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent className="bg-white border-[#e8e5df]">
                     {FREQUENCY_OPTIONS.map((o) => (
