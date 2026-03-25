@@ -704,6 +704,77 @@ async def schedule_disable_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Goal CRUD
+# ---------------------------------------------------------------------------
+
+
+async def goals_list_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/goals — list all goals."""
+    store: Store = request.app["store"]
+    goals = await store.list_goals()
+    return web.json_response(
+        {"goals": goals, "count": len(goals)},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def goal_get_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/goal/{id} — get a goal with state."""
+    store: Store = request.app["store"]
+    goal_id = request.match_info["id"]
+    goal = await store.get_goal(goal_id)
+    if goal is None:
+        raise web.HTTPNotFound(reason=f"Goal not found: {goal_id}")
+    return web.json_response(goal, dumps=lambda obj: json.dumps(obj, default=str))
+
+
+async def goal_create_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/goal — create a new goal."""
+    store: Store = request.app["store"]
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+    for field in ("id", "workspace"):
+        if not body.get(field):
+            raise web.HTTPBadRequest(reason=f"'{field}' is required")
+    await store.create_goal(
+        id=body["id"],
+        workspace=body["workspace"],
+        description=body.get("description", ""),
+        metrics=json.dumps(body["metrics"])
+        if isinstance(body.get("metrics"), dict)
+        else body.get("metrics", "{}"),
+        cooldown_hours=body.get("cooldown_hours", 24),
+    )
+    return web.json_response({"ok": True})
+
+
+async def goal_delete_handler(request: web.Request) -> web.Response:
+    """DELETE /api/internal/goal/{id} — delete a goal."""
+    store: Store = request.app["store"]
+    goal_id = request.match_info["id"]
+    await store.delete_goal(goal_id)
+    return web.json_response({"ok": True})
+
+
+async def goal_enable_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/goal/{id}/enable — enable a goal."""
+    store: Store = request.app["store"]
+    goal_id = request.match_info["id"]
+    await store.update_goal(goal_id, enabled=True)
+    return web.json_response({"ok": True})
+
+
+async def goal_disable_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/goal/{id}/disable — disable a goal."""
+    store: Store = request.app["store"]
+    goal_id = request.match_info["id"]
+    await store.update_goal(goal_id, enabled=False)
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # Rule CRUD
 # ---------------------------------------------------------------------------
 
@@ -1004,6 +1075,14 @@ def create_api_app(
     app.router.add_post(
         "/api/internal/schedule/{name}/disable", schedule_disable_handler
     )
+
+    # Goals
+    app.router.add_get("/api/internal/goals", goals_list_handler)
+    app.router.add_post("/api/internal/goal", goal_create_handler)
+    app.router.add_get("/api/internal/goal/{id}", goal_get_handler)
+    app.router.add_delete("/api/internal/goal/{id}", goal_delete_handler)
+    app.router.add_post("/api/internal/goal/{id}/enable", goal_enable_handler)
+    app.router.add_post("/api/internal/goal/{id}/disable", goal_disable_handler)
 
     # Rules
     app.router.add_get("/api/internal/rules", rules_list_handler)
