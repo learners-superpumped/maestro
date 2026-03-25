@@ -1,12 +1,14 @@
 import { TaskBoardCard } from "@/components/TaskBoardCard"
 
-const COLUMNS = [
-  { key: "pending", label: "Pending" },
-  { key: "running", label: "Running" },
-  { key: "paused", label: "Paused" },
-  { key: "completed", label: "Completed" },
-  { key: "failed", label: "Failed" },
-]
+const COLUMN_ORDER = ["pending", "running", "paused", "completed", "failed"]
+
+const COLUMN_LABELS: Record<string, string> = {
+  pending: "Pending",
+  running: "Running",
+  paused: "Paused",
+  completed: "Completed",
+  failed: "Failed",
+}
 
 interface TaskBoardProps {
   tasks: any[]
@@ -14,35 +16,33 @@ interface TaskBoardProps {
 
 export function TaskBoard({ tasks }: TaskBoardProps) {
   const grouped: Record<string, any[]> = {}
-  for (const col of COLUMNS) grouped[col.key] = []
+  for (const col of COLUMN_ORDER) grouped[col] = []
   for (const task of tasks) {
     const s = task.effective_status ?? task.status
     if (grouped[s]) grouped[s].push(task)
-    else grouped["pending"]?.push(task)
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-      {COLUMNS.map((col) => {
-        const count = grouped[col.key].length
-        return (
-          <div key={col.key} className="min-w-0">
-            <div className="flex items-center gap-1.5 mb-3 h-[28px]">
-              <h3 className="text-[13px] font-medium text-[#37352f]">
-                {col.label}
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {COLUMN_ORDER.map((status) => (
+        <div key={status} className="flex-shrink-0 w-[260px]">
+          <div className="border-t border-[#e8e5df] pt-3">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97]">
+                {COLUMN_LABELS[status]}
               </h3>
-              {count > 0 && (
-                <span className="text-[12px] text-[#9b9a97]">{count}</span>
+              {grouped[status].length > 0 && (
+                <span className="text-[12px] text-[#9b9a97]">{grouped[status].length}</span>
               )}
             </div>
             <div className="space-y-2">
-              {grouped[col.key].map((task: any) => (
+              {grouped[status].map((task: any) => (
                 <TaskBoardCard key={task.id} task={task} />
               ))}
             </div>
           </div>
-        )
-      })}
+        </div>
+      ))}
     </div>
   )
 }
