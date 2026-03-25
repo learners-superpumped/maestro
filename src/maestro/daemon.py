@@ -365,6 +365,30 @@ class Daemon:
                 )
                 continue
 
+            # Inject dependency results into instruction
+            if task.depends_on:
+                try:
+                    dep_ids = json.loads(task.depends_on)
+                except (json.JSONDecodeError, TypeError):
+                    dep_ids = []
+                if dep_ids:
+                    context_parts = []
+                    for dep_id in dep_ids:
+                        dep_task = await self._store.get_task(dep_id)
+                        if dep_task and dep_task.result_json:
+                            result_str = (
+                                json.dumps(dep_task.result_json, ensure_ascii=False)
+                                if not isinstance(dep_task.result_json, str)
+                                else dep_task.result_json
+                            )
+                            context_parts.append(f"### {dep_task.title}\n{result_str}")
+                    if context_parts:
+                        context = "\n\n".join(context_parts)
+                        task.instruction = (
+                            f"## 이전 단계 결과\n\n{context}\n\n"
+                            f"## 지시\n\n{task.instruction}"
+                        )
+
             # Transition to CLAIMED
             await self._store.update_task_status(task.id, TaskStatus.CLAIMED)
             task.status = TaskStatus.CLAIMED
@@ -601,6 +625,19 @@ class Daemon:
                     new_attempt,
                     result.error,
                 )
+                await self._cascade_cancel(task.id)
+
+    async def _cascade_cancel(self, task_id: str) -> None:
+        """Cancel all tasks that depend on the given task (recursively)."""
+        dependents = await self._store.list_dependents(task_id)
+        for t in dependents:
+            await self._store.update_task_status(
+                t.id,
+                TaskStatus.CANCELLED,
+                error=f"Dependency {task_id} failed",
+            )
+            logger.info("Cascade-cancelled task %s (dep %s failed)", t.id, task_id)
+            await self._cascade_cancel(t.id)
 
     # ------------------------------------------------------------------
     # Scheduler

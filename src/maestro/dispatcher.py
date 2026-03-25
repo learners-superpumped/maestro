@@ -239,6 +239,22 @@ class Dispatcher:
                 if elapsed_ms < backoff_ms:
                     continue  # still in backoff period
 
+            # -- Dependency check --
+            if task.depends_on:
+                try:
+                    dep_ids = json.loads(task.depends_on)
+                except (json.JSONDecodeError, TypeError):
+                    dep_ids = []
+                if dep_ids:
+                    deps_met = True
+                    for dep_id in dep_ids:
+                        dep_task = await self._store.get_task(dep_id)
+                        if dep_task is None or dep_task.status.value != "completed":
+                            deps_met = False
+                            break
+                    if not deps_met:
+                        continue  # Dependencies not yet satisfied
+
             # -- Global slot check --
             if total_running + dispatched_count >= self._concurrency.max_total_agents:
                 break  # No more global slots; no point continuing
