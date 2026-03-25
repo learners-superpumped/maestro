@@ -1,0 +1,60 @@
+# maestro.yaml.example
+# Copy this file to maestro.yaml and customise for your deployment.
+# String values may reference environment variables with $VAR_NAME syntax.
+
+project:
+  name: "clawops-maestro"
+  store_path: ./store/maestro.db
+
+daemon:
+  # How often the planner wakes to evaluate goals and generate tasks (ms).
+  planner_interval_ms: 300000
+  # How often the dispatcher wakes to pick up pending tasks and launch agents (ms).
+  dispatcher_interval_ms: 10000
+  # How often the reconciler checks for stuck/stalled agents (ms).
+  reconcile_interval_ms: 30000
+
+concurrency:
+  # Total number of agents that may run at the same time across all workspaces.
+  max_total_agents: 5
+  # Maximum concurrent agents per individual workspace.
+  max_per_workspace: 1
+
+resources:
+  # Named resource pools consumed by agents.
+  # Each sub-key is a pool name; values configure the pool.
+  chrome-profiles:
+    threads:
+      max_concurrent: 1
+      path: ./chrome-profiles/threads
+
+budget:
+  # Hard spending ceiling across all agents in a 24-hour rolling window (USD).
+  daily_limit_usd: 30.0
+  # Per-task spending limit. Tasks that exceed this are aborted (USD).
+  per_task_limit_usd: 5.0
+  # Send an alert when daily spend reaches this percentage of daily_limit_usd.
+  alert_threshold_pct: 80
+
+# Goals, schedules and auto-extract rules are managed via CLI/DB:
+#   maestro schedule add --name daily-post --cron "0 9 * * *" ...
+#   maestro extract-rule add --workspace sns-threads --task-type create_post ...
+
+agent:
+  # Tools agents are permitted to call by default.
+  default_allowed_tools:
+    - Read
+    - Write
+    - Bash
+  # Maximum agent turns before the task is forcefully stopped.
+  default_max_turns: 20
+  # If an agent produces no output for this many ms, it is considered stalled.
+  stall_timeout_ms: 300000
+  # Hard wall-clock time limit for a single agent turn (ms).
+  turn_timeout_ms: 3600000
+
+logging:
+  # Log level: debug | info | warning | error
+  level: info
+  # Path to the log file (relative paths are resolved from the config file's directory).
+  file: ./logs/maestro.log

@@ -117,7 +117,7 @@ export function Goals() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Select value={formWorkspace} onValueChange={setFormWorkspace}>
+                  <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v ?? "")}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
                       <SelectValue placeholder="Select workspace" />
                     </SelectTrigger>
