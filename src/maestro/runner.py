@@ -198,9 +198,19 @@ class AgentRunner:
 
                     elif event_type == "assistant":
                         # Capture last assistant text as fallback
-                        msg = event.get("message", "")
-                        if isinstance(msg, str) and msg.strip():
-                            last_assistant_text = msg
+                        # Structure: {"message": {"content": [{"type": "text", "text": "..."}]}}
+                        msg = event.get("message", {})
+                        if isinstance(msg, dict):
+                            parts = msg.get("content", [])
+                            text_parts = [
+                                p["text"]
+                                for p in parts
+                                if isinstance(p, dict)
+                                and p.get("type") == "text"
+                                and p.get("text")
+                            ]
+                            if text_parts:
+                                last_assistant_text = "\n".join(text_parts)
 
                     elif event_type == "result":
                         cost_usd = float(event.get("total_cost_usd", 0.0))
