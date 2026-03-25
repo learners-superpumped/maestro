@@ -56,14 +56,14 @@ function toSlug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 }
 
-function parseMetrics(raw: string): { key: string; value: string }[] {
+function parseTargets(raw: string): string[] {
   try {
     const obj = typeof raw === "string" ? JSON.parse(raw) : raw
     if (typeof obj === "object" && obj !== null) {
-      return Object.entries(obj).map(([key, value]) => ({
-        key,
-        value: String(value),
-      }))
+      // New format: { targets: ["..."] }
+      if (Array.isArray(obj.targets)) return obj.targets
+      // Legacy format: { key: value, ... } → "key: value"
+      return Object.entries(obj).map(([k, v]) => `${k}: ${v}`)
     }
   } catch { /* ignore */ }
   return []
@@ -98,7 +98,7 @@ export function Goals() {
   const [workspace, setWorkspace] = useState("")
   const [freqAmount, setFreqAmount] = useState(1)
   const [freqUnit, setFreqUnit] = useState("days")
-  const [targets, setTargets] = useState<{ key: string; value: string }[]>([])
+  const [targets, setTargets] = useState<string[]>([])
 
   const { data, isLoading } = useGoals()
   const createGoal = useCreateGoal()
@@ -120,15 +120,12 @@ export function Goals() {
   const cooldownHours = freqAmount * (UNIT_OPTIONS.find((u) => u.value === freqUnit)?.multiplier ?? 24)
 
   const handleCreate = async () => {
-    const metrics: Record<string, string> = {}
-    for (const t of targets) {
-      if (t.key.trim()) metrics[t.key.trim()] = t.value.trim()
-    }
+    const filteredTargets = targets.filter((t) => t.trim())
     await createGoal.mutateAsync({
       id: toSlug(name),
       workspace,
       description: name,
-      metrics,
+      metrics: { targets: filteredTargets },
       cooldown_hours: cooldownHours,
     })
     reset()
@@ -219,49 +216,41 @@ export function Goals() {
                 <span className="text-[13px] text-[#9b9a97]">Targets</span>
                 <button
                   type="button"
-                  onClick={() => setTargets([...targets, { key: "", value: "" }])}
+                  onClick={() => setTargets([...targets, ""])}
                   className="text-[12px] text-[#2383e2] hover:underline"
                 >
-                  + Add target
+                  + Add
                 </button>
               </div>
 
               {targets.length === 0 ? (
-                <p className="text-[12px] text-[#9b9a97] leading-relaxed">
-                  Targets tell the planner what to aim for. For example:<br />
-                  <span className="text-[#787774]">Posts per week</span>
-                  <span className="text-[#9b9a97]"> = </span>
-                  <span className="text-[#787774]">3</span>
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setTargets([""])}
+                  className="w-full text-left text-[12px] text-[#9b9a97] bg-[#f7f6f3] rounded px-3 py-2 hover:bg-[#ebebea] transition-colors"
+                >
+                  What should the planner aim for? e.g.<br />
+                  <span className="text-[#787774]">"Google search ranking top 3"</span>
+                </button>
               ) : (
                 <div className="space-y-1.5">
                   {targets.map((t, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <Input
-                        value={t.key}
+                        value={t}
                         onChange={(e) => {
                           const next = [...targets]
-                          next[i] = { ...next[i], key: e.target.value }
+                          next[i] = e.target.value
                           setTargets(next)
                         }}
                         className="border-[#e8e5df] text-[13px] text-[#37352f] rounded h-[30px] flex-1"
-                        placeholder="Posts per week"
-                      />
-                      <span className="text-[12px] text-[#9b9a97]">=</span>
-                      <Input
-                        value={t.value}
-                        onChange={(e) => {
-                          const next = [...targets]
-                          next[i] = { ...next[i], value: e.target.value }
-                          setTargets(next)
-                        }}
-                        className="border-[#e8e5df] text-[13px] text-[#37352f] rounded h-[30px] w-[80px]"
-                        placeholder="3"
+                        placeholder={i === 0 ? "e.g. Weekly posts 3 or more" : "Add another target..."}
+                        autoFocus={!t}
                       />
                       <button
                         type="button"
                         onClick={() => setTargets(targets.filter((_, j) => j !== i))}
-                        className="text-[#9b9a97] hover:text-[#eb5757] p-0.5"
+                        className="text-[#9b9a97] hover:text-[#eb5757] p-0.5 shrink-0"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -320,7 +309,7 @@ export function Goals() {
                   </TableRow>
                 ))
               : goals.map((g: any) => {
-                  const metrics = parseMetrics(g.metrics)
+                  const goalTargets = parseTargets(g.metrics)
                   return (
                     <TableRow key={g.id} className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]">
                       <TableCell className="text-[14px]">
@@ -338,13 +327,11 @@ export function Goals() {
                       </TableCell>
                       <TableCell className="text-[13px] text-[#787774]">{g.workspace}</TableCell>
                       <TableCell>
-                        {metrics.length > 0 ? (
+                        {goalTargets.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {metrics.map((m) => (
-                              <span key={m.key} className="inline-flex items-center text-[12px] bg-[#f7f6f3] text-[#787774] border border-[#e8e5df] rounded px-1.5 py-0.5">
-                                {m.key}
-                                <span className="mx-0.5 text-[#9b9a97]">=</span>
-                                <span className="text-[#37352f]">{m.value}</span>
+                            {goalTargets.map((t, i) => (
+                              <span key={i} className="text-[12px] bg-[#f7f6f3] text-[#787774] border border-[#e8e5df] rounded px-1.5 py-0.5">
+                                {t}
                               </span>
                             ))}
                           </div>
