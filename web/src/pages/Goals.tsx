@@ -98,13 +98,16 @@ function formatMetrics(raw: string): { key: string; value: string }[] {
   return []
 }
 
+function toSlug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+}
+
 export function Goals() {
   const [open, setOpen] = useState(false)
-  const [formId, setFormId] = useState("")
+  const [formName, setFormName] = useState("")
   const [formWorkspace, setFormWorkspace] = useState("")
-  const [formDescription, setFormDescription] = useState("")
   const [formMetrics, setFormMetrics] = useState<{ key: string; value: string }[]>([])
-  const [formCooldown, setFormCooldown] = useState("24")
+  const [formFrequency, setFormFrequency] = useState("24")
 
   const { data, isLoading } = useGoals()
   const createGoal = useCreateGoal()
@@ -117,11 +120,10 @@ export function Goals() {
   const goals: any[] = data?.goals ?? []
 
   const resetForm = () => {
-    setFormId("")
+    setFormName("")
     setFormWorkspace("")
-    setFormDescription("")
     setFormMetrics([])
-    setFormCooldown("24")
+    setFormFrequency("24")
   }
 
   const handleCreate = async () => {
@@ -129,12 +131,13 @@ export function Goals() {
     for (const m of formMetrics) {
       if (m.key.trim()) metrics[m.key.trim()] = m.value.trim()
     }
+    const id = toSlug(formName)
     await createGoal.mutateAsync({
-      id: formId,
+      id,
       workspace: formWorkspace,
-      description: formDescription,
+      description: formName,
       metrics,
-      cooldown_hours: Number(formCooldown) || 24,
+      cooldown_hours: Number(formFrequency) || 24,
     })
     resetForm()
     setOpen(false)
@@ -161,40 +164,46 @@ export function Goals() {
           />
           <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Add Goal</DialogTitle>
+              <DialogTitle className="text-[16px] font-semibold text-[#37352f]">New Goal</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
-              {/* Workspace */}
+              {/* Goal name — primary input */}
               <div className="space-y-1">
-                <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v ?? "")}>
-                  <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
-                    <SelectValue placeholder="Select workspace" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-[#e8e5df]">
-                    {workspaces.map((ws: any) => (
-                      <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                        {ws.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-[12px] text-[#9b9a97]">Goal *</Label>
+                <Input
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
+                  placeholder="Threads brand presence"
+                  autoFocus
+                />
+                {formName && (
+                  <p className="text-[12px] text-[#9b9a97]">
+                    ID: <span className="font-mono text-[#787774]">{toSlug(formName)}</span>
+                  </p>
+                )}
               </div>
 
-              {/* ID + Description */}
+              {/* Workspace + Frequency */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">ID *</Label>
-                  <Input
-                    value={formId}
-                    onChange={(e) => setFormId(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, "-"))}
-                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                    placeholder="threads-presence"
-                  />
+                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
+                  <Select value={formWorkspace} onValueChange={(v) => setFormWorkspace(v ?? "")}>
+                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-[#e8e5df]">
+                      {workspaces.map((ws: any) => (
+                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                          {ws.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Cooldown</Label>
-                  <Select value={formCooldown} onValueChange={(v) => setFormCooldown(v ?? "24")}>
+                  <Label className="text-[12px] text-[#9b9a97]">Evaluate every</Label>
+                  <Select value={formFrequency} onValueChange={(v) => setFormFrequency(v ?? "24")}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
                       <SelectValue />
                     </SelectTrigger>
@@ -206,25 +215,13 @@ export function Goals() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-[#9b9a97]">Min interval between evaluations</p>
                 </div>
-              </div>
-
-              {/* Description */}
-              <div className="space-y-1">
-                <Label className="text-[12px] text-[#9b9a97]">Description</Label>
-                <Input
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                  placeholder="What should this goal achieve?"
-                />
               </div>
 
               {/* Metrics — key-value pairs */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-[12px] text-[#9b9a97]">Metrics</Label>
+                  <Label className="text-[12px] text-[#9b9a97]">Targets</Label>
                   <Button
                     type="button"
                     variant="ghost"
@@ -232,41 +229,35 @@ export function Goals() {
                     className="h-6 text-[12px] text-[#2383e2] hover:bg-[#2383e2]/5 px-2"
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    Add metric
+                    Add
                   </Button>
                 </div>
-                {formMetrics.length === 0 && (
+                {formMetrics.length === 0 ? (
                   <p className="text-[12px] text-[#9b9a97] bg-[#f7f6f3] rounded px-3 py-2">
-                    No metrics yet. Metrics help the planner understand your targets.
+                    Optional. Help the planner understand what to aim for.
                   </p>
+                ) : (
+                  <div className="space-y-2">
+                    {formMetrics.map((m, i) => (
+                      <MetricRow
+                        key={i}
+                        label={m.key}
+                        value={m.value}
+                        onChangeLabel={(v) => {
+                          const next = [...formMetrics]
+                          next[i] = { ...next[i], key: v }
+                          setFormMetrics(next)
+                        }}
+                        onChangeValue={(v) => {
+                          const next = [...formMetrics]
+                          next[i] = { ...next[i], value: v }
+                          setFormMetrics(next)
+                        }}
+                        onRemove={() => setFormMetrics(formMetrics.filter((_, j) => j !== i))}
+                      />
+                    ))}
+                  </div>
                 )}
-                <div className="space-y-2">
-                  {formMetrics.length > 0 && (
-                    <div className="flex items-center gap-2 px-0.5">
-                      <span className="text-[11px] text-[#9b9a97] flex-1">Key</span>
-                      <span className="text-[11px] text-[#9b9a97] flex-1">Value</span>
-                      <span className="w-7" />
-                    </div>
-                  )}
-                  {formMetrics.map((m, i) => (
-                    <MetricRow
-                      key={i}
-                      label={m.key}
-                      value={m.value}
-                      onChangeLabel={(v) => {
-                        const next = [...formMetrics]
-                        next[i] = { ...next[i], key: v }
-                        setFormMetrics(next)
-                      }}
-                      onChangeValue={(v) => {
-                        const next = [...formMetrics]
-                        next[i] = { ...next[i], value: v }
-                        setFormMetrics(next)
-                      }}
-                      onRemove={() => setFormMetrics(formMetrics.filter((_, j) => j !== i))}
-                    />
-                  ))}
-                </div>
               </div>
 
               {/* Actions */}
@@ -281,7 +272,7 @@ export function Goals() {
                 </Button>
                 <Button
                   onClick={handleCreate}
-                  disabled={createGoal.isPending || !formId || !formWorkspace}
+                  disabled={createGoal.isPending || !formName.trim() || !formWorkspace}
                   className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
                 >
                   {createGoal.isPending && (
