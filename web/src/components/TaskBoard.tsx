@@ -22,11 +22,11 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
       {COLUMNS.map((col) => {
         const count = grouped[col.key].length
         return (
-          <div key={col.key} className="flex-shrink-0 w-[240px]">
+          <div key={col.key} className="min-w-0">
             <div className="flex items-center gap-1.5 mb-3 h-[28px]">
               <h3 className="text-[13px] font-medium text-[#37352f]">
                 {col.label}
@@ -35,7 +35,7 @@ export function TaskBoard({ tasks }: TaskBoardProps) {
                 <span className="text-[12px] text-[#9b9a97]">{count}</span>
               )}
             </div>
-            <div className="space-y-2 min-h-[120px]">
+            <div className="space-y-2">
               {grouped[col.key].map((task: any) => (
                 <TaskBoardCard key={task.id} task={task} />
               ))}
