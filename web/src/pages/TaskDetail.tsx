@@ -415,18 +415,18 @@ export function TaskDetail() {
               <Field label="Approval" value={task.approval_level === 0 ? "Auto" : task.approval_level === 1 ? "Notify" : "Required"} />
               <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} />
               <Field label="Attempt" value={task.max_retries ? `${(task.attempt ?? 0) + 1}/${task.max_retries}` : undefined} />
-              {task.depends_on && task.depends_on.length > 0 && (
+              {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
                 <div className="col-span-2 mt-1">
                   <span className="text-[12px] text-[#9b9a97]">Blocked by</span>
                   <div className="space-y-1 mt-1">
-                    {task.depends_on.map((depId: string) => (
+                    {task.depends_on_tasks.map((dep: any) => (
                       <a
-                        key={depId}
-                        href={`/tasks/${depId}`}
-                        className="flex items-center gap-1.5 text-[13px] text-[#37352f] hover:bg-[#f7f6f3] rounded px-1.5 py-0.5 -mx-1.5 transition-colors"
+                        key={dep.id}
+                        href={`/tasks/${dep.id}`}
+                        className="flex items-center gap-2 text-[13px] hover:bg-[#f7f6f3] rounded px-1.5 py-1 -mx-1.5 transition-colors"
                       >
-                        <span className="text-[12px] text-[#9b9a97] font-mono">{depId.slice(0, 8)}</span>
-                        <span className="text-[#2383e2]">→</span>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dep.status === "completed" ? "bg-[#4dab9a]" : dep.status === "running" ? "bg-[#2383e2]" : "bg-[#9b9a97]"}`} />
+                        <span className="text-[#37352f] truncate">{dep.title}</span>
                       </a>
                     ))}
                   </div>

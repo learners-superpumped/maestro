@@ -55,8 +55,10 @@ function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
                   </button>
                 )}
                 <span className="text-[14px] text-[#787774] truncate">{child.title}</span>
-                        {child.depends_on && child.depends_on.length > 0 && (
-                          <span className="text-[12px] text-[#9b9a97] shrink-0">⏳ {child.depends_on.length}</span>
+                        {child.depends_on_tasks && child.depends_on_tasks.length > 0 && (
+                          <span className="text-[12px] text-[#cb912f] shrink-0" title={child.depends_on_tasks.map((d: any) => d.title).join(", ")}>
+                            ← {child.depends_on_tasks.length} step{child.depends_on_tasks.length > 1 ? "s" : ""}
+                          </span>
                         )}
               </div>
             </TableCell>
@@ -126,9 +128,9 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
                           </button>
                         )}
                         <span className="text-[14px] text-[#37352f] truncate max-w-xs">{task.title}</span>
-                        {task.depends_on && task.depends_on.length > 0 && (
-                          <span className="text-[12px] text-[#9b9a97] shrink-0" title={`Waiting for ${task.depends_on.length} task(s)`}>
-                            ⏳ {task.depends_on.length}
+                        {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
+                          <span className="text-[12px] text-[#cb912f] shrink-0" title={task.depends_on_tasks.map((d: any) => d.title).join(", ")}>
+                            ← {task.depends_on_tasks.length} step{task.depends_on_tasks.length > 1 ? "s" : ""}
                           </span>
                         )}
                       </div>

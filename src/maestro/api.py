@@ -51,6 +51,26 @@ async def health_handler(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+async def _resolve_deps(store: Store, depends_on: str | None) -> list[dict] | None:
+    """Resolve depends_on IDs to [{id, title, status}] for frontend display."""
+    if not depends_on:
+        return None
+    try:
+        dep_ids = json.loads(depends_on)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not dep_ids:
+        return None
+    result = []
+    for dep_id in dep_ids:
+        t = await store.get_task(dep_id)
+        if t:
+            result.append({"id": t.id, "title": t.title, "status": t.status.value})
+        else:
+            result.append({"id": dep_id, "title": dep_id, "status": "unknown"})
+    return result
+
+
 async def task_get_handler(request: web.Request) -> web.Response:
     """GET /api/internal/task/{task_id} — fetch task details."""
     store: Store = request.app["store"]
@@ -86,6 +106,7 @@ async def task_get_handler(request: web.Request) -> web.Response:
             "error": task.error,
             "session_id": task.session_id,
             "depends_on": json.loads(task.depends_on) if task.depends_on else None,
+            "depends_on_tasks": await _resolve_deps(store, task.depends_on),
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None,
         }
@@ -373,35 +394,49 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
 
     if root_only:
         # store returns dicts with children_summary when root_only=True
+        # Enrich depends_on for frontend
+        for t in tasks:
+            raw = t.get("depends_on")
+            if raw and isinstance(raw, str):
+                try:
+                    t["depends_on"] = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    t["depends_on"] = None
+            t["depends_on_tasks"] = await _resolve_deps(
+                store, raw if isinstance(raw, str) else None
+            )
         return web.json_response(
             {"tasks": tasks, "count": len(tasks)},
             dumps=lambda obj: json.dumps(obj, default=str),
         )
 
+    enriched = []
+    for t in tasks:
+        enriched.append(
+            {
+                "id": t.id,
+                "type": t.type,
+                "workspace": t.workspace,
+                "title": t.title,
+                "status": t.status.value,
+                "priority": t.priority,
+                "approval_level": t.approval_level,
+                "attempt": t.attempt,
+                "max_retries": t.max_retries,
+                "budget_usd": t.budget_usd,
+                "cost_usd": t.cost_usd,
+                "error": t.error,
+                "session_id": t.session_id,
+                "depends_on": json.loads(t.depends_on) if t.depends_on else None,
+                "depends_on_tasks": await _resolve_deps(store, t.depends_on),
+                "parent_task_id": t.parent_task_id,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+            }
+        )
     return web.json_response(
         {
-            "tasks": [
-                {
-                    "id": t.id,
-                    "type": t.type,
-                    "workspace": t.workspace,
-                    "title": t.title,
-                    "status": t.status.value,
-                    "priority": t.priority,
-                    "approval_level": t.approval_level,
-                    "attempt": t.attempt,
-                    "max_retries": t.max_retries,
-                    "budget_usd": t.budget_usd,
-                    "cost_usd": t.cost_usd,
-                    "error": t.error,
-                    "session_id": t.session_id,
-                    "depends_on": json.loads(t.depends_on) if t.depends_on else None,
-                    "parent_task_id": t.parent_task_id,
-                    "created_at": t.created_at.isoformat() if t.created_at else None,
-                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
-                }
-                for t in tasks
-            ],
+            "tasks": enriched,
             "count": len(tasks),
         },
         dumps=lambda obj: json.dumps(obj, default=str),

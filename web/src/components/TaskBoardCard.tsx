@@ -12,7 +12,7 @@ interface TaskCardProps {
     status: string
     cost_usd?: number
     children_summary?: { total: number; completed: number }
-    depends_on?: string[] | null
+    depends_on_tasks?: { id: string; title: string; status: string }[] | null
   }
 }
 
@@ -27,9 +27,9 @@ export function TaskBoardCard({ task }: TaskCardProps) {
       <div className="flex items-center gap-2 flex-wrap">
         <TaskTypeBadge type={task.type} />
         <span className="text-[12px] text-[#9b9a97]">{task.workspace}</span>
-        {task.depends_on && task.depends_on.length > 0 && (
-          <span className="text-[12px] text-[#cb912f]">
-            Waiting for {task.depends_on.length} step{task.depends_on.length > 1 ? "s" : ""}
+        {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
+          <span className="text-[12px] text-[#cb912f]" title={task.depends_on_tasks.map(d => d.title).join(", ")}>
+            ← {task.depends_on_tasks.length} step{task.depends_on_tasks.length > 1 ? "s" : ""}
           </span>
         )}
       </div>
