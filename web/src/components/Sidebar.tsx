@@ -6,6 +6,7 @@ import {
   Clock,
   GitBranch,
   FolderOpen,
+  Target,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -18,6 +19,7 @@ const navItems = [
   { icon: Package, label: "Assets", to: "/assets" },
   { icon: Clock, label: "Schedules", to: "/schedules" },
   { icon: GitBranch, label: "Rules", to: "/rules" },
+  { icon: Target, label: "Goals", to: "/goals" },
   { icon: FolderOpen, label: "Workspaces", to: "/workspaces" },
 ]
 

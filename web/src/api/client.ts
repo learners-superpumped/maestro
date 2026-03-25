@@ -100,6 +100,22 @@ export const api = {
       }),
   },
 
+  goals: {
+    list: () => request<any>("/api/internal/goals"),
+    get: (id: string) => request<any>(`/api/internal/goal/${id}`),
+    create: (data: any) =>
+      request<any>("/api/internal/goal", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<any>(`/api/internal/goal/${id}`, { method: "DELETE" }),
+    enable: (id: string) =>
+      request<any>(`/api/internal/goal/${id}/enable`, { method: "POST" }),
+    disable: (id: string) =>
+      request<any>(`/api/internal/goal/${id}/disable`, { method: "POST" }),
+  },
+
   rules: {
     list: (params?: { workspace?: string }) =>
       request<any>(`/api/internal/rules${buildQuery(params)}`),
