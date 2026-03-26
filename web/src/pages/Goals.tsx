@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { Plus, Trash2, Loader2, Target, X, Play } from "lucide-react"
-import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal, useTriggerGoal } from "@/hooks/queries/use-goals"
+import { Plus, Trash2, Loader2, Target, X, Play, Pencil } from "lucide-react"
+import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal, useTriggerGoal, useUpdateGoal } from "@/hooks/queries/use-goals"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -103,6 +103,44 @@ export function Goals() {
   const deleteGoal = useDeleteGoal()
   const toggleGoal = useToggleGoal()
   const triggerGoal = useTriggerGoal()
+  const updateGoal = useUpdateGoal()
+
+  const [editGoal, setEditGoal] = useState<any | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editFreqAmount, setEditFreqAmount] = useState(1)
+  const [editFreqUnit, setEditFreqUnit] = useState("days")
+  const [editTargets, setEditTargets] = useState<string[]>([])
+
+  const openEdit = (g: any) => {
+    setEditGoal(g)
+    setEditName(g.description || g.id)
+    const h = g.cooldown_hours
+    if (h >= 168 && h % 168 === 0) {
+      setEditFreqAmount(h / 168)
+      setEditFreqUnit("weeks")
+    } else if (h >= 24 && h % 24 === 0) {
+      setEditFreqAmount(h / 24)
+      setEditFreqUnit("days")
+    } else {
+      setEditFreqAmount(h)
+      setEditFreqUnit("hours")
+    }
+    setEditTargets(parseTargets(g.metrics))
+  }
+
+  const editCooldownHours = editFreqAmount * (UNIT_OPTIONS.find((u) => u.value === editFreqUnit)?.multiplier ?? 24)
+
+  const handleUpdate = async () => {
+    if (!editGoal) return
+    const filteredTargets = editTargets.filter((t) => t.trim())
+    await updateGoal.mutateAsync({
+      id: editGoal.id,
+      description: editName,
+      metrics: { targets: filteredTargets },
+      cooldown_hours: editCooldownHours,
+    })
+    setEditGoal(null)
+  }
 
   const goals: any[] = data?.goals ?? []
 
@@ -338,6 +376,15 @@ export function Goals() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            onClick={() => openEdit(g)}
+                            className="h-7 w-7 text-[#9b9a97] hover:text-[#2383e2] hover:bg-[#2383e2]/5"
+                            title="Edit"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             onClick={() => triggerGoal.mutate(g.id)}
                             disabled={triggerGoal.isPending || !g.enabled}
                             className="h-7 w-7 text-[#9b9a97] hover:text-[#2383e2] hover:bg-[#2383e2]/5"
@@ -370,6 +417,117 @@ export function Goals() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editGoal} onOpenChange={(v) => { if (!v) setEditGoal(null) }}>
+        <DialogContent className="bg-white border border-[#e8e5df] text-[#37352f] max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Edit Goal</DialogTitle>
+          </DialogHeader>
+
+          <div className="mt-3 space-y-1">
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="border-0 shadow-none text-[18px] font-medium text-[#37352f] px-0 h-auto py-1 placeholder:text-[#c4c3c0] focus-visible:ring-0"
+              placeholder="What do you want to achieve?"
+              autoFocus
+            />
+          </div>
+
+          <div className="mt-4 space-y-0 border-t border-[#e8e5df] pt-3">
+            <PropRow label="Check every">
+              <div className="flex items-center gap-0.5">
+                <Input
+                  type="number"
+                  min={1}
+                  value={editFreqAmount}
+                  onChange={(e) => setEditFreqAmount(Math.max(1, Number(e.target.value) || 1))}
+                  className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] w-[44px] rounded text-center px-0 hover:bg-[#f7f6f3] focus-visible:ring-0"
+                />
+                <Select value={editFreqUnit} onValueChange={(v) => setEditFreqUnit(v ?? "days")}>
+                  <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] w-[76px] rounded hover:bg-[#f7f6f3] focus:ring-0">
+                    <SelectValue>{UNIT_OPTIONS.find((u) => u.value === editFreqUnit)?.label ?? "days"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-[#e8e5df]">
+                    {UNIT_OPTIONS.map((u) => (
+                      <SelectItem key={u.value} value={u.value} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
+                        {u.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </PropRow>
+          </div>
+
+          <div className="mt-3 border-t border-[#e8e5df] pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[13px] text-[#9b9a97]">Targets</span>
+              <button
+                type="button"
+                onClick={() => setEditTargets([...editTargets, ""])}
+                className="text-[12px] text-[#2383e2] hover:underline"
+              >
+                + Add
+              </button>
+            </div>
+
+            {editTargets.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setEditTargets([""])}
+                className="w-full text-left text-[12px] text-[#9b9a97] bg-[#f7f6f3] rounded px-3 py-2 hover:bg-[#ebebea] transition-colors"
+              >
+                What should the planner aim for?
+              </button>
+            ) : (
+              <div className="space-y-1.5">
+                {editTargets.map((t, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <Input
+                      value={t}
+                      onChange={(e) => {
+                        const next = [...editTargets]
+                        next[i] = e.target.value
+                        setEditTargets(next)
+                      }}
+                      className="border-[#e8e5df] text-[13px] text-[#37352f] rounded h-[30px] flex-1"
+                      placeholder="Target..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditTargets(editTargets.filter((_, j) => j !== i))}
+                      className="text-[#9b9a97] hover:text-[#eb5757] p-0.5 shrink-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[#e8e5df]">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setEditGoal(null)}
+              className="h-[28px] text-[13px] text-[#787774] hover:bg-[#f7f6f3]"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              disabled={updateGoal.isPending || !editName.trim()}
+              className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
+            >
+              {updateGoal.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
