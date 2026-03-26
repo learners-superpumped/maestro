@@ -720,3 +720,33 @@ async def test_handle_result_no_cleanup_no_worktree_flag(
     # Should never check worktrees
     daemon._worktree_mgr.list_worktrees.assert_not_called()
     daemon._worktree_mgr.remove_worktree.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_result_json_not_overwritten_on_resume(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """resume 후 완료 시 기존 result_json이 보존되어야 함."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    task = _make_task(task_id="preserve-rj", approval_level=2)
+    await store.create_task(task)
+    await store.update_task_status(
+        "preserve-rj", TaskStatus.COMPLETED, result_json='{"original": "result"}'
+    )
+
+    task_with_result = await store.get_task("preserve-rj")
+
+    result = TaskResult(
+        task_id="preserve-rj",
+        success=True,
+        result_json='{"overwritten": "bad"}',
+    )
+    await daemon._handle_result(task_with_result, result)
+
+    final = await store.get_task("preserve-rj")
+    result_str = str(final.result_json)
+    assert "original" in result_str
+    assert "overwritten" not in result_str

@@ -219,6 +219,7 @@ class Daemon:
         if site._server and site._server.sockets:  # type: ignore[attr-defined]
             actual_port = site._server.sockets[0].getsockname()[1]  # type: ignore[attr-defined]
 
+        self._port = actual_port
         logger.info("Internal API listening on 127.0.0.1:%d", actual_port)
 
         # 3. Write PID and port files to .maestro/ (fixed location)
@@ -535,12 +536,18 @@ class Daemon:
             timeout_at=timeout_at.isoformat(),
         )
 
+        agent_env = {
+            "MAESTRO_DAEMON_PORT": str(self._port),
+            "MAESTRO_BASE_PATH": str(self._base_path),
+        }
+
         try:
             result = await self._runner.resume(
                 task,
                 task.session_id,
                 instruction,
                 cwd,
+                env=agent_env,
             )
         except Exception as exc:
             logger.exception("Runner raised resuming task %s: %s", task.id, exc)
@@ -611,6 +618,12 @@ class Daemon:
         else:
             effective_permission_mode = self._config.agent.permission_mode
 
+        # Pass daemon connection info as env vars for MCP servers
+        agent_env = {
+            "MAESTRO_DAEMON_PORT": str(self._port),
+            "MAESTRO_BASE_PATH": str(self._base_path),
+        }
+
         try:
             result = await self._runner.execute(
                 task,
@@ -624,6 +637,7 @@ class Daemon:
                 on_event=on_event,
                 system_prompt=system_prompt,
                 permission_mode=effective_permission_mode,
+                env=agent_env,
             )
         except Exception as exc:
             logger.exception("Runner raised for task %s: %s", task.id, exc)
@@ -652,7 +666,7 @@ class Daemon:
 
         if result.success:
             now = datetime.now(timezone.utc)
-            if result.result_json is not None:
+            if result.result_json is not None and not task.result_json:
                 extra_fields["result_json"] = result.result_json
             await self._store.update_task_status(
                 task.id,
