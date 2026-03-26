@@ -980,6 +980,7 @@ class Daemon:
                 title=f"Revision #{original_task.review_count + 1}: {original_task.title}",
                 instruction=(
                     f"이전 실행의 리뷰어 피드백:\n{feedback}\n\n"
+                    f"이전 실행 결과:\n{original_task.result_json}\n\n"
                     f"원본 지시: {original_task.instruction}\n\n"
                     f"위 피드백을 반영하여 수정하라."
                 ),

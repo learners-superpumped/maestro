@@ -750,3 +750,57 @@ async def test_result_json_not_overwritten_on_resume(
     result_str = str(final.result_json)
     assert "original" in result_str
     assert "overwritten" not in result_str
+
+
+@pytest.mark.asyncio
+async def test_revision_includes_original_result(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """revision 태스크 생성 시 원본 result_json이 instruction에 포함되어야 함."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    task = _make_task(task_id="rev-orig", approval_level=1)
+    await store.create_task(task)
+    await store.update_task_status(
+        "rev-orig", TaskStatus.COMPLETED, result_json='{"output": "original work"}'
+    )
+
+    import json
+
+    review_task = Task(
+        id="rev-review",
+        type="review",
+        agent="reviewer",
+        title="Review: Test",
+        instruction=json.dumps(
+            {
+                "original_task_id": "rev-orig",
+                "original_agent": "default",
+                "original_instruction": "Do something",
+                "result": '{"output": "original work"}',
+            }
+        ),
+        approval_level=0,
+        parent_task_id="rev-orig",
+    )
+    await store.create_task(review_task)
+
+    review_result = TaskResult(
+        task_id="rev-review",
+        success=True,
+        result_json=json.dumps(
+            {
+                "verdict": "revise",
+                "issues": ["fix import order"],
+                "summary": "needs fix",
+            }
+        ),
+    )
+    await daemon._handle_review_result(review_task, review_result)
+
+    all_tasks = await store.list_tasks()
+    revision_tasks = [t for t in all_tasks if "Revision" in t.title]
+    assert len(revision_tasks) == 1
+    assert "original work" in revision_tasks[0].instruction
