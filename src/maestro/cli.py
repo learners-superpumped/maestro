@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 import click
 
 from maestro.models import Task, TaskStatus
-from maestro.workspace import WorkspaceManager
 
 _STATUS_EMOJI = {
     "pending": "⏳",
@@ -28,6 +27,41 @@ _STATUS_EMOJI = {
     "failed": "❌",
     "cancelled": "🚫",
 }
+
+_MAESTRO_YAML_TEMPLATE = """\
+project:
+  name: "{project_name}"
+  store_path: .maestro/store/maestro.db
+
+agents:
+  planner:
+    role: "Goal을 분석하여 실행 가능한 task로 분해하는 플래너"
+    instructions: .maestro/prompts/planner.md
+    tools: [Read, Glob, Grep]
+    max_turns: 30
+    no_worktree: true
+  reviewer:
+    role: "Task 결과를 검증하는 리뷰어"
+    instructions: .maestro/prompts/reviewer.md
+    tools: [Read, Glob, Grep]
+    max_turns: 20
+    no_worktree: true
+  default:
+    tools: [Read, Write, Edit, Bash]
+    max_turns: 50
+
+concurrency:
+  max_total_agents: 2
+  max_per_goal: 1
+
+budget:
+  daily_limit_usd: 30.0
+  per_task_limit_usd: 5.0
+
+logging:
+  level: info
+  file: .maestro/logs/maestro.log
+"""
 
 
 def _status_str(status_value: str) -> str:
@@ -46,7 +80,7 @@ def _project_root() -> pathlib.Path:
 
 
 def _pid_file() -> pathlib.Path:
-    return _project_root() / "store" / "maestro.pid"
+    return _project_root() / ".maestro" / "store" / "maestro.pid"
 
 
 def _config_path() -> pathlib.Path:
@@ -82,7 +116,7 @@ def main() -> None:
 
 @main.command()
 def init() -> None:
-    """Initialize project (create maestro.yaml, dirs, init DB)."""
+    """Initialize project (create maestro.yaml, .maestro/ dirs, init DB)."""
     root = _project_root()
     config_file = root / "maestro.yaml"
     example_file = root / "maestro.yaml.example"
@@ -93,20 +127,22 @@ def init() -> None:
             shutil.copy2(example_file, config_file)
             click.echo(f"Created {config_file} (copied from example)")
         else:
-            # Write a minimal config
+            # Write template config
+            project_name = root.name
             config_file.write_text(
-                'project:\n  name: "my-project"\n  store_path: ./store/maestro.db\n',
+                _MAESTRO_YAML_TEMPLATE.format(project_name=project_name),
                 encoding="utf-8",
             )
             click.echo(f"Created {config_file} (minimal)")
     else:
         click.echo(f"{config_file} already exists, skipping")
 
-    # 2. Create directories
+    # 2. Create .maestro/ directories
     dirs = [
-        root / "store",
-        root / "workspaces" / "_base" / "knowledge",
-        root / "logs",
+        root / ".maestro" / "store",
+        root / ".maestro" / "logs",
+        root / ".maestro" / "worktrees",
+        root / ".maestro" / "prompts",
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
@@ -120,6 +156,50 @@ def init() -> None:
     store = Store(cfg.project.store_path)
     asyncio.run(store.init_db())
     click.echo(f"Database initialized: {cfg.project.store_path}")
+
+    # 4. Merge maestro MCP servers into .claude/mcp.json
+    claude_dir = root / ".claude"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    mcp_json_path = claude_dir / "mcp.json"
+    if mcp_json_path.exists():
+        try:
+            mcp_data = json.loads(mcp_json_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            mcp_data = {}
+    else:
+        mcp_data = {}
+
+    if "mcpServers" not in mcp_data:
+        mcp_data["mcpServers"] = {}
+    if "maestro" not in mcp_data["mcpServers"]:
+        mcp_data["mcpServers"]["maestro"] = {
+            "command": "maestro",
+            "args": ["mcp"],
+        }
+        mcp_json_path.write_text(
+            json.dumps(mcp_data, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        click.echo(f"MCP config merged: {mcp_json_path}")
+    else:
+        click.echo(f"MCP config already has maestro entry: {mcp_json_path}")
+
+    # 5. Add .maestro/ to .gitignore (if git repo)
+    is_git = (root / ".git").exists() or (root / ".git").is_file()
+    if is_git:
+        click.echo("Git repo detected.")
+        gitignore = root / ".gitignore"
+        marker = ".maestro/"
+        needs_add = True
+        if gitignore.exists():
+            content = gitignore.read_text(encoding="utf-8")
+            if marker in content:
+                needs_add = False
+        if needs_add:
+            with open(gitignore, "a", encoding="utf-8") as f:
+                f.write(f"\n# Maestro working directory\n{marker}\n")
+            click.echo(f"Added {marker} to .gitignore")
+
     click.echo("Maestro project initialized.")
 
 
@@ -243,7 +323,12 @@ def task() -> None:
 
 
 @task.command("create")
-@click.option("--workspace", required=True, help="Target workspace name")
+@click.option(
+    "--agent", default="default", help="Agent definition name (default: default)"
+)
+@click.option(
+    "--no-worktree", is_flag=True, help="Run at project root instead of a git worktree"
+)
 @click.option(
     "--type", "task_type", required=True, help="Task type (e.g. shell, claude)"
 )
@@ -256,7 +341,8 @@ def task() -> None:
     "--priority", default=3, type=int, help="Priority 1 (urgent) to 5 (low), default 3"
 )
 def task_create(
-    workspace: str,
+    agent: str,
+    no_worktree: bool,
     task_type: str,
     title: str,
     instruction: str,
@@ -279,7 +365,8 @@ def task_create(
     new_task = Task(
         id=task_id,
         type=task_type,
-        workspace=workspace,
+        agent=agent,
+        no_worktree=no_worktree,
         title=title,
         instruction=instruction,
         approval_level=approval_level,
@@ -294,9 +381,7 @@ def task_create(
 
 @task.command("list")
 @click.option("--status", "filter_status", default=None, help="Filter by status")
-@click.option(
-    "--workspace", "filter_workspace", default=None, help="Filter by workspace"
-)
+@click.option("--agent", "filter_agent", default=None, help="Filter by agent")
 @click.option("--flat", is_flag=True, help="Flat list without tree indentation")
 @click.option(
     "--limit",
@@ -306,7 +391,7 @@ def task_create(
     type=int,
     help="Max number of tasks to show (default: 20)",
 )
-def task_list(filter_status, filter_workspace, flat, limit):
+def task_list(filter_status, filter_agent, flat, limit):
     """List tasks."""
     config_file = _config_path()
     if not config_file.exists():
@@ -337,7 +422,7 @@ def task_list(filter_status, filter_workspace, flat, limit):
         if flat:
             # Flat mode: use SQL LIMIT for efficiency
             tasks = await store.list_tasks(
-                status=ts, workspace=filter_workspace, limit=limit + 1
+                status=ts, agent=filter_agent, limit=limit + 1
             )
 
             if not tasks:
@@ -351,7 +436,7 @@ def task_list(filter_status, filter_workspace, flat, limit):
                 emoji = _STATUS_EMOJI.get(t.status.value, " ")
                 click.echo(
                     f"{emoji} {t.id:<10} {t.status.value:<14}"
-                    f" {t.priority:>3} {t.workspace:<20} {t.title}"
+                    f" {t.priority:>3} {t.agent:<20} {t.title}"
                 )
 
             if has_more:
@@ -362,7 +447,7 @@ def task_list(filter_status, filter_workspace, flat, limit):
             return
 
         # Tree auto-detection: fetch all tasks
-        all_tasks = await store.list_tasks(status=ts, workspace=filter_workspace)
+        all_tasks = await store.list_tasks(status=ts, agent=filter_agent)
 
         if not all_tasks:
             click.echo("No tasks found.")
@@ -400,7 +485,7 @@ def task_list(filter_status, filter_workspace, flat, limit):
                 emoji = _STATUS_EMOJI.get(display_status, " ")
                 click.echo(
                     f"{indent}{emoji} {task.id:<10} {display_status:<14}"
-                    f" {task.priority:>3} {task.workspace:<20} {task.title}"
+                    f" {task.priority:>3} {task.agent:<20} {task.title}"
                 )
                 for child in children_map.get(task.id, []):
                     _print_tree(child, indent + "   ")
@@ -422,7 +507,7 @@ def task_list(filter_status, filter_workspace, flat, limit):
                 emoji = _STATUS_EMOJI.get(t.status.value, " ")
                 click.echo(
                     f"{emoji} {t.id:<10} {t.status.value:<14}"
-                    f" {t.priority:>3} {t.workspace:<20} {t.title}"
+                    f" {t.priority:>3} {t.agent:<20} {t.title}"
                 )
 
             if has_more:
@@ -459,7 +544,8 @@ def task_get(task_id: str, full: bool) -> None:
 
         click.echo(f"ID:             {t.id}")
         click.echo(f"Type:           {t.type}")
-        click.echo(f"Workspace:      {t.workspace}")
+        click.echo(f"Agent:          {t.agent}")
+        click.echo(f"No Worktree:    {t.no_worktree}")
         click.echo(f"Title:          {t.title}")
         click.echo(f"Instruction:    {t.instruction}")
         click.echo(f"Status:         {_status_str(t.status.value)}")
@@ -730,14 +816,14 @@ def dashboard() -> None:
 
         # Status counts
         status_counts: dict[str, int] = {}
-        ws_stats: dict[str, dict] = {}
+        agent_stats: dict[str, dict] = {}
         for t in tasks:
             sv = t.status.value
             status_counts[sv] = status_counts.get(sv, 0) + 1
-            if t.workspace not in ws_stats:
-                ws_stats[t.workspace] = {"count": 0, "cost": 0.0}
-            ws_stats[t.workspace]["count"] += 1
-            ws_stats[t.workspace]["cost"] += t.cost_usd
+            if t.agent not in agent_stats:
+                agent_stats[t.agent] = {"count": 0, "cost": 0.0}
+            agent_stats[t.agent]["count"] += 1
+            agent_stats[t.agent]["cost"] += t.cost_usd
 
         click.echo("📊 Maestro Dashboard")
         click.echo("─" * 40)
@@ -770,11 +856,11 @@ def dashboard() -> None:
         max_agents = config.concurrency.max_total_agents
         click.echo(f"Agents:     {running_count}/{max_agents} active")
 
-        # Workspaces
-        if ws_stats:
-            click.echo("Workspaces:")
-            for ws, stats in sorted(ws_stats.items()):
-                click.echo(f"  {ws:<20} {stats['count']} tasks, ${stats['cost']:.2f}")
+        # Agent stats
+        if agent_stats:
+            click.echo("Agents:")
+            for ag, stats in sorted(agent_stats.items()):
+                click.echo(f"  {ag:<20} {stats['count']} tasks, ${stats['cost']:.2f}")
 
     asyncio.run(_run())
 
@@ -847,88 +933,31 @@ main.add_command(task)
 
 
 # ---------------------------------------------------------------------------
-# workspace group
+# cleanup
 # ---------------------------------------------------------------------------
 
 
-@main.group()
-def workspace() -> None:
-    """Manage workspaces."""
+@main.command()
+@click.option("--all", "cleanup_all", is_flag=True, help="Force remove all worktrees")
+def cleanup(cleanup_all: bool) -> None:
+    """Clean up completed goal/task worktrees."""
+    from maestro.worktree import WorktreeManager
 
-
-@workspace.command("create")
-@click.argument("name")
-@click.option(
-    "--template",
-    default="default",
-    type=click.Choice(WorkspaceManager.available_templates(), case_sensitive=False),
-    help="Template to use (default: default)",
-)
-def workspace_create(name: str, template: str) -> None:
-    """Create a new workspace."""
     root = _project_root()
-    wm = WorkspaceManager(root)
-    wm.ensure_base_knowledge()
-
-    try:
-        ws_path = wm.create_workspace(name, template=template)
-    except FileExistsError:
-        click.echo(f"Error: workspace '{name}' already exists.", err=True)
-        sys.exit(1)
-    except ValueError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
-
-    click.echo(f"Workspace created: {ws_path}")
-    click.echo(f"  Template: {template}")
-    warnings = wm.validate_workspace(name)
-    if warnings:
-        for w in warnings:
-            click.echo(f"  Warning: {w}")
-    else:
-        click.echo("  Status: valid")
-
-
-@workspace.command("list")
-def workspace_list() -> None:
-    """List workspaces."""
-    root = _project_root()
-    wm = WorkspaceManager(root)
-    names = wm.list_workspaces()
-
-    if not names:
-        click.echo("No workspaces found.")
+    wm = WorktreeManager(root)
+    if not wm.is_git_repo():
+        click.echo("Not a git repo, no worktrees to clean.")
         return
-
-    click.echo(f"{'WORKSPACE':<30} {'STATUS'}")
-    click.echo("-" * 45)
-    for name in names:
-        warnings = wm.validate_workspace(name)
-        status = "valid" if not warnings else f"{len(warnings)} warning(s)"
-        click.echo(f"{name:<30} {status}")
-
-
-@workspace.command("validate")
-@click.argument("name")
-def workspace_validate(name: str) -> None:
-    """Validate a workspace."""
-    root = _project_root()
-    wm = WorkspaceManager(root)
-
-    if not wm.workspace_exists(name):
-        click.echo(f"Error: workspace '{name}' does not exist.", err=True)
-        sys.exit(1)
-
-    warnings = wm.validate_workspace(name)
-    if warnings:
-        click.echo(f"Workspace '{name}' has {len(warnings)} warning(s):")
-        for w in warnings:
-            click.echo(f"  - {w}")
-    else:
-        click.echo(f"Workspace '{name}' is valid.")
-
-
-main.add_command(workspace)
+    worktrees = wm.list_worktrees()
+    if not worktrees:
+        click.echo("No worktrees found.")
+        return
+    for name in worktrees:
+        if cleanup_all or not wm.has_changes(name):
+            wm.remove_worktree(name)
+            click.echo(f"Removed: {name}")
+        else:
+            click.echo(f"Skipped (has changes): {name}")
 
 
 # ---------------------------------------------------------------------------
@@ -953,7 +982,6 @@ def asset() -> None:
 @click.option(
     "--content", "content_json", default=None, help="JSON string for text content"
 )
-@click.option("--workspace", default=None, help="Workspace (default: _shared)")
 @click.option("--tags", default=None, help="Comma-separated tags")
 @click.option("--ttl-days", type=int, default=None, help="TTL in days")
 @click.option("--permanent", is_flag=True, help="No expiry (ttl=null)")
@@ -963,7 +991,6 @@ def asset_register(
     asset_type: str,
     file_path: str | None,
     content_json: str | None,
-    workspace: str | None,
     tags: str | None,
     ttl_days: int | None,
     permanent: bool,
@@ -998,10 +1025,6 @@ def asset_register(
     if permanent:
         ttl_days = None
 
-    # workspace default
-    if not workspace:
-        workspace = "_shared"
-
     async def _run() -> None:
         await store.init_db()
         am = AssetManager(store, None, cfg, pathlib.Path(cfg.project.store_path).parent)
@@ -1013,7 +1036,6 @@ def asset_register(
             tags=tag_list,
             description=description,
             ttl_days=ttl_days,
-            workspace=workspace,
             created_by="human",
         )
         click.echo(f"Registered asset: {a['id']} — {a['title']}")
@@ -1023,7 +1045,6 @@ def asset_register(
 
 @asset.command("list")
 @click.option("--type", "asset_type", default=None, help="Filter by asset_type")
-@click.option("--workspace", default=None, help="Filter by workspace")
 @click.option("--tags", default=None, help="Filter by comma-separated tags")
 @click.option(
     "--limit",
@@ -1033,9 +1054,7 @@ def asset_register(
     type=int,
     help="Max number of assets to show (default: 20)",
 )
-def asset_list(
-    asset_type: str | None, workspace: str | None, tags: str | None, limit: int
-) -> None:
+def asset_list(asset_type: str | None, tags: str | None, limit: int) -> None:
     """List assets."""
     config_file = _config_path()
     if not config_file.exists():
@@ -1058,7 +1077,6 @@ def asset_list(
         await store.init_db()
         assets = await store.list_assets_filtered(
             asset_type=asset_type,
-            workspace=workspace,
             tags=tag_list,
             limit=limit + 1,
         )
@@ -1069,14 +1087,12 @@ def asset_list(
         has_more = len(assets) > limit
         display_assets = assets[:limit]
 
-        click.echo(
-            f"{'ID':<14} {'TYPE':<12} {'WORKSPACE':<16} {'CREATED_BY':<12} {'TITLE'}"
-        )
-        click.echo("-" * 80)
+        click.echo(f"{'ID':<14} {'TYPE':<12} {'CREATED_BY':<12} {'TITLE'}")
+        click.echo("-" * 60)
         for a in display_assets:
             click.echo(
                 f"{a['id']:<14} {a.get('asset_type', ''):<12}"
-                f" {a.get('workspace', ''):<16} {a.get('created_by', ''):<12}"
+                f" {a.get('created_by', ''):<12}"
                 f" {a.get('title', '')}"
             )
 
@@ -1088,12 +1104,10 @@ def asset_list(
 
 @asset.command("search")
 @click.argument("query")
-@click.option("--workspace", default=None, help="Filter by workspace")
 @click.option("--type", "asset_type", default=None, help="Filter by asset_type")
 @click.option("--limit", "-L", default=10, type=int, help="Max results")
 def asset_search_cmd(
     query: str,
-    workspace: str | None,
     asset_type: str | None,
     limit: int,
 ) -> None:
@@ -1115,7 +1129,6 @@ def asset_search_cmd(
         am = AssetManager(store, None, cfg, pathlib.Path(cfg.project.store_path).parent)
         results = await am.search(
             query=query,
-            workspace=workspace,
             asset_type=asset_type,
             limit=limit,
         )
@@ -1230,14 +1243,21 @@ def schedule():
 
 @schedule.command("add")
 @click.option("--name", required=True, help="Unique schedule name")
-@click.option("--workspace", required=True)
+@click.option(
+    "--agent", default="default", help="Agent definition name (default: default)"
+)
+@click.option(
+    "--no-worktree", is_flag=True, help="Run at project root instead of a git worktree"
+)
 @click.option("--type", "task_type", required=True, help="Task type to create")
 @click.option("--cron", default=None, help='Cron expression (e.g. "0 9 * * *")')
 @click.option(
     "--interval", "interval_ms", type=int, default=None, help="Interval in ms"
 )
 @click.option("--approval", "approval_level", type=int, default=0)
-def schedule_add(name, workspace, task_type, cron, interval_ms, approval_level):
+def schedule_add(
+    name, agent, no_worktree, task_type, cron, interval_ms, approval_level
+):
     """Add a new schedule."""
 
     async def _run():
@@ -1248,7 +1268,8 @@ def schedule_add(name, workspace, task_type, cron, interval_ms, approval_level):
         await store.init_db()
         await store.create_schedule(
             name=name,
-            workspace=workspace,
+            agent=agent,
+            no_worktree=no_worktree,
             task_type=task_type,
             cron=cron,
             interval_ms=interval_ms,
@@ -1274,14 +1295,14 @@ def schedule_list():
             click.echo("No schedules.")
             return
         click.echo(
-            f"{'NAME':<25} {'TYPE':<15} {'WORKSPACE':<15} {'TRIGGER':<20} {'ENABLED'}"
+            f"{'NAME':<25} {'TYPE':<15} {'AGENT':<15} {'TRIGGER':<20} {'ENABLED'}"
         )
         click.echo("-" * 85)
         for s in schedules:
             trigger = s["cron"] or f"every {s['interval_ms']}ms"
             enabled = "✓" if s["enabled"] else "✗"
             click.echo(
-                f"{s['name']:<25} {s['task_type']:<15} {s['workspace']:<15} {trigger:<20} {enabled}"
+                f"{s['name']:<25} {s['task_type']:<15} {s.get('agent', 'default'):<15} {trigger:<20} {enabled}"
             )
 
     asyncio.run(_run())
@@ -1351,13 +1372,15 @@ def goal():
 
 @goal.command("add")
 @click.option("--id", "goal_id", required=True, help="Unique goal ID")
-@click.option("--workspace", required=True)
+@click.option(
+    "--no-worktree", is_flag=True, help="Run at project root instead of a git worktree"
+)
 @click.option("--description", default="", help="Goal description")
 @click.option("--metrics", default="{}", help="Metrics JSON")
 @click.option(
     "--cooldown", "cooldown_hours", type=int, default=24, help="Cooldown hours"
 )
-def goal_add(goal_id, workspace, description, metrics, cooldown_hours):
+def goal_add(goal_id, no_worktree, description, metrics, cooldown_hours):
     """Add a new goal."""
 
     async def _run():
@@ -1368,7 +1391,7 @@ def goal_add(goal_id, workspace, description, metrics, cooldown_hours):
         await store.init_db()
         await store.create_goal(
             id=goal_id,
-            workspace=workspace,
+            no_worktree=no_worktree,
             description=description,
             metrics=metrics,
             cooldown_hours=cooldown_hours,
@@ -1392,17 +1415,15 @@ def goal_list():
         if not goals:
             click.echo("No goals.")
             return
-        click.echo(
-            f"{'ID':<25} {'WORKSPACE':<15} {'COOLDOWN':<10} {'ENABLED':<9} {'LAST EVALUATED'}"
-        )
-        click.echo("-" * 85)
+        click.echo(f"{'ID':<25} {'COOLDOWN':<10} {'ENABLED':<9} {'LAST EVALUATED'}")
+        click.echo("-" * 70)
         for g in goals:
             enabled = "✓" if g["enabled"] else "✗"
             last_eval = g.get("last_evaluated_at") or "—"
             if last_eval != "—":
                 last_eval = last_eval[:19]
             click.echo(
-                f"{g['id']:<25} {g['workspace']:<15} {g['cooldown_hours']:<10} {enabled:<9} {last_eval}"
+                f"{g['id']:<25} {g['cooldown_hours']:<10} {enabled:<9} {last_eval}"
             )
 
     asyncio.run(_run())
@@ -1425,7 +1446,7 @@ def goal_show(goal_id):
             return
         click.echo(f"ID:                 {g['id']}")
         click.echo(f"Description:        {g['description']}")
-        click.echo(f"Workspace:          {g['workspace']}")
+        click.echo(f"No Worktree:        {g.get('no_worktree', False)}")
         click.echo(f"Metrics:            {g['metrics']}")
         click.echo(f"Cooldown:           {g['cooldown_hours']}h")
         click.echo(f"Enabled:            {'✓' if g['enabled'] else '✗'}")
