@@ -30,8 +30,24 @@ logger = logging.getLogger("maestro.mcp_store")
 
 
 def _daemon_base_url() -> str:
-    """Return the base URL for the Maestro daemon's internal API."""
-    port_file = Path(".maestro/maestro.port")
+    """Return the base URL for the Maestro daemon's internal API.
+
+    Resolution order:
+    1. MAESTRO_DAEMON_PORT env var (set by daemon when spawning agents)
+    2. .maestro/maestro.port file relative to MAESTRO_BASE_PATH
+    3. .maestro/maestro.port file relative to cwd (fallback)
+    """
+    import os
+
+    port = os.environ.get("MAESTRO_DAEMON_PORT", "")
+    if port:
+        return f"http://127.0.0.1:{port}"
+
+    base = os.environ.get("MAESTRO_BASE_PATH", "")
+    if base:
+        port_file = Path(base) / ".maestro" / "maestro.port"
+    else:
+        port_file = Path(".maestro/maestro.port")
     port = port_file.read_text().strip() if port_file.exists() else "0"
     return f"http://127.0.0.1:{port}"
 

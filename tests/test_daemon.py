@@ -457,6 +457,32 @@ def test_extract_json_invalid():
 
 
 # ---------------------------------------------------------------------------
+# _extract_review_from_text tests
+# ---------------------------------------------------------------------------
+
+
+def test_extract_review_from_text_revise():
+    text = "리뷰 완료했습니다. **verdict: revise**로 제출했습니다.\n\n1. 리서치 내용 전무\n2. 이름 리스트 누락"
+    result = Daemon._extract_review_from_text(text)
+    assert result is not None
+    assert result["verdict"] == "revise"
+    assert len(result["issues"]) >= 2
+
+
+def test_extract_review_from_text_pass():
+    text = "verdict: pass. 모든 항목이 충족됨."
+    result = Daemon._extract_review_from_text(text)
+    assert result is not None
+    assert result["verdict"] == "pass"
+
+
+def test_extract_review_from_text_no_verdict():
+    text = "별 문제 없어 보입니다."
+    result = Daemon._extract_review_from_text(text)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
 # _resolve_cwd tests
 # ---------------------------------------------------------------------------
 

@@ -949,13 +949,54 @@ class Daemon:
         )
         await self._store.create_task(review_task)
 
+    @staticmethod
+    def _extract_review_from_text(text: str) -> dict | None:
+        """Fallback: extract verdict from natural-language review text."""
+        import re
+
+        if not isinstance(text, str):
+            return None
+        lower = text.lower()
+        verdict = None
+        if "verdict" in lower and "revise" in lower:
+            verdict = "revise"
+        elif "verdict" in lower and "pass" in lower:
+            verdict = "pass"
+        elif "revise" in lower:
+            verdict = "revise"
+        elif "pass" in lower:
+            verdict = "pass"
+        if not verdict:
+            return None
+
+        # Try to extract issues from numbered/bulleted lists
+        issues = []
+        for m in re.finditer(r"[\d]+[\.\)]\s*\*{0,2}(.+?)(?:\*{0,2})(?:\n|$)", text):
+            issue = m.group(1).strip().rstrip("*").strip()
+            if issue:
+                issues.append(issue)
+
+        return {"verdict": verdict, "issues": issues, "summary": text[:200]}
+
     async def _handle_review_result(
         self, review_task: Task, result: TaskResult
     ) -> None:
         review_data = self._extract_json(result.result_json)
         if not isinstance(review_data, dict):
-            logger.error("Review result not valid JSON for task %s", review_task.id)
-            return
+            # Fallback: try extracting verdict from natural language
+            review_data = self._extract_review_from_text(
+                result.result_json
+                if isinstance(result.result_json, str)
+                else str(result.result_json or "")
+            )
+            if not review_data:
+                logger.error("Review result not valid JSON for task %s", review_task.id)
+                return
+            logger.warning(
+                "Review result for task %s was not JSON, extracted verdict=%s from text",
+                review_task.id,
+                review_data.get("verdict"),
+            )
 
         instruction_data = self._extract_json(review_task.instruction)
         original_task_id = instruction_data["original_task_id"]

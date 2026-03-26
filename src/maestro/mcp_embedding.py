@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -43,7 +44,16 @@ def _store() -> Store:
 
 
 def _daemon_port() -> int:
-    port_file = Path(".maestro/maestro.port")
+    """Resolve daemon port. Env var first, then port file."""
+    port = os.environ.get("MAESTRO_DAEMON_PORT", "")
+    if port:
+        return int(port)
+
+    base = os.environ.get("MAESTRO_BASE_PATH", "")
+    if base:
+        port_file = Path(base) / ".maestro" / "maestro.port"
+    else:
+        port_file = Path(".maestro/maestro.port")
     return int(port_file.read_text().strip()) if port_file.exists() else 0
 
 
