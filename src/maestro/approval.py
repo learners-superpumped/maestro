@@ -118,7 +118,7 @@ class ApprovalManager:
             entry: dict[str, Any] = dict(appr)
             if task:
                 entry["task_title"] = task.title
-                entry["task_workspace"] = task.workspace
+                entry["task_agent"] = task.agent
                 entry["task_status"] = task.status.value
             results.append(entry)
         return results

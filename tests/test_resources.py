@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import pathlib
-
 import pytest
 
 from maestro.config import MaestroConfig, ProjectConfig, ResourceProfile
 from maestro.resources import ResourceManager
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -30,7 +26,9 @@ def _config_with_chrome() -> MaestroConfig:
     return _config(
         resources={
             "chrome-profiles": {
-                "threads": ResourceProfile(max_concurrent=1, path="./chrome-profiles/threads"),
+                "threads": ResourceProfile(
+                    max_concurrent=1, path="./chrome-profiles/threads"
+                ),
                 "x": ResourceProfile(max_concurrent=1, path="./chrome-profiles/x"),
             },
         }
@@ -101,10 +99,14 @@ class TestIsAvailable:
         cfg = _config_with_chrome()
         rm = ResourceManager(cfg)
 
-        assert rm.all_available(["chrome-profiles/threads", "chrome-profiles/x"]) is True
+        assert (
+            rm.all_available(["chrome-profiles/threads", "chrome-profiles/x"]) is True
+        )
 
         await rm.acquire("chrome-profiles/threads")
-        assert rm.all_available(["chrome-profiles/threads", "chrome-profiles/x"]) is False
+        assert (
+            rm.all_available(["chrome-profiles/threads", "chrome-profiles/x"]) is False
+        )
         assert rm.all_available(["chrome-profiles/x"]) is True
 
 
@@ -141,62 +143,18 @@ class TestReleaseUnknown:
 
 
 class TestGetWorkspaceResources:
-    """Test workspace-to-resource mapping."""
+    """Test workspace-to-resource mapping (now always returns empty list)."""
 
-    def test_workspace_with_chrome_browser(self, tmp_path: pathlib.Path) -> None:
+    def test_always_returns_empty(self) -> None:
         cfg = _config_with_chrome()
-        ws_dir = tmp_path / "workspaces"
+        rm = ResourceManager(cfg)
+        assert rm.get_workspace_resources("sns-threads") == []
 
-        # Create a workspace with chrome-browser in mcp.json
-        ws = ws_dir / "sns-threads" / ".claude"
-        ws.mkdir(parents=True)
-        mcp = {
-            "mcpServers": {
-                "maestro-store": {"command": "python"},
-                "chrome-browser": {"command": "npx"},
-            }
-        }
-        (ws / "mcp.json").write_text(json.dumps(mcp))
-
-        rm = ResourceManager(cfg, workspaces_dir=ws_dir)
-        resources = rm.get_workspace_resources("sns-threads")
-
-        assert "chrome-profiles/threads" in resources
-
-    def test_workspace_without_chrome_browser(self, tmp_path: pathlib.Path) -> None:
+    def test_any_workspace_returns_empty(self) -> None:
         cfg = _config_with_chrome()
-        ws_dir = tmp_path / "workspaces"
-
-        ws = ws_dir / "seo" / ".claude"
-        ws.mkdir(parents=True)
-        mcp = {
-            "mcpServers": {
-                "maestro-store": {"command": "python"},
-            }
-        }
-        (ws / "mcp.json").write_text(json.dumps(mcp))
-
-        rm = ResourceManager(cfg, workspaces_dir=ws_dir)
-        resources = rm.get_workspace_resources("seo")
-
-        assert resources == []
-
-    def test_workspace_no_mcp_json(self, tmp_path: pathlib.Path) -> None:
-        cfg = _config_with_chrome()
-        ws_dir = tmp_path / "workspaces"
-        (ws_dir / "missing").mkdir(parents=True)
-
-        rm = ResourceManager(cfg, workspaces_dir=ws_dir)
-        resources = rm.get_workspace_resources("missing")
-
-        assert resources == []
-
-    def test_no_workspaces_dir(self) -> None:
-        cfg = _config_with_chrome()
-        rm = ResourceManager(cfg)  # no workspaces_dir
-
-        resources = rm.get_workspace_resources("any")
-        assert resources == []
+        rm = ResourceManager(cfg)
+        assert rm.get_workspace_resources("any") == []
+        assert rm.get_workspace_resources("") == []
 
 
 # ---------------------------------------------------------------------------

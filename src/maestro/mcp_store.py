@@ -91,17 +91,16 @@ async def maestro_task_submit_result(
 
 
 async def maestro_history_search(
-    workspace: str,
     query: str,
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Search recent actions in workspace history.
+    """Search recent actions in history.
 
     Note: history storage is a placeholder; returns empty results for now.
     """
     # The daemon's history endpoint is a placeholder.
     # We return an empty list until history persistence is implemented.
-    return {"results": [], "query": query, "workspace": workspace, "limit": limit}
+    return {"results": [], "query": query, "limit": limit}
 
 
 async def maestro_history_record(action: dict[str, Any]) -> dict[str, Any]:
@@ -193,11 +192,10 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "maestro_history_search": {
-        "description": "Search recent actions in workspace history",
+        "description": "Search recent actions in history",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "workspace": {"type": "string", "description": "Workspace name"},
                 "query": {"type": "string", "description": "Search query"},
                 "limit": {
                     "type": "integer",
@@ -205,7 +203,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "default": 10,
                 },
             },
-            "required": ["workspace", "query"],
+            "required": ["query"],
         },
     },
     "maestro_history_record": {
@@ -266,7 +264,6 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
         )
     elif name == "maestro_history_search":
         return await maestro_history_search(
-            arguments["workspace"],
             arguments["query"],
             arguments.get("limit", 10),
         )

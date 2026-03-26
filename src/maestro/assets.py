@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import mimetypes
 import secrets
 import shutil
@@ -75,10 +74,12 @@ def _dot_path(data: dict, path: str) -> Any:
 class AssetManager:
     """Manages asset registration, search, and lifecycle."""
 
-    def __init__(self, store: Any, embedding: Any, config: Any, base_path: Path) -> None:
+    def __init__(
+        self, store: Any, embedding: Any, config: Any, base_path: Path
+    ) -> None:
         self._store = store
         self._embedding = embedding  # EmbeddingClient or None
-        self._config = config        # MaestroConfig (has .assets: AssetsConfig)
+        self._config = config  # MaestroConfig (has .assets: AssetsConfig)
         self._base_path = base_path
 
     async def register_asset(
@@ -91,7 +92,6 @@ class AssetManager:
         tags: Optional[list[str]] = None,
         description: Optional[str] = None,
         ttl_days: Optional[int] = None,
-        workspace: str = "_shared",
         created_by: str = "human",
         task_id: Optional[str] = None,
         media_type: Optional[str] = None,
@@ -106,7 +106,9 @@ class AssetManager:
         # Calculate expires_at
         expires_at: Optional[str] = None
         if ttl_days is not None:
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=ttl_days)).isoformat()
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(days=ttl_days)
+            ).isoformat()
 
         # Detect media type for file-based assets
         if not media_type and file_path:
@@ -118,7 +120,7 @@ class AssetManager:
         if file_path:
             src = Path(file_path)
             if src.exists():
-                dest_dir = self._base_path / "assets" / workspace / datetime.now().strftime("%Y-%m")
+                dest_dir = self._base_path / "assets" / datetime.now().strftime("%Y-%m")
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 dest = dest_dir / f"{asset_id}_{src.name}"
                 shutil.copy2(src, dest)
@@ -128,7 +130,6 @@ class AssetManager:
         asset_data: dict[str, Any] = {
             "id": asset_id,
             "task_id": task_id,
-            "workspace": workspace,
             "created_by": created_by,
             "asset_type": asset_type,
             "media_type": media_type,
@@ -167,7 +168,6 @@ class AssetManager:
         self,
         *,
         query: str,
-        workspace: Optional[str] = None,
         asset_type: Optional[str] = None,
         tags: Optional[list[str]] = None,
         since: Optional[str] = None,
@@ -177,7 +177,6 @@ class AssetManager:
         """Search assets: structured filter -> vector similarity."""
         # Phase 1: structured filter
         candidates = await self._store.list_assets_filtered(
-            workspace=workspace,
             asset_type=asset_type,
             tags=tags,
             limit=500,
@@ -221,7 +220,6 @@ class AssetManager:
         self,
         *,
         task_id: str,
-        workspace: str,
         result_json: dict,
         rules: dict,
     ) -> list[dict]:
@@ -241,7 +239,9 @@ class AssetManager:
 
         for item in items:
             title_val = (
-                _dot_path(item, rules["title_field"]) if isinstance(item, dict) else str(item)
+                _dot_path(item, rules["title_field"])
+                if isinstance(item, dict)
+                else str(item)
             )
             if not title_val:
                 continue
@@ -258,7 +258,6 @@ class AssetManager:
                 title=title,
                 content_json=item if isinstance(item, dict) else {"value": item},
                 tags=extracted_tags or None,
-                workspace=workspace,
                 created_by="daemon",
                 task_id=task_id,
             )

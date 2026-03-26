@@ -11,7 +11,6 @@ from maestro.approval import ApprovalManager
 from maestro.models import Task, TaskStatus
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -25,7 +24,6 @@ def _task(
     defaults = dict(
         id=task_id or uuid.uuid4().hex[:8],
         type="claude",
-        workspace="ws1",
         title="Test task",
         instruction="Do something",
         status=status,

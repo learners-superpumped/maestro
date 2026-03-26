@@ -9,7 +9,6 @@ by multiple agents. Resources are identified by a composite key of
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 
 from maestro.config import MaestroConfig
@@ -49,38 +48,16 @@ class ResourceManager:
     def get_workspace_resources(self, workspace: str) -> list[str]:
         """Get resource names needed by a workspace.
 
-        Inspects the workspace's ``.claude/mcp.json`` for ``chrome-browser``
-        configuration and maps it to declared resource pools.
+        Resources will be redesigned in a future update.
+        Returns an empty list for now.
 
         Args:
-            workspace: Workspace name.
+            workspace: Workspace name (unused).
 
         Returns:
-            List of resource keys (e.g. ``["chrome-profiles/threads"]``).
+            Empty list.
         """
-        if self._workspaces_dir is None:
-            return []
-
-        mcp_path = self._workspaces_dir / workspace / ".claude" / "mcp.json"
-        if not mcp_path.exists():
-            return []
-
-        try:
-            mcp_data = json.loads(mcp_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return []
-
-        resources: list[str] = []
-        servers = mcp_data.get("mcpServers", {})
-
-        # Chrome browser server implies a chrome-profiles resource.
-        # Map workspace name to resource profile name if it exists.
-        if "chrome-browser" in servers:
-            for profile_name in self._resources.get("chrome-profiles", {}):
-                if profile_name in workspace:
-                    resources.append(f"chrome-profiles/{profile_name}")
-
-        return resources
+        return []
 
     async def acquire(self, resource_name: str) -> bool:
         """Try to acquire a resource lock.

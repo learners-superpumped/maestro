@@ -104,7 +104,7 @@ async def test_create_task_emits(emitting_store):
         received.append((et, p))
 
     bus.on("task.*", handler)
-    task = Task(id="et-01", type="test", workspace="w", title="T", instruction="I")
+    task = Task(id="et-01", type="test", title="T", instruction="I")
     await store.create_task(task)
     assert len(received) == 1
     assert received[0][0] == "task.created"
@@ -119,7 +119,7 @@ async def test_update_status_emits(emitting_store):
         received.append((et, p))
 
     bus.on("task.*", handler)
-    task = Task(id="et-02", type="test", workspace="w", title="T", instruction="I")
+    task = Task(id="et-02", type="test", title="T", instruction="I")
     await store.create_task(task)
     received.clear()
     await store.update_task_status("et-02", TaskStatus.APPROVED)
@@ -137,7 +137,6 @@ async def test_completed_emits_both(emitting_store):
     task = Task(
         id="et-03",
         type="test",
-        workspace="w",
         title="T",
         instruction="I",
         status=TaskStatus.RUNNING,
@@ -151,7 +150,7 @@ async def test_completed_emits_both(emitting_store):
 
 async def test_db_write_still_works(emitting_store):
     store, bus = emitting_store
-    task = Task(id="et-04", type="test", workspace="w", title="T", instruction="I")
+    task = Task(id="et-04", type="test", title="T", instruction="I")
     await store.create_task(task)
     loaded = await store.get_task("et-04")
     assert loaded is not None
@@ -166,9 +165,7 @@ async def test_schedule_events(emitting_store):
         received.append(et)
 
     bus.on("schedule.*", handler)
-    await store.create_schedule(
-        name="s1", workspace="w", task_type="test", cron="0 * * * *"
-    )
+    await store.create_schedule(name="s1", task_type="test", cron="0 * * * *")
     assert "schedule.created" in received
     received.clear()
     await store.delete_schedule("s1")

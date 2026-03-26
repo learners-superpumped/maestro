@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import pathlib
+from unittest.mock import MagicMock
 
 import pytest
 
-from maestro.assets import AssetManager, detect_asset_type, _dot_path
+from maestro.assets import AssetManager, _dot_path, detect_asset_type
 from maestro.config import AssetsConfig
 from maestro.models import Task
 from maestro.store import Store
-from unittest.mock import MagicMock
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -33,7 +32,6 @@ async def _ensure_task(store: Store, task_id: str) -> None:
     task = Task(
         id=task_id,
         type="shell",
-        workspace="/ws/test",
         title="test task",
         instruction="noop",
     )
@@ -106,14 +104,12 @@ async def test_register_asset_basic(asset_manager: AssetManager) -> None:
         content_json={"body": "hello"},
         tags=["promo", "test"],
         description="A test asset",
-        workspace="sns-threads",
     )
 
     assert asset is not None
     assert len(asset["id"]) == 12
     assert asset["title"] == "Test Post"
     assert asset["asset_type"] == "post"
-    assert asset["workspace"] == "sns-threads"
     assert asset["description"] == "A test asset"
     assert asset["tags"] == ["promo", "test"]
     assert asset["content_json"] == {"body": "hello"}
@@ -186,15 +182,13 @@ async def test_search_returns_results(asset_manager: AssetManager) -> None:
     await asset_manager.register_asset(
         asset_type="post",
         title="Alpha Post",
-        workspace="ws1",
     )
     await asset_manager.register_asset(
         asset_type="image",
         title="Beta Image",
-        workspace="ws1",
     )
 
-    results = await asset_manager.search(query="anything", workspace="ws1")
+    results = await asset_manager.search(query="anything")
     assert len(results) == 2
 
 
@@ -263,7 +257,6 @@ async def test_auto_extract_with_iterate(asset_manager: AssetManager) -> None:
 
     assets = await asset_manager.auto_extract(
         task_id="task-extract",
-        workspace="ws1",
         result_json=result_json,
         rules=rules,
     )
@@ -279,9 +272,7 @@ async def test_auto_extract_with_iterate(asset_manager: AssetManager) -> None:
 
 async def test_auto_extract_skips_duplicates(asset_manager: AssetManager) -> None:
     await _ensure_task(asset_manager._store, "task-dup")
-    result_json = {
-        "topics": [{"name": "Topic A"}]
-    }
+    result_json = {"topics": [{"name": "Topic A"}]}
     rules = {
         "asset_type": "research",
         "iterate": "topics",
@@ -291,7 +282,6 @@ async def test_auto_extract_skips_duplicates(asset_manager: AssetManager) -> Non
     # First extraction
     first = await asset_manager.auto_extract(
         task_id="task-dup",
-        workspace="ws1",
         result_json=result_json,
         rules=rules,
     )
@@ -300,7 +290,6 @@ async def test_auto_extract_skips_duplicates(asset_manager: AssetManager) -> Non
     # Second extraction with same task_id + asset_type -> skip
     second = await asset_manager.auto_extract(
         task_id="task-dup",
-        workspace="ws1",
         result_json=result_json,
         rules=rules,
     )
@@ -318,7 +307,6 @@ async def test_auto_extract_without_iterate(asset_manager: AssetManager) -> None
 
     assets = await asset_manager.auto_extract(
         task_id="task-single",
-        workspace="ws1",
         result_json=result_json,
         rules=rules,
     )

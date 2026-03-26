@@ -67,7 +67,6 @@ async def maestro_asset_register(
     tags: list[str] | None = None,
     description: str | None = None,
     ttl_days: int | None = None,
-    workspace: str = "_shared",
     created_by: str = "agent",
     task_id: str | None = None,
 ) -> dict[str, Any]:
@@ -75,7 +74,6 @@ async def maestro_asset_register(
     payload: dict[str, Any] = {
         "asset_type": asset_type,
         "title": title,
-        "workspace": workspace,
         "created_by": created_by,
     }
     if content_json is not None:
@@ -96,7 +94,6 @@ async def maestro_asset_register(
 
 async def maestro_asset_search(
     query: str,
-    workspace: str | None = None,
     asset_type: str | None = None,
     tags: list[str] | None = None,
     since: str | None = None,
@@ -104,9 +101,11 @@ async def maestro_asset_search(
     include_content: bool = True,
 ) -> dict[str, Any]:
     """Search assets via daemon HTTP API (supports vector similarity)."""
-    payload: dict[str, Any] = {"query": query, "limit": limit, "include_content": include_content}
-    if workspace is not None:
-        payload["workspace"] = workspace
+    payload: dict[str, Any] = {
+        "query": query,
+        "limit": limit,
+        "include_content": include_content,
+    }
     if asset_type is not None:
         payload["asset_type"] = asset_type
     if tags is not None:
@@ -177,11 +176,6 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "integer",
                     "description": "Days until auto-archival (null = permanent)",
                 },
-                "workspace": {
-                    "type": "string",
-                    "description": "Workspace scope (default: _shared)",
-                    "default": "_shared",
-                },
                 "created_by": {
                     "type": "string",
                     "description": "Creator identifier",
@@ -201,10 +195,6 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query text"},
-                "workspace": {
-                    "type": "string",
-                    "description": "Filter by workspace (also includes _shared)",
-                },
                 "asset_type": {
                     "type": "string",
                     "description": "Filter by asset type",
@@ -283,14 +273,12 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
             tags=arguments.get("tags"),
             description=arguments.get("description"),
             ttl_days=arguments.get("ttl_days"),
-            workspace=arguments.get("workspace", "_shared"),
             created_by=arguments.get("created_by", "agent"),
             task_id=arguments.get("task_id"),
         )
     elif name == "maestro_asset_search":
         return await maestro_asset_search(
             query=arguments["query"],
-            workspace=arguments.get("workspace"),
             asset_type=arguments.get("asset_type"),
             tags=arguments.get("tags"),
             since=arguments.get("since"),

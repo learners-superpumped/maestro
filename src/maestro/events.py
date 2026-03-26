@@ -122,7 +122,6 @@ class EventEmittingStore(Store):
             {
                 "asset_id": asset["id"],
                 "asset_type": asset["asset_type"],
-                "workspace": asset.get("workspace", "_shared"),
                 "title": asset["title"],
             },
         )
@@ -175,7 +174,7 @@ class EventEmittingStore(Store):
         result = await super().create_schedule(**kwargs)
         await self._bus.emit(
             "schedule.created",
-            {"name": kwargs["name"], "workspace": kwargs["workspace"]},
+            {"name": kwargs["name"], "agent": kwargs.get("agent", "default")},
         )
         return result
 
@@ -194,15 +193,12 @@ class EventEmittingStore(Store):
         await self._bus.emit(
             "rule.created",
             {
-                "workspace": kwargs["workspace"],
                 "task_type": kwargs["task_type"],
                 "asset_type": kwargs["asset_type"],
             },
         )
         return result
 
-    async def delete_extract_rule(self, workspace, task_type):
-        await super().delete_extract_rule(workspace, task_type)
-        await self._bus.emit(
-            "rule.deleted", {"workspace": workspace, "task_type": task_type}
-        )
+    async def delete_extract_rule(self, task_type):
+        await super().delete_extract_rule(task_type)
+        await self._bus.emit("rule.deleted", {"task_type": task_type})
