@@ -36,7 +36,7 @@ class DaemonConfig:
 @dataclass
 class ConcurrencyConfig:
     max_total_agents: int = 5
-    max_per_workspace: int = 1
+    max_per_goal: int = 1
 
 
 @dataclass
@@ -44,6 +44,18 @@ class BudgetConfig:
     daily_limit_usd: float = 30.0
     per_task_limit_usd: float = 5.0
     alert_threshold_pct: int = 80
+
+
+@dataclass
+class AgentDefinition:
+    """Defines a named agent with role, instructions, tools, and behavior."""
+
+    name: str = "default"
+    role: str = ""
+    instructions: str = ""
+    tools: list[str] = field(default_factory=lambda: ["Read", "Write", "Edit", "Bash"])
+    max_turns: int = 50
+    no_worktree: bool = False
 
 
 @dataclass
@@ -116,6 +128,7 @@ class MaestroConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     assets: AssetsConfig = field(default_factory=AssetsConfig)
+    agents: dict[str, AgentDefinition] = field(default_factory=dict)
     # dict[resource_type, dict[profile_name, ResourceProfile]]
     resources: dict[str, dict[str, ResourceProfile]] = field(default_factory=dict)
 
@@ -168,7 +181,7 @@ def _parse_daemon(data: dict[str, Any]) -> DaemonConfig:
 def _parse_concurrency(data: dict[str, Any]) -> ConcurrencyConfig:
     return ConcurrencyConfig(
         max_total_agents=data.get("max_total_agents", 5),
-        max_per_workspace=data.get("max_per_workspace", 1),
+        max_per_goal=data.get("max_per_goal", 1),
     )
 
 
@@ -264,6 +277,37 @@ def _parse_assets(data: dict[str, Any]) -> AssetsConfig:
     )
 
 
+def _parse_agents(data: dict[str, Any]) -> dict[str, AgentDefinition]:
+    """Parse the agents section.
+
+    Expected shape::
+
+        agents:
+          researcher:
+            role: "Research specialist"
+            instructions: "Focus on finding accurate data"
+            tools: ["Read", "WebSearch"]
+            max_turns: 30
+            no_worktree: true
+
+    Returns ``dict[agent_name, AgentDefinition]``.
+    """
+    result: dict[str, AgentDefinition] = {}
+    for agent_name, agent_data in data.items():
+        if not isinstance(agent_data, dict):
+            continue
+        default = AgentDefinition()
+        result[agent_name] = AgentDefinition(
+            name=agent_name,
+            role=str(agent_data.get("role", default.role)),
+            instructions=str(agent_data.get("instructions", default.instructions)),
+            tools=list(agent_data.get("tools", default.tools)),
+            max_turns=int(agent_data.get("max_turns", default.max_turns)),
+            no_worktree=bool(agent_data.get("no_worktree", default.no_worktree)),
+        )
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -306,6 +350,7 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     logging_cfg = _parse_logging(data.get("logging") or {})
     integrations = _parse_integrations(data.get("integrations") or {})
     resources = _parse_resources(data.get("resources") or {})
+    agents = _parse_agents(data.get("agents") or {})
     assets_raw = data.get("assets", {})
     assets = _parse_assets(assets_raw or {})
     if not assets.gemini_api_key:
@@ -320,5 +365,6 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
         logging=logging_cfg,
         integrations=integrations,
         assets=assets,
+        agents=agents,
         resources=resources,
     )

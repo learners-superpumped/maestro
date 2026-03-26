@@ -7,6 +7,7 @@ import pathlib
 import pytest
 
 from maestro.config import (
+    AgentDefinition,
     AssetsConfig,
     MaestroConfig,
     ResourceProfile,
@@ -29,7 +30,7 @@ daemon:
 
 concurrency:
   max_total_agents: 5
-  max_per_workspace: 1
+  max_per_goal: 1
 
 resources:
   chrome-profiles:
@@ -70,6 +71,18 @@ agent:
   default_max_turns: 20
   stall_timeout_ms: 300000
   turn_timeout_ms: 3600000
+
+agents:
+  researcher:
+    role: "Research specialist"
+    instructions: "Focus on accurate data"
+    tools:
+      - Read
+      - WebSearch
+    max_turns: 30
+    no_worktree: true
+  writer:
+    role: "Content writer"
 
 logging:
   level: info
@@ -128,7 +141,7 @@ def test_defaults_applied(tmp_path: pathlib.Path) -> None:
 
     # concurrency defaults
     assert cfg.concurrency.max_total_agents == 5
-    assert cfg.concurrency.max_per_workspace == 1
+    assert cfg.concurrency.max_per_goal == 1
 
     # budget defaults
     assert cfg.budget.daily_limit_usd == 30.0
@@ -236,7 +249,7 @@ def test_concurrency_config_parsed(tmp_path: pathlib.Path) -> None:
     cfg = load_config(cfg_file)
 
     assert cfg.concurrency.max_total_agents == 5
-    assert cfg.concurrency.max_per_workspace == 1
+    assert cfg.concurrency.max_per_goal == 1
 
 
 # ---------------------------------------------------------------------------
@@ -358,3 +371,73 @@ assets:
     cfg = load_config(str(cfg_path))
     assert cfg.assets.default_ttl["engage"] == 14
     assert cfg.assets.cleanup_interval_ms == 3_600_000
+
+
+# ---------------------------------------------------------------------------
+# AgentDefinition parsing
+# ---------------------------------------------------------------------------
+
+
+def test_agents_parsed(tmp_path: pathlib.Path) -> None:
+    """agents section should be parsed into dict[name, AgentDefinition]."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(FULL_CONFIG)
+    cfg = load_config(cfg_file)
+
+    assert "researcher" in cfg.agents
+    researcher = cfg.agents["researcher"]
+    assert isinstance(researcher, AgentDefinition)
+    assert researcher.name == "researcher"
+    assert researcher.role == "Research specialist"
+    assert researcher.instructions == "Focus on accurate data"
+    assert researcher.tools == ["Read", "WebSearch"]
+    assert researcher.max_turns == 30
+    assert researcher.no_worktree is True
+
+
+def test_agents_partial_definition(tmp_path: pathlib.Path) -> None:
+    """Agent with only role specified should get defaults for other fields."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(FULL_CONFIG)
+    cfg = load_config(cfg_file)
+
+    assert "writer" in cfg.agents
+    writer = cfg.agents["writer"]
+    assert writer.name == "writer"
+    assert writer.role == "Content writer"
+    assert writer.instructions == ""
+    assert writer.tools == ["Read", "Write", "Edit", "Bash"]
+    assert writer.max_turns == 50
+    assert writer.no_worktree is False
+
+
+def test_agents_empty_when_omitted(tmp_path: pathlib.Path) -> None:
+    """agents should default to empty dict when omitted."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(MINIMAL_CONFIG)
+    cfg = load_config(cfg_file)
+
+    assert cfg.agents == {}
+
+
+# ---------------------------------------------------------------------------
+# ConcurrencyConfig – max_per_goal
+# ---------------------------------------------------------------------------
+
+
+def test_max_per_goal_parsed(tmp_path: pathlib.Path) -> None:
+    """max_per_goal should be parsed from concurrency section."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(FULL_CONFIG)
+    cfg = load_config(cfg_file)
+
+    assert cfg.concurrency.max_per_goal == 1
+
+
+def test_max_per_goal_default(tmp_path: pathlib.Path) -> None:
+    """max_per_goal should default to 1 when not specified."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(MINIMAL_CONFIG)
+    cfg = load_config(cfg_file)
+
+    assert cfg.concurrency.max_per_goal == 1

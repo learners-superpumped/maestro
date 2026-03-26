@@ -5,9 +5,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
-    workspace TEXT NOT NULL,
     title TEXT NOT NULL,
     instruction TEXT NOT NULL,
+    agent TEXT DEFAULT 'default',
+    no_worktree INTEGER DEFAULT 0,
     goal_id TEXT,
     parent_task_id TEXT,
     depends_on TEXT,
@@ -32,14 +33,14 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace);
+CREATE INDEX IF NOT EXISTS idx_tasks_goal ON tasks(goal_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(agent);
 CREATE INDEX IF NOT EXISTS idx_tasks_scheduled ON tasks(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
 
 CREATE TABLE IF NOT EXISTS assets (
     id TEXT PRIMARY KEY,
     task_id TEXT REFERENCES tasks(id),
-    workspace TEXT NOT NULL DEFAULT '_shared',
     created_by TEXT NOT NULL DEFAULT 'human',
     asset_type TEXT NOT NULL,
     media_type TEXT,
@@ -66,7 +67,6 @@ CREATE TABLE IF NOT EXISTS asset_usage (
     used_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_assets_workspace ON assets(workspace);
 CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
 CREATE INDEX IF NOT EXISTS idx_assets_archived ON assets(archived);
 CREATE INDEX IF NOT EXISTS idx_assets_expires ON assets(expires_at);
@@ -77,7 +77,6 @@ CREATE INDEX IF NOT EXISTS idx_asset_usage_task ON asset_usage(task_id);
 CREATE TABLE IF NOT EXISTS action_history (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id),
-    workspace TEXT NOT NULL,
     action_type TEXT NOT NULL,
     platform TEXT NOT NULL,
     content TEXT,
@@ -109,7 +108,7 @@ CREATE TABLE IF NOT EXISTS budget_daily (
 CREATE TABLE IF NOT EXISTS goals (
     id                   TEXT PRIMARY KEY,
     description          TEXT NOT NULL DEFAULT '',
-    workspace            TEXT NOT NULL,
+    no_worktree          INTEGER DEFAULT 0,
     metrics              TEXT NOT NULL DEFAULT '{}',
     cooldown_hours       INTEGER NOT NULL DEFAULT 24,
     enabled              INTEGER NOT NULL DEFAULT 1,
@@ -146,8 +145,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE TABLE IF NOT EXISTS schedules (
     id             TEXT PRIMARY KEY,
     name           TEXT UNIQUE NOT NULL,
-    workspace      TEXT NOT NULL,
     task_type      TEXT NOT NULL,
+    agent          TEXT DEFAULT 'default',
+    no_worktree    INTEGER DEFAULT 0,
     cron           TEXT,
     interval_ms    INTEGER,
     approval_level INTEGER NOT NULL DEFAULT 0,
@@ -157,19 +157,16 @@ CREATE TABLE IF NOT EXISTS schedules (
 );
 
 CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
-CREATE INDEX IF NOT EXISTS idx_schedules_workspace ON schedules(workspace);
 
 CREATE TABLE IF NOT EXISTS auto_extract_rules (
     id          TEXT PRIMARY KEY,
-    workspace   TEXT NOT NULL,
-    task_type   TEXT NOT NULL,
+    task_type   TEXT NOT NULL UNIQUE,
     asset_type  TEXT NOT NULL,
     title_field TEXT,
     iterate     TEXT,
     tags_from   TEXT,
     created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    UNIQUE(workspace, task_type)
+    updated_at  TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS task_events (

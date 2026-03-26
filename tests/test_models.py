@@ -10,22 +10,22 @@ Tests cover:
 - TaskResult creation
 """
 
-import pytest
 from datetime import datetime, timezone
-from uuid import UUID
+
+import pytest
 
 from maestro.models import (
-    TaskStatus,
-    Task,
-    TaskResult,
     VALID_TRANSITIONS,
     InvalidTransitionError,
+    Task,
+    TaskResult,
+    TaskStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # TaskStatus – valid transitions
 # ---------------------------------------------------------------------------
+
 
 class TestTaskStatusTransitions:
     """Verify that VALID_TRANSITIONS covers the spec state machine exactly."""
@@ -105,6 +105,7 @@ class TestTaskStatusInvalidTransitions:
 # Task – creation with defaults
 # ---------------------------------------------------------------------------
 
+
 class TestTaskCreation:
     """Verify Task can be created and default values are applied correctly."""
 
@@ -112,7 +113,6 @@ class TestTaskCreation:
         defaults = dict(
             id="task-001",
             type="shell",
-            workspace="/tmp/test",
             title="Test task",
             instruction="echo hello",
         )
@@ -123,7 +123,6 @@ class TestTaskCreation:
         task = self._make_task()
         assert task.id == "task-001"
         assert task.type == "shell"
-        assert task.workspace == "/tmp/test"
         assert task.title == "Test task"
         assert task.instruction == "echo hello"
 
@@ -197,10 +196,27 @@ class TestTaskCreation:
         task = self._make_task(parent_task_id="task-parent")
         assert task.parent_task_id == "task-parent"
 
+    def test_task_default_agent_is_default(self):
+        task = self._make_task()
+        assert task.agent == "default"
+
+    def test_task_accepts_custom_agent(self):
+        task = self._make_task(agent="researcher")
+        assert task.agent == "researcher"
+
+    def test_task_default_no_worktree_is_false(self):
+        task = self._make_task()
+        assert task.no_worktree is False
+
+    def test_task_accepts_no_worktree_true(self):
+        task = self._make_task(no_worktree=True)
+        assert task.no_worktree is True
+
 
 # ---------------------------------------------------------------------------
 # Task.is_dispatchable()
 # ---------------------------------------------------------------------------
+
 
 class TestIsDispatchable:
     """is_dispatchable() must return True iff status == APPROVED."""
@@ -209,7 +225,6 @@ class TestIsDispatchable:
         return Task(
             id="task-dispatch",
             type="shell",
-            workspace="/tmp",
             title="dispatch test",
             instruction="echo hi",
             status=status,
@@ -247,6 +262,7 @@ class TestIsDispatchable:
 # Task.needs_auto_approval()
 # ---------------------------------------------------------------------------
 
+
 class TestNeedsAutoApproval:
     """needs_auto_approval() returns True if PENDING and approval_level in {0, 1}."""
 
@@ -254,7 +270,6 @@ class TestNeedsAutoApproval:
         return Task(
             id="task-auto",
             type="shell",
-            workspace="/tmp",
             title="auto approval test",
             instruction="echo hi",
             status=status,
@@ -285,6 +300,7 @@ class TestNeedsAutoApproval:
 # Task.retry_backoff_ms()
 # ---------------------------------------------------------------------------
 
+
 class TestRetryBackoffMs:
     """retry_backoff_ms() = min(10000 * 2^(attempt-1), 300_000)"""
 
@@ -292,7 +308,6 @@ class TestRetryBackoffMs:
         return Task(
             id="task-retry",
             type="shell",
-            workspace="/tmp",
             title="retry test",
             instruction="echo hi",
             attempt=attempt,
@@ -332,6 +347,7 @@ class TestRetryBackoffMs:
 # Task.transition_to() – optional guard method
 # ---------------------------------------------------------------------------
 
+
 class TestTransitionTo:
     """If Task exposes a transition_to() method, it must enforce valid transitions."""
 
@@ -339,7 +355,6 @@ class TestTransitionTo:
         return Task(
             id="task-trans",
             type="shell",
-            workspace="/tmp",
             title="transition test",
             instruction="echo hi",
             status=status,
@@ -372,7 +387,9 @@ class TestTransitionTo:
         task = self._make_task(TaskStatus.PENDING)
         old_updated_at = task.updated_at
         # Ensure time progresses
-        import time; time.sleep(0.001)
+        import time
+
+        time.sleep(0.001)
         task.transition_to(TaskStatus.APPROVED)
         assert task.updated_at >= old_updated_at
 
@@ -380,6 +397,7 @@ class TestTransitionTo:
 # ---------------------------------------------------------------------------
 # TaskResult
 # ---------------------------------------------------------------------------
+
 
 class TestTaskResult:
     """TaskResult dataclass basic creation."""

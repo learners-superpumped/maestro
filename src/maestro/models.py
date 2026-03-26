@@ -94,12 +94,13 @@ class Task:
     ---------------
     id          : Unique task identifier
     type        : Task type (e.g. "shell", "claude")
-    workspace   : Absolute path to the working directory
     title       : Human-readable title
     instruction : The instruction / command to execute
 
     Optional fields (all default to None unless noted)
     ---------------------------------------------------
+    agent           : Agent definition name from maestro.yaml (default "default")
+    no_worktree     : When True, run at project root instead of a git worktree (default False)
     goal_id         : Parent goal identifier
     parent_task_id  : ID of a parent task (for sub-tasks)
     status          : Current state (default: PENDING)
@@ -125,9 +126,12 @@ class Task:
     # --- Required fields ---
     id: str
     type: str
-    workspace: str
     title: str
     instruction: str
+
+    # --- Agent & worktree ---
+    agent: str = "default"
+    no_worktree: bool = False
 
     # --- Optional identifiers ---
     goal_id: Optional[str] = None
