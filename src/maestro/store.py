@@ -161,7 +161,7 @@ class Store:
     """Async SQLite store for Maestro tasks and related entities."""
 
     def __init__(self, db_path: pathlib.Path | str) -> None:
-        self._db_path = str(db_path)
+        self._db_path = str(pathlib.Path(db_path).resolve())
 
     # ------------------------------------------------------------------
     # Internal helpers
