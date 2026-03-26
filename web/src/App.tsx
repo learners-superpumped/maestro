@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react"
 import {
   createRouter,
   createRoute,
@@ -8,13 +9,28 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/sonner"
 import { Layout } from "@/components/Layout"
-import { Dashboard } from "@/pages/Dashboard"
-import { Tasks } from "@/pages/Tasks"
-import { TaskDetail } from "@/pages/TaskDetail"
-import { Assets } from "@/pages/Assets"
-import { Schedules } from "@/pages/Schedules"
-import { Rules } from "@/pages/Rules"
-import { Goals } from "@/pages/Goals"
+
+const Dashboard = lazy(() =>
+  import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard }))
+)
+const Tasks = lazy(() =>
+  import("@/pages/Tasks").then((m) => ({ default: m.Tasks }))
+)
+const TaskDetail = lazy(() =>
+  import("@/pages/TaskDetail").then((m) => ({ default: m.TaskDetail }))
+)
+const Assets = lazy(() =>
+  import("@/pages/Assets").then((m) => ({ default: m.Assets }))
+)
+const Schedules = lazy(() =>
+  import("@/pages/Schedules").then((m) => ({ default: m.Schedules }))
+)
+const Rules = lazy(() =>
+  import("@/pages/Rules").then((m) => ({ default: m.Rules }))
+)
+const Goals = lazy(() =>
+  import("@/pages/Goals").then((m) => ({ default: m.Goals }))
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,8 +41,16 @@ const queryClient = new QueryClient({
   },
 })
 
+function RootComponent() {
+  return (
+    <Suspense>
+      <Layout />
+    </Suspense>
+  )
+}
+
 const rootRoute = createRootRoute({
-  component: Layout,
+  component: RootComponent,
 })
 
 const indexRoute = createRoute({
