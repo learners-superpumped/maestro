@@ -65,6 +65,7 @@ class AgentRunner:
         task: Task,
         allowed_tools: list[str],
         max_turns: int,
+        system_prompt: str | None = None,
     ) -> list[str]:
         """Build the argument list for a fresh Claude CLI execution.
 
@@ -76,13 +77,15 @@ class AgentRunner:
             Tool names to pass via ``--allowedTools`` (joined with commas).
         max_turns:
             Maximum number of agentic turns to allow.
+        system_prompt:
+            Optional system prompt to append via ``--append-system-prompt``.
 
         Returns
         -------
         list[str]
             Complete argv suitable for ``asyncio.create_subprocess_exec``.
         """
-        return [
+        args = [
             "claude",
             "-p",
             task.instruction,
@@ -96,6 +99,9 @@ class AgentRunner:
             "--max-budget-usd",
             str(task.budget_usd),
         ]
+        if system_prompt is not None:
+            args += ["--append-system-prompt", system_prompt]
+        return args
 
     def _build_resume_args(self, session_id: str, instruction: str) -> list[str]:
         """Build the argument list for resuming an existing Claude CLI session.
@@ -130,7 +136,7 @@ class AgentRunner:
     async def _stream(
         self,
         args: list[str],
-        workspace_path: Path,
+        cwd: Path,
         on_event: Optional[callable] = None,
     ) -> TaskResult:
         """Spawn a subprocess, stream its stdout, and collect results.
@@ -139,7 +145,7 @@ class AgentRunner:
         ----------
         args:
             The complete argv to pass to ``create_subprocess_exec``.
-        workspace_path:
+        cwd:
             The working directory for the spawned process.
 
         Returns
@@ -161,7 +167,7 @@ class AgentRunner:
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(workspace_path),
+                cwd=str(cwd),
             )
 
             assert proc.stdout is not None  # PIPE guarantees this
@@ -282,10 +288,11 @@ class AgentRunner:
     async def execute(
         self,
         task: Task,
-        workspace_path: Path,
+        cwd: Path,
         allowed_tools: Optional[list[str]] = None,
         max_turns: int = 20,
         on_event: Optional[callable] = None,
+        system_prompt: str | None = None,
     ) -> TaskResult:
         """Execute a task from scratch using the Claude CLI.
 
@@ -293,12 +300,14 @@ class AgentRunner:
         ----------
         task:
             The task to execute.
-        workspace_path:
+        cwd:
             Working directory for the Claude subprocess.
         allowed_tools:
             Optional list of tool names.  Defaults to an empty list.
         max_turns:
             Maximum agentic turns.  Defaults to 20.
+        system_prompt:
+            Optional system prompt to append via ``--append-system-prompt``.
 
         Returns
         -------
@@ -307,10 +316,10 @@ class AgentRunner:
         if allowed_tools is None:
             allowed_tools = []
 
-        args = self._build_execute_args(task, allowed_tools, max_turns)
+        args = self._build_execute_args(task, allowed_tools, max_turns, system_prompt)
         logger.info("Executing task %s: %s", task.id, args)
 
-        result = await self._stream(args, workspace_path, on_event=on_event)
+        result = await self._stream(args, cwd, on_event=on_event)
         result.task_id = task.id
         return result
 
@@ -319,7 +328,7 @@ class AgentRunner:
         task: Task,
         session_id: str,
         instruction: str,
-        workspace_path: Path,
+        cwd: Path,
         on_event: Optional[callable] = None,
     ) -> TaskResult:
         """Resume an existing Claude CLI session for a task.
@@ -332,7 +341,7 @@ class AgentRunner:
             The Claude CLI session UUID from the previous run.
         instruction:
             The follow-up prompt to send.
-        workspace_path:
+        cwd:
             Working directory for the Claude subprocess.
 
         Returns
@@ -342,6 +351,6 @@ class AgentRunner:
         args = self._build_resume_args(session_id, instruction)
         logger.info("Resuming task %s (session=%s): %s", task.id, session_id, args)
 
-        result = await self._stream(args, workspace_path, on_event=on_event)
+        result = await self._stream(args, cwd, on_event=on_event)
         result.task_id = task.id
         return result

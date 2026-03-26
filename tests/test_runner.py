@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from maestro.models import Task, TaskStatus
+from maestro.models import Task
 from maestro.runner import AgentRunner, parse_stream_event
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -26,7 +25,6 @@ def sample_task() -> Task:
     return Task(
         id="task-001",
         type="claude",
-        workspace="/tmp/test-workspace",
         title="Test Task",
         instruction="Write a hello world script",
         budget_usd=5.0,
@@ -89,7 +87,7 @@ class TestParseStreamEvent:
 
     def test_json_array_returns_none(self):
         # We expect dicts only; arrays are not valid stream events
-        line = '[1, 2, 3]'
+        line = "[1, 2, 3]"
         result = parse_stream_event(line)
         assert result is None
 
@@ -101,12 +99,16 @@ class TestParseStreamEvent:
 
 class TestBuildExecuteArgs:
     def test_returns_list_of_strings(self, runner: AgentRunner, sample_task: Task):
-        args = runner._build_execute_args(sample_task, allowed_tools=["Read", "Write"], max_turns=20)
+        args = runner._build_execute_args(
+            sample_task, allowed_tools=["Read", "Write"], max_turns=20
+        )
         assert isinstance(args, list)
         assert all(isinstance(a, str) for a in args)
 
     def test_starts_with_claude(self, runner: AgentRunner, sample_task: Task):
-        args = runner._build_execute_args(sample_task, allowed_tools=["Read"], max_turns=10)
+        args = runner._build_execute_args(
+            sample_task, allowed_tools=["Read"], max_turns=10
+        )
         assert args[0] == "claude"
 
     def test_includes_prompt_flag(self, runner: AgentRunner, sample_task: Task):
@@ -115,7 +117,9 @@ class TestBuildExecuteArgs:
         p_idx = args.index("-p")
         assert args[p_idx + 1] == sample_task.instruction
 
-    def test_includes_stream_json_output_format(self, runner: AgentRunner, sample_task: Task):
+    def test_includes_stream_json_output_format(
+        self, runner: AgentRunner, sample_task: Task
+    ):
         args = runner._build_execute_args(sample_task, allowed_tools=[], max_turns=5)
         assert "--output-format" in args
         idx = args.index("--output-format")
@@ -123,7 +127,9 @@ class TestBuildExecuteArgs:
 
     def test_includes_allowed_tools(self, runner: AgentRunner, sample_task: Task):
         allowed_tools = ["Read", "Write", "Bash"]
-        args = runner._build_execute_args(sample_task, allowed_tools=allowed_tools, max_turns=5)
+        args = runner._build_execute_args(
+            sample_task, allowed_tools=allowed_tools, max_turns=5
+        )
         assert "--allowedTools" in args
         idx = args.index("--allowedTools")
         assert args[idx + 1] == "Read,Write,Bash"
@@ -151,7 +157,6 @@ class TestBuildExecuteArgs:
         task = Task(
             id="task-002",
             type="claude",
-            workspace="/tmp/ws",
             title="Budget Task",
             instruction="Do something",
             budget_usd=2.5,
@@ -160,7 +165,9 @@ class TestBuildExecuteArgs:
         idx = args.index("--max-budget-usd")
         assert float(args[idx + 1]) == pytest.approx(2.5)
 
-    def test_empty_allowed_tools_produces_empty_string(self, runner: AgentRunner, sample_task: Task):
+    def test_empty_allowed_tools_produces_empty_string(
+        self, runner: AgentRunner, sample_task: Task
+    ):
         args = runner._build_execute_args(sample_task, allowed_tools=[], max_turns=5)
         idx = args.index("--allowedTools")
         assert args[idx + 1] == ""
@@ -174,13 +181,45 @@ class TestBuildExecuteArgs:
         )
         assert args == [
             "claude",
-            "-p", sample_task.instruction,
-            "--output-format", "stream-json",
+            "-p",
+            sample_task.instruction,
+            "--output-format",
+            "stream-json",
             "--verbose",
-            "--allowedTools", "Read,Write",
-            "--max-turns", "20",
-            "--max-budget-usd", str(sample_task.budget_usd),
+            "--allowedTools",
+            "Read,Write",
+            "--max-turns",
+            "20",
+            "--max-budget-usd",
+            str(sample_task.budget_usd),
         ]
+
+    def test_system_prompt_none_does_not_add_flag(
+        self, runner: AgentRunner, sample_task: Task
+    ):
+        """When system_prompt is None, --append-system-prompt must not appear."""
+        args = runner._build_execute_args(
+            sample_task,
+            allowed_tools=[],
+            max_turns=5,
+            system_prompt=None,
+        )
+        assert "--append-system-prompt" not in args
+
+    def test_system_prompt_provided_adds_flag(
+        self, runner: AgentRunner, sample_task: Task
+    ):
+        """When system_prompt is given, --append-system-prompt and its value are appended."""
+        prompt = "You are a helpful coding assistant."
+        args = runner._build_execute_args(
+            sample_task,
+            allowed_tools=[],
+            max_turns=5,
+            system_prompt=prompt,
+        )
+        assert "--append-system-prompt" in args
+        idx = args.index("--append-system-prompt")
+        assert args[idx + 1] == prompt
 
 
 # ---------------------------------------------------------------------------
@@ -225,9 +264,12 @@ class TestBuildResumeArgs:
         args = runner._build_resume_args(session_id, instruction)
         assert args == [
             "claude",
-            "--resume", session_id,
-            "-p", instruction,
-            "--output-format", "stream-json",
+            "--resume",
+            session_id,
+            "-p",
+            instruction,
+            "--output-format",
+            "stream-json",
             "--verbose",
         ]
 
