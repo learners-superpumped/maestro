@@ -1509,6 +1509,44 @@ def goal_disable(goal_id):
     asyncio.run(_run())
 
 
+@goal.command("edit")
+@click.argument("goal_id")
+@click.option("--description", default=None, help="New description")
+@click.option("--metrics", default=None, help="New metrics JSON")
+@click.option(
+    "--cooldown", "cooldown_hours", type=int, default=None, help="New cooldown hours"
+)
+def goal_edit(goal_id, description, metrics, cooldown_hours):
+    """Edit an existing goal."""
+
+    async def _run():
+        config = _load_config()
+        from maestro.store import Store
+
+        store = Store(config.project.store_path)
+        await store.init_db()
+        g = await store.get_goal(goal_id)
+        if not g:
+            click.echo(f"Goal not found: {goal_id}", err=True)
+            raise SystemExit(1)
+        fields = {}
+        if description is not None:
+            fields["description"] = description
+        if metrics is not None:
+            fields["metrics"] = metrics
+        if cooldown_hours is not None:
+            fields["cooldown_hours"] = cooldown_hours
+        if not fields:
+            click.echo(
+                "Nothing to update. Use --description, --metrics, or --cooldown."
+            )
+            return
+        await store.update_goal(goal_id, **fields)
+        click.echo(f"Updated goal: {goal_id}")
+
+    asyncio.run(_run())
+
+
 @goal.command("remove")
 @click.argument("goal_id")
 def goal_remove(goal_id):
