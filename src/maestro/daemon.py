@@ -35,7 +35,8 @@ from maestro.reconciler import Reconciler
 from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
 from maestro.store import Store
-from maestro.workspace import WorkspaceManager
+from maestro.workspace import WorkspaceManager  # TODO: remove in Task 8
+from maestro.worktree import WorktreeManager
 from maestro.ws import WebSocketManager
 
 logger = logging.getLogger("maestro.daemon")
@@ -92,6 +93,8 @@ class Daemon:
             self._store, embedding_client, self._config, self._base_path
         )
 
+        self._worktree_mgr = WorktreeManager(base_path)
+
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick: float = 0.0
@@ -99,7 +102,7 @@ class Daemon:
         self._last_scheduler_tick: float = 0.0
         self._last_cleanup_tick: float = 0.0
 
-        # Internal workspace templates (used if no local override exists)
+        # Legacy workspace templates — used by _resume_task until Task 8
         self._internal_templates: dict[str, str] = {
             "_planner": "planner",
             "_reviewer": "reviewer",
@@ -149,6 +152,50 @@ class Daemon:
                 logger.info(
                     "Seeded extract rule from YAML: %s/%s", workspace, task_type
                 )
+
+    # ------------------------------------------------------------------
+    # CWD & prompt resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_cwd(self, task: Task) -> Path:
+        """Determine the working directory for a task."""
+        agent_def = self._config.agents.get(task.agent)
+        if not self._worktree_mgr.is_git_repo():
+            return self._base_path
+        if task.no_worktree or (agent_def and agent_def.no_worktree):
+            return self._base_path
+        if task.goal_id:
+            return self._worktree_mgr.ensure_worktree(f"goal-{task.goal_id}")
+        return self._worktree_mgr.ensure_worktree(f"task-{task.id}")
+
+    def _load_prompt(self, agent_name: str) -> str | None:
+        """Load agent prompt using 3-tier hierarchy: project override -> package builtin -> None."""
+        agent_def = self._config.agents.get(agent_name)
+        if not agent_def:
+            return None
+
+        prompt_parts: list[str] = []
+        if agent_def.role:
+            prompt_parts.append(f"# Role\n{agent_def.role}")
+
+        # Tier 2: project override (.maestro/prompts/)
+        if agent_def.instructions:
+            override_path = self._base_path / agent_def.instructions
+            if override_path.exists():
+                prompt_parts.append(override_path.read_text())
+                return "\n\n".join(prompt_parts)
+
+        # Tier 1: package builtin
+        import importlib.resources
+
+        try:
+            builtin = importlib.resources.files("maestro.prompts") / f"{agent_name}.md"
+            if builtin.is_file():
+                prompt_parts.append(builtin.read_text())
+        except (FileNotFoundError, TypeError):
+            pass
+
+        return "\n\n".join(prompt_parts) if prompt_parts else None
 
     # ------------------------------------------------------------------
     # Public interface
@@ -327,7 +374,7 @@ class Daemon:
             task = Task(
                 id=str(uuid.uuid4())[:8],
                 type=spec.get("type", "planning"),
-                workspace=spec["workspace"],
+                agent=spec.get("agent", "planner"),
                 title=spec["title"],
                 instruction=spec["instruction"],
                 priority=spec.get("priority", 1),
@@ -495,25 +542,16 @@ class Daemon:
     async def _execute_task(self, task: Task) -> None:
         """Execute a single task end-to-end.
 
-        1. Verify workspace exists.
+        1. Resolve cwd and agent config.
         2. Transition to RUNNING with started_at and timeout_at.
         3. Call the AgentRunner.
         4. Handle the result.
         """
-        wm = WorkspaceManager(self._base_path)
-        template = self._internal_templates.get(task.workspace)
-        try:
-            workspace_path = wm.resolve_workspace_path(task.workspace, template)
-        except FileNotFoundError:
-            logger.error(
-                "Workspace %s does not exist for task %s", task.workspace, task.id
-            )
-            await self._store.update_task_status(
-                task.id,
-                TaskStatus.FAILED,
-                error=f"Workspace not found: {task.workspace}",
-            )
-            return
+        agent_def = self._config.agents.get(
+            task.agent, self._config.agents.get("default")
+        )
+        cwd = self._resolve_cwd(task)
+        system_prompt = self._load_prompt(task.agent)
 
         # Transition to RUNNING
         now = datetime.now(timezone.utc)
@@ -539,10 +577,15 @@ class Daemon:
         try:
             result = await self._runner.execute(
                 task,
-                workspace_path,
-                allowed_tools=self._config.agent.default_allowed_tools,
-                max_turns=self._config.agent.default_max_turns,
+                cwd=cwd,
+                allowed_tools=agent_def.tools
+                if agent_def
+                else self._config.agent.default_allowed_tools,
+                max_turns=agent_def.max_turns
+                if agent_def
+                else self._config.agent.default_max_turns,
                 on_event=on_event,
+                system_prompt=system_prompt,
             )
         except Exception as exc:
             logger.exception("Runner raised for task %s: %s", task.id, exc)
@@ -762,7 +805,7 @@ class Daemon:
 
         # Auto-extract assets from result_json
         if result.result_json and self._asset_manager:
-            rule = await self._store.get_extract_rule(task.workspace, task.type)
+            rule = await self._store.get_extract_rule(task.type)
             if rule:
                 rules = {
                     "asset_type": rule["asset_type"],
@@ -777,7 +820,7 @@ class Daemon:
                     if isinstance(rj, dict):
                         await self._asset_manager.auto_extract(
                             task_id=task.id,
-                            workspace=task.workspace,
+                            workspace=task.agent,
                             result_json=rj,
                             rules=rules,
                         )
@@ -801,16 +844,15 @@ class Daemon:
         review_task = Task(
             id=str(uuid.uuid4())[:8],
             type="review",
-            workspace="_reviewer",
+            agent="reviewer",
             title=f"Review: {original_task.title}",
             instruction=json.dumps(
                 {
                     "original_task_id": original_task.parent_task_id
                     or original_task.id,
-                    "original_workspace": original_task.workspace,
+                    "original_agent": original_task.agent,
                     "original_instruction": original_task.instruction,
                     "result": result.result_json,
-                    "knowledge_path": f"../{original_task.workspace}/knowledge/",
                 },
                 ensure_ascii=False,
             ),
@@ -859,7 +901,7 @@ class Daemon:
             revision_task = Task(
                 id=str(uuid.uuid4())[:8],
                 type=original_task.type,
-                workspace=original_task.workspace,
+                agent=original_task.agent,
                 title=f"Revision #{original_task.review_count + 1}: {original_task.title}",
                 instruction=(
                     f"이전 실행의 리뷰어 피드백:\n{feedback}\n\n"

@@ -65,7 +65,7 @@ class EventEmittingStore(Store):
             "task.created",
             {
                 "task_id": task.id,
-                "workspace": task.workspace,
+                "agent": task.agent,
                 "title": task.title,
                 "type": task.type,
             },
