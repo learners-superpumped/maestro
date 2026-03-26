@@ -53,7 +53,7 @@ class AgentDefinition:
     name: str = "default"
     role: str = ""
     instructions: str = ""
-    tools: list[str] = field(default_factory=lambda: ["Read", "Write", "Edit", "Bash"])
+    tools: list[str] = field(default_factory=lambda: ["Read", "Write", "Bash"])
     max_turns: int = 50
     no_worktree: bool = False
 

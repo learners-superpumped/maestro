@@ -17,8 +17,8 @@ daemon:
 concurrency:
   # Total number of agents that may run at the same time across all workspaces.
   max_total_agents: 5
-  # Maximum concurrent agents per individual workspace.
-  max_per_workspace: 1
+  # Maximum concurrent agents per individual goal.
+  max_per_goal: 1
 
 resources:
   # Named resource pools consumed by agents.
