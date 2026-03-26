@@ -3,7 +3,8 @@
 ## Goals
 {goals}
 
-{history_section}## Signals
+{history_section}
+## Signals
 {signals}
 
 중요: 각 태스크에 agent 필드를 지정하라. agent는 태스크를 실행할 에이전트 유형이다.

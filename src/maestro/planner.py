@@ -125,7 +125,7 @@ class Planner:
                     result_summary = ""
                     if t.result:
                         result_summary = str(t.result)[:300]
-                    status_label = "성공" if t.status.value == "completed" else "실패"
+                    status_label = "DONE" if t.status.value == "completed" else "FAIL"
                     history_parts.append(
                         f"- [{status_label}] {t.title}: {result_summary}"
                     )
@@ -135,13 +135,8 @@ class Planner:
 
         history_section = ""
         if history_parts:
-            history_text = "\n".join(history_parts)
-            history_section = (
-                "## 과거 작업 이력\n"
-                "아래는 이 목표에 대해 이전에 실행된 태스크들이다. "
-                "이 결과를 바탕으로 다음 단계를 계획하라.\n\n"
-                f"{history_text}\n\n"
-            )
+            header = (_PROMPTS_DIR / "planner_history_header.md").read_text()
+            history_section = header + "\n".join(history_parts) + "\n\n"
 
         template = (_PROMPTS_DIR / "planner_instruction.md").read_text()
         instruction = template.format(
