@@ -13,6 +13,72 @@ interface TaskListTreeProps {
   isLoading: boolean
 }
 
+function TaskRow({
+  task,
+  depth,
+  expanded,
+  onToggle,
+  onClick,
+}: {
+  task: any
+  depth: number
+  expanded: boolean
+  onToggle: () => void
+  onClick: () => void
+}) {
+  const hasChildren = task.children_summary?.total > 0
+  const status = task.effective_status ?? task.status
+  const indent = depth * 20
+
+  return (
+    <TableRow
+      className="border-b border-[#f0efed] hover:bg-[#f7f6f3] cursor-pointer h-[36px]"
+      onClick={onClick}
+    >
+      {/* Status + Title in one cell for proper indentation */}
+      <TableCell>
+        <div className="flex items-center" style={{ paddingLeft: `${indent}px` }}>
+          {/* Chevron — only if has children, otherwise spacer */}
+          {hasChildren ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggle()
+              }}
+              className="text-[#9b9a97] hover:text-[#37352f] w-5 h-5 flex items-center justify-center shrink-0"
+            >
+              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            </button>
+          ) : (
+            <span className="w-5 shrink-0" />
+          )}
+          <StatusIcon status={status} size={14} />
+          <span className={`text-[13px] truncate ml-2 ${depth === 0 ? "text-[#37352f]" : "text-[#787774]"}`}>
+            {task.title}
+          </span>
+          {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
+            <span
+              className="text-[11px] text-[#cb912f] shrink-0 ml-2"
+              title={task.depends_on_tasks.map((d: any) => d.title).join(", ")}
+            >
+              ← {task.depends_on_tasks.length}
+            </span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="w-[40px] px-2">
+        {task.priority != null && <PriorityIcon priority={task.priority} size={14} />}
+      </TableCell>
+      <TableCell className="w-[80px] text-[12px] text-[#9b9a97] tabular-nums">
+        {formatTaskTime(task)}
+      </TableCell>
+      <TableCell className="w-[80px] text-right text-[13px] font-mono text-[#9b9a97]">
+        {task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(2)}` : "—"}
+      </TableCell>
+    </TableRow>
+  )
+}
+
 function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
   const { data, isLoading } = useTaskChildren(parentId)
   const navigate = useNavigate()
@@ -31,8 +97,8 @@ function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
   if (isLoading) {
     return (
       <TableRow className="border-b border-[#f0efed]">
-        <TableCell colSpan={5}>
-          <div style={{ paddingLeft: `${depth * 24}px` }}>
+        <TableCell colSpan={4}>
+          <div style={{ paddingLeft: `${depth * 20 + 20}px` }}>
             <Skeleton className="h-4 w-48 bg-[#f7f6f3]" />
           </div>
         </TableCell>
@@ -44,45 +110,16 @@ function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
     <>
       {children.map((child: any) => (
         <Fragment key={child.id}>
-          <TableRow
-            className="border-b border-[#f0efed] hover:bg-[#f7f6f3] cursor-pointer h-[36px]"
+          <TaskRow
+            task={child}
+            depth={depth}
+            expanded={!!expanded[child.id]}
+            onToggle={() => setExpanded((prev) => ({ ...prev, [child.id]: !prev[child.id] }))}
             onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
-          >
-            <TableCell className="w-[24px] px-2">
-              <StatusIcon status={child.status} size={14} />
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 24}px` }}>
-                {depth < 2 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setExpanded((prev) => ({ ...prev, [child.id]: !prev[child.id] }))
-                    }}
-                    className="text-[#9b9a97] hover:text-[#37352f] w-5 h-5 flex items-center justify-center"
-                  >
-                    {expanded[child.id] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                  </button>
-                )}
-                <span className="text-[14px] text-[#787774] truncate">{child.title}</span>
-                {child.depends_on_tasks && child.depends_on_tasks.length > 0 && (
-                  <span className="text-[12px] text-[#cb912f] shrink-0" title={child.depends_on_tasks.map((d: any) => d.title).join(", ")}>
-                    ← {child.depends_on_tasks.length} step{child.depends_on_tasks.length > 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            </TableCell>
-            <TableCell className="w-[40px] px-2">
-              {child.priority != null && <PriorityIcon priority={child.priority} size={14} />}
-            </TableCell>
-            <TableCell className="w-[80px] text-[12px] text-[#9b9a97] tabular-nums">
-              {formatTaskTime(child)}
-            </TableCell>
-            <TableCell className="w-[80px] text-right text-[13px] font-mono text-[#787774]">
-              {child.cost_usd != null ? `$${Number(child.cost_usd).toFixed(2)}` : "—"}
-            </TableCell>
-          </TableRow>
-          {expanded[child.id] && depth < 2 && <ChildRows parentId={child.id} depth={depth + 1} />}
+          />
+          {expanded[child.id] && child.children_summary?.total > 0 && depth < 2 && (
+            <ChildRows parentId={child.id} depth={depth + 1} />
+          )}
         </Fragment>
       ))}
     </>
@@ -103,12 +140,11 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
   }, [hasRunning])
 
   return (
-    <div className="border border-[#f0efed] rounded overflow-hidden">
+    <div className="border border-[#e8e5df] rounded overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow className="border-b border-[#f0efed] hover:bg-transparent">
-            <TableHead className="text-[12px] font-medium text-[#9b9a97] w-[24px] px-2">Status</TableHead>
-            <TableHead className="text-[12px] font-medium text-[#9b9a97]">Title</TableHead>
+          <TableRow className="border-b border-[#e8e5df] hover:bg-transparent">
+            <TableHead className="text-[12px] font-medium text-[#9b9a97]">Task</TableHead>
             <TableHead className="text-[12px] font-medium text-[#9b9a97] w-[40px] px-2">Priority</TableHead>
             <TableHead className="text-[12px] font-medium text-[#9b9a97] w-[80px]">Time</TableHead>
             <TableHead className="text-[12px] font-medium text-[#9b9a97] w-[80px] text-right">Cost</TableHead>
@@ -118,63 +154,30 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i} className="border-b border-[#f0efed]">
-                {Array.from({ length: 5 }).map((_, j) => (
+                {Array.from({ length: 4 }).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 bg-[#f7f6f3]" /></TableCell>
                 ))}
               </TableRow>
             ))
           ) : (
-            tasks.map((task: any) => {
-              const hasChildren = task.children_summary?.total > 0
-              const status = task.effective_status ?? task.status
-              return (
-                <Fragment key={task.id}>
-                  <TableRow
-                    className="border-b border-[#f0efed] hover:bg-[#f7f6f3] cursor-pointer h-[36px]"
-                    onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
-                  >
-                    <TableCell className="w-[24px] px-2">
-                      <StatusIcon status={status} size={14} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {hasChildren && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setExpanded((prev) => ({ ...prev, [task.id]: !prev[task.id] }))
-                            }}
-                            className="text-[#9b9a97] hover:text-[#37352f] w-5 h-5 flex items-center justify-center"
-                          >
-                            {expanded[task.id] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                          </button>
-                        )}
-                        <span className="text-[14px] text-[#37352f] truncate max-w-xs">{task.title}</span>
-                        {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
-                          <span className="text-[12px] text-[#cb912f] shrink-0" title={task.depends_on_tasks.map((d: any) => d.title).join(", ")}>
-                            ← {task.depends_on_tasks.length} step{task.depends_on_tasks.length > 1 ? "s" : ""}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="w-[40px] px-2">
-                      {task.priority != null && <PriorityIcon priority={task.priority} size={14} />}
-                    </TableCell>
-                    <TableCell className="w-[80px] text-[12px] text-[#9b9a97] tabular-nums">
-                      {formatTaskTime(task)}
-                    </TableCell>
-                    <TableCell className="w-[80px] text-right text-[13px] font-mono text-[#787774]">
-                      {task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(2)}` : "—"}
-                    </TableCell>
-                  </TableRow>
-                  {expanded[task.id] && hasChildren && <ChildRows parentId={task.id} depth={1} />}
-                </Fragment>
-              )
-            })
+            tasks.map((task: any) => (
+              <Fragment key={task.id}>
+                <TaskRow
+                  task={task}
+                  depth={0}
+                  expanded={!!expanded[task.id]}
+                  onToggle={() => setExpanded((prev) => ({ ...prev, [task.id]: !prev[task.id] }))}
+                  onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
+                />
+                {expanded[task.id] && task.children_summary?.total > 0 && (
+                  <ChildRows parentId={task.id} depth={1} />
+                )}
+              </Fragment>
+            ))
           )}
           {!isLoading && tasks.length === 0 && (
             <TableRow className="border-b border-[#f0efed]">
-              <TableCell colSpan={5} className="text-center text-[14px] text-[#9b9a97] py-8">No tasks found</TableCell>
+              <TableCell colSpan={4} className="text-center text-[13px] text-[#9b9a97] py-8">No tasks found</TableCell>
             </TableRow>
           )}
         </TableBody>
