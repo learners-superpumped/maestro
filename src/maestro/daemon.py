@@ -666,8 +666,12 @@ class Daemon:
 
         if result.success:
             now = datetime.now(timezone.utc)
-            if result.result_json is not None and not task.result_json:
-                extra_fields["result_json"] = result.result_json
+            if result.result_json is not None:
+                # Re-fetch from DB to check if result_json was already set
+                # (e.g. via MCP submit_result during execution)
+                current = await self._store.get_task(task.id)
+                if not current or not current.result_json:
+                    extra_fields["result_json"] = result.result_json
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.COMPLETED,
