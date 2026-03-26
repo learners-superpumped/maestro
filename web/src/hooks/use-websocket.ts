@@ -38,8 +38,6 @@ export function useWebSocket() {
             queryClient.invalidateQueries({ queryKey: ["schedules"] })
           if (type.startsWith("rule."))
             queryClient.invalidateQueries({ queryKey: ["rules"] })
-          if (type.startsWith("workspace."))
-            queryClient.invalidateQueries({ queryKey: ["workspaces"] })
           if (
             type.startsWith("task.") ||
             type.startsWith("asset.") ||

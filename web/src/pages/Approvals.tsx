@@ -33,7 +33,6 @@ export function Approvals() {
               <TableHead className="text-[#9b9a97] text-[12px]">Status</TableHead>
               <TableHead className="text-[#9b9a97] text-[12px]">Task ID</TableHead>
               <TableHead className="text-[#9b9a97] text-[12px]">Title</TableHead>
-              <TableHead className="text-[#9b9a97] text-[12px]">Workspace</TableHead>
               <TableHead className="text-[#9b9a97] text-[12px]">Type</TableHead>
               <TableHead className="text-[#9b9a97] text-[12px]">Draft Preview</TableHead>
               <TableHead className="text-[#9b9a97] text-[12px] w-28">Actions</TableHead>
@@ -43,7 +42,7 @@ export function Approvals() {
             {isLoading
               ? Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i} className="border-[#e8e5df]">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 6 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 bg-[#f7f6f3]" /></TableCell>
                     ))}
                   </TableRow>
@@ -64,9 +63,6 @@ export function Approvals() {
                     </TableCell>
                     <TableCell className="text-[#37352f] text-[14px] max-w-xs truncate">
                       {item.title ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-[#787774] text-[13px]">
-                      {item.workspace ?? "—"}
                     </TableCell>
                     <TableCell className="text-[#9b9a97] text-[12px] font-mono">
                       {item.type ?? "—"}
@@ -108,7 +104,7 @@ export function Approvals() {
                 ))}
             {!isLoading && approvals.length === 0 && (
               <TableRow className="border-[#e8e5df]">
-                <TableCell colSpan={7} className="text-center text-[#9b9a97] py-8 text-[14px]">
+                <TableCell colSpan={6} className="text-center text-[#9b9a97] py-8 text-[14px]">
                   No pending approvals
                 </TableCell>
               </TableRow>

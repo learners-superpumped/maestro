@@ -24,7 +24,7 @@ export const api = {
   stats: () => request<any>("/api/internal/stats"),
 
   tasks: {
-    list: (params?: { status?: string; workspace?: string; root_only?: string }) =>
+    list: (params?: { status?: string; root_only?: string }) =>
       request<any>(`/api/internal/tasks${buildQuery(params)}`),
     get: (id: string) => request<any>(`/api/internal/task/${id}`),
     create: (data: any) =>
@@ -59,7 +59,7 @@ export const api = {
   },
 
   assets: {
-    list: (params?: { type?: string; workspace?: string; tags?: string }) =>
+    list: (params?: { type?: string; tags?: string }) =>
       request<any>(`/api/internal/assets${buildQuery(params)}`),
     get: (id: string) => request<any>(`/api/internal/asset/${id}`),
     register: (data: any) =>
@@ -76,7 +76,7 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ grace_days: graceDays }),
       }),
-    search: (data: { query: string; workspace?: string; asset_type?: string; limit?: number }) =>
+    search: (data: { query: string; asset_type?: string; limit?: number }) =>
       request<any>("/api/internal/asset/search", {
         method: "POST",
         body: JSON.stringify(data),
@@ -117,15 +117,15 @@ export const api = {
   },
 
   rules: {
-    list: (params?: { workspace?: string }) =>
-      request<any>(`/api/internal/rules${buildQuery(params)}`),
+    list: () =>
+      request<any>("/api/internal/rules"),
     create: (data: any) =>
       request<any>("/api/internal/rule", {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    delete: (workspace: string, taskType: string) =>
-      request<any>(`/api/internal/rule/${workspace}/${taskType}`, {
+    delete: (taskType: string) =>
+      request<any>(`/api/internal/rule/${taskType}`, {
         method: "DELETE",
       }),
   },
@@ -133,16 +133,5 @@ export const api = {
   approvals: {
     pending: () => request<any>("/api/internal/approvals/pending"),
     get: (taskId: string) => request<any>(`/api/internal/approval/${taskId}`),
-  },
-
-  workspaces: {
-    list: () => request<any>("/api/internal/workspaces"),
-    create: (data: { name: string; template?: string }) =>
-      request<any>("/api/internal/workspace", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    validate: (name: string) =>
-      request<any>(`/api/internal/workspace/${name}/validate`),
   },
 }

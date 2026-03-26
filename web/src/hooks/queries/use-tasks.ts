@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { toast } from "sonner"
 
-export function useTasks(params?: { status?: string; workspace?: string }) {
+export function useTasks(params?: { status?: string }) {
   return useQuery({
     queryKey: ["tasks", params],
     queryFn: () => api.tasks.list(params),
@@ -83,7 +83,7 @@ export function useReviseTask() {
   })
 }
 
-export function useRootTasks(params?: { status?: string; workspace?: string }) {
+export function useRootTasks(params?: { status?: string }) {
   return useQuery({
     queryKey: ["root-tasks", params],
     queryFn: () => api.tasks.list({ ...params, root_only: "true" }),

@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Plus, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { useRootTasks, useCreateTask } from "@/hooks/queries/use-tasks"
-import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { ActionRequired } from "@/components/ActionRequired"
 import { TaskBoard } from "@/components/TaskBoard"
 import { TaskListTree } from "@/components/TaskListTree"
@@ -12,7 +11,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -30,7 +28,6 @@ import {
 } from "@/components/ui/dialog"
 
 const taskSchema = z.object({
-  workspace: z.string().min(1, "Required"),
   title: z.string().min(1, "Required"),
   instruction: z.string().min(1, "Required"),
   priority: z.number().int().min(0).max(100),
@@ -67,19 +64,13 @@ function usePersisted<T>(key: string, defaultValue: T): [T, (v: T) => void] {
 
 export function Tasks() {
   const [view, setView] = usePersisted<"list" | "board">("maestro:tasks:view", "list")
-  const [statusFilter, setStatusFilter] = usePersisted("maestro:tasks:status", "")
-  const [workspaceFilter, setWorkspaceFilter] = usePersisted("maestro:tasks:workspace", "")
-  const [showSystem, setShowSystem] = usePersisted("maestro:tasks:showSystem", false)
+  const [statusFilter, setStatusFilter] = usePersisted<string>("maestro:tasks:status", "")
   const [open, setOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const { data, isLoading } = useRootTasks({
     status: statusFilter || undefined,
-    workspace: workspaceFilter || undefined,
   })
-
-  const { data: wsData } = useWorkspaces()
-  const workspaces: any[] = wsData?.workspaces ?? []
 
   const createTask = useCreateTask()
 
@@ -96,7 +87,6 @@ export function Tasks() {
 
   const onSubmit = handleSubmit(async (values) => {
     const payload: any = {
-      workspace: values.workspace,
       type: "claude",
       title: values.title,
       instruction: values.instruction,
@@ -110,11 +100,7 @@ export function Tasks() {
     setOpen(false)
   })
 
-  const allTasks: any[] = data?.tasks ?? []
-  // Filter out system workspaces unless toggled on
-  const tasks = showSystem ? allTasks : allTasks.filter((t: any) =>
-    !t.workspace?.startsWith("_")
-  )
+  const tasks: any[] = data?.tasks ?? []
 
   return (
     <div className="space-y-6">
@@ -152,25 +138,6 @@ export function Tasks() {
               <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Create Task</DialogTitle>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4 mt-2">
-              <div className="space-y-1">
-                <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                <Select onValueChange={(v) => setValue("workspace", v)}>
-                  <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
-                    <SelectValue placeholder="Select workspace" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-[#e8e5df]">
-                    {workspaces.map((ws: any) => (
-                      <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                        {ws.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.workspace && (
-                  <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
-                )}
-              </div>
-
               <div className="space-y-1">
                 <Label className="text-[12px] text-[#9b9a97]">Title *</Label>
                 <Input
@@ -315,7 +282,7 @@ export function Tasks() {
 
         <div className="flex items-center gap-1.5">
           <span className="text-[12px] text-[#9b9a97] font-medium">Status</span>
-          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : (v ?? ""))}>
             <SelectTrigger className="w-36 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -326,28 +293,6 @@ export function Tasks() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <span className="text-[12px] text-[#9b9a97] font-medium">Workspace</span>
-          <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-40 bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
-              <SelectValue placeholder="All workspaces" />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-[#e8e5df]">
-              <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
-              {workspaces.map((ws: any) => (
-                <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
-                  {ws.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Switch checked={showSystem} onCheckedChange={setShowSystem} />
-          <span className="text-[12px] text-[#9b9a97]">System</span>
         </div>
       </div>
 

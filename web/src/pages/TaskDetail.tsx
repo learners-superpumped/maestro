@@ -29,8 +29,6 @@ import {
   ChevronRight,
   Loader2,
   Check,
-  X,
-  PenLine,
   AlertTriangle,
   Play,
   RefreshCw,
@@ -229,14 +227,12 @@ export function TaskDetail() {
             <TaskTypeBadge type={task.type} />
           </div>
           <div className="flex items-center gap-2 mt-0.5 text-[12px] text-[#9b9a97]">
-            <span>{task.workspace}</span>
             {task.cost_usd > 0 && (
               <>
-                <span>·</span>
                 <span className="font-mono">${Number(task.cost_usd).toFixed(4)}</span>
+                <span>·</span>
               </>
             )}
-            <span>·</span>
             <span className="font-mono">{task.id}</span>
           </div>
         </div>
@@ -250,7 +246,6 @@ export function TaskDetail() {
                   size="sm"
                   onClick={async () => {
                     await createTask.mutateAsync({
-                      workspace: task.workspace,
                       type: task.type,
                       title: task.title,
                       instruction: task.instruction,

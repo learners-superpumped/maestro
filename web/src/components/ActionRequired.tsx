@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Check, X, PenLine, Play, RefreshCw, ExternalLink, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react"
+import { Check, X, PenLine, Play, RefreshCw, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "@/api/client"
 
@@ -15,9 +15,7 @@ function parseReviewFromDraft(draftJson: any): { verdict: string | null; summary
   if (!draftJson) return { verdict: null, summary: null }
   try {
     const draft = typeof draftJson === "string" ? JSON.parse(draftJson) : draftJson
-    // review_summary is the top-level field
     const summary = draft.review_summary || null
-    // verdict is inside the result field (which contains markdown with JSON)
     let verdict: string | null = null
     const resultStr = draft.result || ""
     const jsonMatch = resultStr.match(/```json\s*\n?([\s\S]*?)\n?```/)
@@ -43,7 +41,6 @@ function ApprovalCard({ task }: { task: any }) {
   const [dialogType, setDialogType] = useState<"approve" | "reject" | "revise" | null>(null)
   const [note, setNote] = useState("")
 
-  // Fetch approval draft for this task
   const { data: approval } = useQuery({
     queryKey: ["approval", task.id],
     queryFn: () => api.approvals.get(task.id),
@@ -73,7 +70,7 @@ function ApprovalCard({ task }: { task: any }) {
           ? "border-[#e8e5df] border-l-2 border-l-[#4dab9a]"
           : "border-[#e8e5df]"
       )}>
-        {/* Row 1: Status + Title + Workspace + Actions */}
+        {/* Row 1: Status + Title + Actions */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <StatusBadge status={task.status} />
@@ -83,7 +80,6 @@ function ApprovalCard({ task }: { task: any }) {
             >
               {task.title}
             </span>
-            <span className="text-[12px] text-[#9b9a97] shrink-0">{task.workspace}</span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {task.status === "pending" && (
@@ -118,11 +114,10 @@ function ApprovalCard({ task }: { task: any }) {
               <>
                 <Button size="sm" onClick={async () => {
                   await retryTask.mutateAsync({
-                    workspace: task.workspace, type: task.type,
+                    type: task.type,
                     title: task.title, instruction: task.instruction,
                     priority: task.priority, approval_level: task.approval_level,
                   })
-                  // Dismiss old failed task
                   await api.tasks.dismiss(task.id)
                 }}
                   disabled={retryTask.isPending}

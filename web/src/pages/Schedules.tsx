@@ -9,7 +9,6 @@ import {
   useDeleteSchedule,
   useToggleSchedule,
 } from "@/hooks/queries/use-schedules"
-import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,7 +47,6 @@ const TASK_TYPES = [
 
 const scheduleSchema = z.object({
   name: z.string().min(1, "Required"),
-  workspace: z.string().min(1, "Required"),
   task_type: z.string().min(1, "Required"),
   cron: z.string(),
   interval_ms: z.number().int().min(0),
@@ -65,9 +63,6 @@ export function Schedules() {
   const deleteSchedule = useDeleteSchedule()
   const toggleSchedule = useToggleSchedule()
 
-  const { data: wsData } = useWorkspaces()
-  const workspaces: any[] = wsData?.workspaces ?? []
-
   const {
     register,
     handleSubmit,
@@ -82,7 +77,6 @@ export function Schedules() {
   const onSubmit = handleSubmit(async (values) => {
     const payload: any = {
       name: values.name,
-      workspace: values.workspace,
       task_type: values.task_type,
       approval_level: values.approval_level,
     }
@@ -119,40 +113,20 @@ export function Schedules() {
               <DialogTitle className="text-[16px] font-semibold text-[#37352f]">Add Schedule</DialogTitle>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Name *</Label>
-                  <Input
-                    {...register("name")}
-                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                  />
-                  {errors.name && (
-                    <p className="text-[12px] text-[#eb5757]">{errors.name.message}</p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Select onValueChange={(v) => setValue("workspace", v)}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
-                      <SelectValue placeholder="Select workspace" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {workspaces.map((ws: any) => (
-                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {ws.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.workspace && (
-                    <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
-                  )}
-                </div>
+              <div className="space-y-1">
+                <Label className="text-[12px] text-[#9b9a97]">Name *</Label>
+                <Input
+                  {...register("name")}
+                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
+                />
+                {errors.name && (
+                  <p className="text-[12px] text-[#eb5757]">{errors.name.message}</p>
+                )}
               </div>
 
               <div className="space-y-1">
                 <Label className="text-[12px] text-[#9b9a97]">Task Type *</Label>
-                <Select onValueChange={(v) => setValue("task_type", v)}>
+                <Select onValueChange={(v) => { if (v) setValue("task_type", v as string) }}>
                   <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
                     <SelectValue placeholder="Select task type" />
                   </SelectTrigger>
@@ -239,7 +213,6 @@ export function Schedules() {
           <TableHeader>
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Name</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Task Type</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Trigger</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Enabled</TableHead>
@@ -250,7 +223,7 @@ export function Schedules() {
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i} className="border-[#e8e5df]">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 5 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
@@ -262,7 +235,6 @@ export function Schedules() {
                     <TableCell className="text-[#37352f] text-[14px] font-medium">
                       {s.name}
                     </TableCell>
-                    <TableCell className="text-[14px] text-[#787774]">{s.workspace}</TableCell>
                     <TableCell className="font-mono text-[13px] text-[#787774]">
                       {s.task_type}
                     </TableCell>
@@ -299,7 +271,7 @@ export function Schedules() {
                 ))}
             {!isLoading && schedules.length === 0 && (
               <TableRow className="border-[#e8e5df]">
-                <TableCell colSpan={6} className="text-center text-[14px] text-[#9b9a97] py-8">
+                <TableCell colSpan={5} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No schedules found
                 </TableCell>
               </TableRow>

@@ -2,10 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { toast } from "sonner"
 
-export function useRules(params?: { workspace?: string }) {
+export function useRules() {
   return useQuery({
-    queryKey: ["rules", params],
-    queryFn: () => api.rules.list(params),
+    queryKey: ["rules"],
+    queryFn: () => api.rules.list(),
   })
 }
 
@@ -24,13 +24,7 @@ export function useCreateRule() {
 export function useDeleteRule() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      workspace,
-      taskType,
-    }: {
-      workspace: string
-      taskType: string
-    }) => api.rules.delete(workspace, taskType),
+    mutationFn: (taskType: string) => api.rules.delete(taskType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] })
       toast.success("Rule deleted")

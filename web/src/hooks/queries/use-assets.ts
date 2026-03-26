@@ -4,7 +4,6 @@ import { toast } from "sonner"
 
 export function useAssets(params?: {
   type?: string
-  workspace?: string
   tags?: string
 }) {
   return useQuery({
@@ -59,7 +58,7 @@ export function useArchiveAsset() {
 
 export function useSearchAssets() {
   return useMutation({
-    mutationFn: (data: { query: string; workspace?: string; asset_type?: string; limit?: number }) =>
+    mutationFn: (data: { query: string; asset_type?: string; limit?: number }) =>
       api.assets.search(data),
     onError: (err: Error) => toast.error(err.message),
   })

@@ -45,7 +45,7 @@ export function Dashboard() {
       <div>
         <h1 className="text-[20px] font-semibold text-[#37352f]">Dashboard</h1>
         <p className="text-[14px] text-[#787774] mt-1">
-          Overview of your Maestro workspace
+          Overview of your Maestro agents
         </p>
       </div>
 

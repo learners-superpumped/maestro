@@ -5,7 +5,6 @@ import {
   Package,
   Clock,
   GitBranch,
-  FolderOpen,
   Target,
   ChevronLeft,
   ChevronRight,
@@ -20,7 +19,6 @@ const navItems = [
   { icon: Clock, label: "Schedules", to: "/schedules" },
   { icon: GitBranch, label: "Rules", to: "/rules" },
   { icon: Target, label: "Goals", to: "/goals" },
-  { icon: FolderOpen, label: "Workspaces", to: "/workspaces" },
 ]
 
 interface SidebarProps {

@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Plus, Trash2, Loader2 } from "lucide-react"
 import { useRules, useCreateRule, useDeleteRule } from "@/hooks/queries/use-rules"
-import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -52,7 +51,6 @@ const ASSET_TYPES = [
 ]
 
 const ruleSchema = z.object({
-  workspace: z.string().min(1, "Required"),
   task_type: z.string().min(1, "Required"),
   asset_type: z.string().min(1, "Required"),
   title_field: z.string().min(1, "Required"),
@@ -63,18 +61,12 @@ const ruleSchema = z.object({
 type RuleFormValues = z.infer<typeof ruleSchema>
 
 export function Rules() {
-  const [workspaceFilter, setWorkspaceFilter] = useState("")
   const [open, setOpen] = useState(false)
 
-  const { data, isLoading } = useRules({
-    workspace: workspaceFilter || undefined,
-  })
+  const { data, isLoading } = useRules()
 
   const createRule = useCreateRule()
   const deleteRule = useDeleteRule()
-
-  const { data: wsData } = useWorkspaces()
-  const workspaces: any[] = wsData?.workspaces ?? []
 
   const {
     register,
@@ -127,26 +119,8 @@ export function Rules() {
             <form onSubmit={onSubmit} className="space-y-4 mt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                  <Select onValueChange={(v) => setValue("workspace", v)}>
-                    <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
-                      <SelectValue placeholder="Select workspace" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-[#e8e5df]">
-                      {workspaces.map((ws: any) => (
-                        <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                          {ws.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.workspace && (
-                    <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
-                  )}
-                </div>
-                <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Task Type *</Label>
-                  <Select onValueChange={(v) => setValue("task_type", v)}>
+                  <Select onValueChange={(v) => { if (v) setValue("task_type", v as string) }}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
                       <SelectValue placeholder="Select task type" />
                     </SelectTrigger>
@@ -162,12 +136,9 @@ export function Rules() {
                     <p className="text-[12px] text-[#eb5757]">{errors.task_type.message}</p>
                   )}
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-[12px] text-[#9b9a97]">Asset Type *</Label>
-                  <Select onValueChange={(v) => setValue("asset_type", v)}>
+                  <Select onValueChange={(v) => { if (v) setValue("asset_type", v as string) }}>
                     <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
                       <SelectValue placeholder="Select asset type" />
                     </SelectTrigger>
@@ -183,17 +154,18 @@ export function Rules() {
                     <p className="text-[12px] text-[#eb5757]">{errors.asset_type.message}</p>
                   )}
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Title Field *</Label>
-                  <Input
-                    {...register("title_field")}
-                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                    placeholder="title"
-                  />
-                  {errors.title_field && (
-                    <p className="text-[12px] text-[#eb5757]">{errors.title_field.message}</p>
-                  )}
-                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[12px] text-[#9b9a97]">Title Field *</Label>
+                <Input
+                  {...register("title_field")}
+                  className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
+                  placeholder="title"
+                />
+                {errors.title_field && (
+                  <p className="text-[12px] text-[#eb5757]">{errors.title_field.message}</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -239,29 +211,11 @@ export function Rules() {
         </Dialog>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-3">
-        <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-52 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
-            <SelectValue placeholder="All workspaces" />
-          </SelectTrigger>
-          <SelectContent className="bg-white border-[#e8e5df]">
-            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
-            {workspaces.map((ws: any) => (
-              <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
-                {ws.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* Table */}
       <div className="rounded border border-[#e8e5df] overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Task Type</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Asset Type</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Title Field</TableHead>
@@ -273,7 +227,7 @@ export function Rules() {
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i} className="border-[#e8e5df]">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 5 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
@@ -282,10 +236,9 @@ export function Rules() {
                 ))
               : rules.map((rule: any) => (
                   <TableRow
-                    key={`${rule.workspace}-${rule.task_type}`}
+                    key={rule.task_type}
                     className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]"
                   >
-                    <TableCell className="text-[#37352f] text-[14px]">{rule.workspace}</TableCell>
                     <TableCell className="font-mono text-[13px] text-[#787774]">
                       {rule.task_type}
                     </TableCell>
@@ -301,10 +254,7 @@ export function Rules() {
                         size="icon"
                         variant="ghost"
                         onClick={() =>
-                          deleteRule.mutate({
-                            workspace: rule.workspace,
-                            taskType: rule.task_type,
-                          })
+                          deleteRule.mutate(rule.task_type)
                         }
                         disabled={deleteRule.isPending}
                         className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#eb5757]/5"
@@ -317,7 +267,7 @@ export function Rules() {
                 ))}
             {!isLoading && rules.length === 0 && (
               <TableRow className="border-[#e8e5df]">
-                <TableCell colSpan={6} className="text-center text-[14px] text-[#9b9a97] py-8">
+                <TableCell colSpan={5} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No rules found
                 </TableCell>
               </TableRow>

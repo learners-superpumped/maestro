@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Plus, Trash2, Archive, Loader2, RefreshCw, Search } from "lucide-react"
+import { Plus, Trash2, Archive, Loader2, RefreshCw } from "lucide-react"
 import {
   useAssets,
   useRegisterAsset,
@@ -11,7 +11,6 @@ import {
   useCleanupAssets,
   useSearchAssets,
 } from "@/hooks/queries/use-assets"
-import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -54,7 +53,6 @@ const assetSchema = z.object({
   title: z.string().min(1, "Required"),
   asset_type: z.string().min(1, "Required"),
   content: z.string().min(1, "Required"),
-  workspace: z.string().min(1, "Required"),
   tags: z.string(),
   description: z.string(),
   ttl_days: z.number().int().min(0),
@@ -64,19 +62,14 @@ type AssetFormValues = z.infer<typeof assetSchema>
 
 export function Assets() {
   const [typeFilter, setTypeFilter] = useState("")
-  const [workspaceFilter, setWorkspaceFilter] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[] | null>(null)
   const [open, setOpen] = useState(false)
   const [cleanupOpen, setCleanupOpen] = useState(false)
   const [graceDays, setGraceDays] = useState("7")
 
-  const { data: wsData } = useWorkspaces()
-  const workspaces: any[] = wsData?.workspaces ?? []
-
   const { data, isLoading } = useAssets({
     type: typeFilter || undefined,
-    workspace: workspaceFilter || undefined,
   })
 
   const registerAsset = useRegisterAsset()
@@ -166,7 +159,7 @@ export function Assets() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[12px] text-[#9b9a97]">Asset Type *</Label>
-                    <Select onValueChange={(v) => setValue("asset_type", v)}>
+                    <Select onValueChange={(v) => { if (v) setValue("asset_type", v as string) }}>
                       <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
@@ -186,22 +179,12 @@ export function Assets() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <Label className="text-[12px] text-[#9b9a97]">Workspace *</Label>
-                    <Select onValueChange={(v) => setValue("workspace", v)}>
-                      <SelectTrigger className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded">
-                        <SelectValue placeholder="Select workspace" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-[#e8e5df]">
-                        {workspaces.map((ws: any) => (
-                          <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                            {ws.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.workspace && (
-                      <p className="text-[12px] text-[#eb5757]">{errors.workspace.message}</p>
-                    )}
+                    <Label className="text-[12px] text-[#9b9a97]">Tags (comma-separated)</Label>
+                    <Input
+                      {...register("tags")}
+                      className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
+                      placeholder="tag1, tag2"
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[12px] text-[#9b9a97]">TTL Days (0=forever)</Label>
@@ -211,15 +194,6 @@ export function Assets() {
                       className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[12px] text-[#9b9a97]">Tags (comma-separated)</Label>
-                  <Input
-                    {...register("tags")}
-                    className="bg-white border-[#e8e5df] text-[#37352f] text-[14px] rounded"
-                    placeholder="tag1, tag2"
-                  />
                 </div>
 
                 <div className="space-y-1">
@@ -270,29 +244,15 @@ export function Assets() {
 
       {/* Filters */}
       <div className="flex gap-3 items-center">
-        <Select value={typeFilter || "all"} onValueChange={(v) => setTypeFilter(v === "all" ? "" : v)}>
+        <Select value={typeFilter || "all"} onValueChange={(v) => setTypeFilter(v === "all" ? "" : (v ?? ""))}>
           <SelectTrigger className="w-44 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
             <SelectValue placeholder="All types" />
           </SelectTrigger>
           <SelectContent className="bg-white border-[#e8e5df]">
             <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All types</SelectItem>
-            {ASSET_TYPES.map((t) => (
+            {ASSET_TYPES.map((t: { value: string; label: string }) => (
               <SelectItem key={t.value} value={t.value} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
                 {t.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={workspaceFilter || "all"} onValueChange={(v) => setWorkspaceFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-52 bg-[#f7f6f3] border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]">
-            <SelectValue placeholder="All workspaces" />
-          </SelectTrigger>
-          <SelectContent className="bg-white border-[#e8e5df]">
-            <SelectItem value="all" className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">All workspaces</SelectItem>
-            {workspaces.map((ws: any) => (
-              <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] hover:bg-[#f7f6f3] text-[13px]">
-                {ws.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -305,7 +265,7 @@ export function Assets() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && searchQuery.trim()) {
               searchAssets.mutate(
-                { query: searchQuery, workspace: workspaceFilter || undefined, asset_type: typeFilter || undefined },
+                { query: searchQuery, asset_type: typeFilter || undefined },
                 { onSuccess: (data) => setSearchResults(data?.results ?? []) }
               )
             }
@@ -331,7 +291,6 @@ export function Assets() {
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Type</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Title</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Tags</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Created By</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Created At</TableHead>
@@ -342,7 +301,7 @@ export function Assets() {
             {isLoading
               ? Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i} className="border-[#e8e5df]">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 6 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
@@ -357,7 +316,6 @@ export function Assets() {
                     <TableCell className="text-[#37352f] text-[14px] max-w-xs truncate">
                       {asset.title}
                     </TableCell>
-                    <TableCell className="text-[14px] text-[#787774]">{asset.workspace}</TableCell>
                     <TableCell className="text-[12px] text-[#9b9a97]">
                       {Array.isArray(asset.tags) ? asset.tags.join(", ") : (asset.tags ?? "—")}
                     </TableCell>
@@ -397,7 +355,7 @@ export function Assets() {
                 ))}
             {!isLoading && displayAssets.length === 0 && (
               <TableRow className="border-[#e8e5df]">
-                <TableCell colSpan={7} className="text-center text-[14px] text-[#9b9a97] py-8">
+                <TableCell colSpan={6} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No assets found
                 </TableCell>
               </TableRow>

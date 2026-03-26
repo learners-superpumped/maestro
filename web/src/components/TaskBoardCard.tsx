@@ -1,5 +1,4 @@
 import { useNavigate } from "@tanstack/react-router"
-import { StatusBadge } from "@/components/StatusBadge"
 import { TaskTypeBadge } from "@/components/TaskTypeBadge"
 import { ProgressIndicator } from "@/components/ProgressIndicator"
 
@@ -8,7 +7,6 @@ interface TaskCardProps {
     id: string
     title: string
     type: string
-    workspace: string
     status: string
     cost_usd?: number
     children_summary?: { total: number; completed: number }
@@ -26,7 +24,6 @@ export function TaskBoardCard({ task }: TaskCardProps) {
       <p className="text-[14px] font-medium text-[#37352f] truncate">{task.title}</p>
       <div className="flex items-center gap-2 flex-wrap">
         <TaskTypeBadge type={task.type} />
-        <span className="text-[12px] text-[#9b9a97]">{task.workspace}</span>
         {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
           <span className="text-[12px] text-[#cb912f]" title={task.depends_on_tasks.map(d => d.title).join(", ")}>
             ← {task.depends_on_tasks.length} step{task.depends_on_tasks.length > 1 ? "s" : ""}

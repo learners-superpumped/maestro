@@ -21,7 +21,7 @@ function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
   if (isLoading) {
     return (
       <TableRow className="border-b border-[#e8e5df]">
-        <TableCell colSpan={6}>
+        <TableCell colSpan={5}>
           <div style={{ paddingLeft: `${depth * 24}px` }}>
             <Skeleton className="h-4 w-48 bg-[#f7f6f3]" />
           </div>
@@ -62,7 +62,6 @@ function ChildRows({ parentId, depth }: { parentId: string; depth: number }) {
                         )}
               </div>
             </TableCell>
-            <TableCell className="text-[14px] text-[#787774]">{child.workspace}</TableCell>
             <TableCell />
             <TableCell className="text-[13px] font-mono text-[#787774]">
               {child.cost_usd != null ? `$${Number(child.cost_usd).toFixed(4)}` : "—"}
@@ -89,7 +88,6 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
           <TableRow className="border-b border-[#e8e5df] hover:bg-transparent">
             <TableHead className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97] w-24">Status</TableHead>
             <TableHead className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97]">Title</TableHead>
-            <TableHead className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97]">Workspace</TableHead>
             <TableHead className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97] w-16">Progress</TableHead>
             <TableHead className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97]">Cost</TableHead>
             <TableHead className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97]">Updated</TableHead>
@@ -99,7 +97,7 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i} className="border-b border-[#e8e5df]">
-                {Array.from({ length: 6 }).map((_, j) => (
+                {Array.from({ length: 5 }).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 bg-[#f7f6f3]" /></TableCell>
                 ))}
               </TableRow>
@@ -135,7 +133,6 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-[14px] text-[#787774]">{task.workspace}</TableCell>
                     <TableCell>
                       {task.children_summary && (
                         <ProgressIndicator total={task.children_summary.total} completed={task.children_summary.completed} />
@@ -155,7 +152,7 @@ export function TaskListTree({ tasks, isLoading }: TaskListTreeProps) {
           )}
           {!isLoading && tasks.length === 0 && (
             <TableRow className="border-b border-[#e8e5df]">
-              <TableCell colSpan={6} className="text-center text-[14px] text-[#9b9a97] py-8">No tasks found</TableCell>
+              <TableCell colSpan={5} className="text-center text-[14px] text-[#9b9a97] py-8">No tasks found</TableCell>
             </TableRow>
           )}
         </TableBody>

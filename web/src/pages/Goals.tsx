@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Plus, Trash2, Loader2, Target, X } from "lucide-react"
 import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal } from "@/hooks/queries/use-goals"
-import { useWorkspaces } from "@/hooks/queries/use-workspaces"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -95,7 +94,6 @@ function PropRow({ label, children }: { label: string; children: React.ReactNode
 export function Goals() {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
-  const [workspace, setWorkspace] = useState("")
   const [freqAmount, setFreqAmount] = useState(1)
   const [freqUnit, setFreqUnit] = useState("days")
   const [targets, setTargets] = useState<string[]>([])
@@ -105,13 +103,10 @@ export function Goals() {
   const deleteGoal = useDeleteGoal()
   const toggleGoal = useToggleGoal()
 
-  const { data: wsData } = useWorkspaces()
-  const workspaces: any[] = wsData?.workspaces ?? []
   const goals: any[] = data?.goals ?? []
 
   const reset = () => {
     setName("")
-    setWorkspace("")
     setFreqAmount(1)
     setFreqUnit("days")
     setTargets([])
@@ -123,7 +118,6 @@ export function Goals() {
     const filteredTargets = targets.filter((t) => t.trim())
     await createGoal.mutateAsync({
       id: toSlug(name),
-      workspace,
       description: name,
       metrics: { targets: filteredTargets },
       cooldown_hours: cooldownHours,
@@ -170,21 +164,6 @@ export function Goals() {
 
             {/* Properties — Notion inline style */}
             <div className="mt-4 space-y-0 border-t border-[#e8e5df] pt-3">
-              <PropRow label="Workspace">
-                <Select value={workspace} onValueChange={(v) => setWorkspace(v ?? "")}>
-                  <SelectTrigger className="border-0 shadow-none text-[13px] text-[#37352f] h-[34px] px-1.5 rounded hover:bg-[#f7f6f3] focus:ring-0">
-                    <SelectValue placeholder="Select workspace..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-[#e8e5df]">
-                    {workspaces.map((ws: any) => (
-                      <SelectItem key={ws.name} value={ws.name} className="text-[#37352f] text-[13px] hover:bg-[#f7f6f3]">
-                        {ws.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </PropRow>
-
               <PropRow label="Check every">
                 <div className="flex items-center gap-0.5">
                   <Input
@@ -272,7 +251,7 @@ export function Goals() {
               </Button>
               <Button
                 onClick={handleCreate}
-                disabled={createGoal.isPending || !name.trim() || !workspace}
+                disabled={createGoal.isPending || !name.trim()}
                 className="h-[28px] text-[13px] bg-[#2383e2] hover:bg-[#1a73cc] text-white rounded px-3"
               >
                 {createGoal.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
@@ -289,7 +268,6 @@ export function Goals() {
           <TableHeader>
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Goal</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Workspace</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Targets</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Frequency</TableHead>
               <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Last Run</TableHead>
@@ -301,7 +279,7 @@ export function Goals() {
             {isLoading
               ? Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i} className="border-[#e8e5df]">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 6 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 bg-[#f7f6f3]" />
                       </TableCell>
@@ -325,7 +303,6 @@ export function Goals() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-[13px] text-[#787774]">{g.workspace}</TableCell>
                       <TableCell>
                         {goalTargets.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
@@ -372,7 +349,7 @@ export function Goals() {
                 })}
             {!isLoading && goals.length === 0 && (
               <TableRow className="border-[#e8e5df]">
-                <TableCell colSpan={7} className="text-center text-[14px] text-[#9b9a97] py-8">
+                <TableCell colSpan={6} className="text-center text-[14px] text-[#9b9a97] py-8">
                   No goals yet
                 </TableCell>
               </TableRow>
