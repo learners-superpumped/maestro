@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
-import { StatusBadge } from "@/components/StatusBadge"
+import { StatusIcon } from "@/components/StatusIcon"
 import { cn } from "@/lib/utils"
 
 interface TreeNode {
@@ -23,7 +23,7 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
         style={{ paddingLeft: `${depth * 20 + 8}px` }}
         onClick={() => navigate({ to: "/tasks/$id", params: { id: node.id } })}
       >
-        <StatusBadge status={node.status} />
+        <StatusIcon status={node.status} />
         <span className="text-[14px] text-[#37352f] truncate">{node.title}</span>
         <span className="text-[12px] text-[#9b9a97] font-mono ml-auto shrink-0">
           {node.cost_usd != null ? `$${Number(node.cost_usd).toFixed(4)}` : ""}

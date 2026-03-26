@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router"
 import { useApprovals } from "@/hooks/queries/use-approvals"
 import { useApproveTask, useRejectTask } from "@/hooks/queries/use-tasks"
-import { StatusBadge } from "@/components/StatusBadge"
+import { StatusIcon } from "@/components/StatusIcon"
 import { Button } from "@/components/ui/button"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -53,7 +53,7 @@ export function Approvals() {
                     className="border-[#e8e5df] hover:bg-[#f7f6f3]"
                   >
                     <TableCell>
-                      <StatusBadge status={item.status ?? "pending"} />
+                      <StatusIcon status={item.status ?? "pending"} />
                     </TableCell>
                     <TableCell
                       className="font-mono text-[12px] text-[#2383e2] cursor-pointer hover:underline"

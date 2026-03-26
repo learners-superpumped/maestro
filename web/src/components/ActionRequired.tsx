@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { useRootTasks, useApproveTask, useRejectTask, useReviseTask, useCreateTask } from "@/hooks/queries/use-tasks"
-import { StatusBadge } from "@/components/StatusBadge"
+import { StatusIcon } from "@/components/StatusIcon"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -73,7 +73,7 @@ function ApprovalCard({ task }: { task: any }) {
         {/* Row 1: Status + Title + Actions */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <StatusBadge status={task.status} />
+            <StatusIcon status={task.status} />
             <span
               className="text-[14px] text-[#37352f] truncate cursor-pointer hover:underline"
               onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
