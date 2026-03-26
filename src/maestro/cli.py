@@ -171,18 +171,33 @@ def init() -> None:
 
     if "mcpServers" not in mcp_data:
         mcp_data["mcpServers"] = {}
-    if "maestro" not in mcp_data["mcpServers"]:
-        mcp_data["mcpServers"]["maestro"] = {
-            "command": "maestro",
-            "args": ["mcp"],
-        }
+    maestro_mcp = {
+        "maestro-store": {
+            "command": "python",
+            "args": ["-m", "maestro.mcp_store"],
+            "env": {"MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}"},
+        },
+        "maestro-embedding": {
+            "command": "python",
+            "args": ["-m", "maestro.mcp_embedding"],
+            "env": {"MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}"},
+        },
+    }
+    # Remove old incorrect "maestro" entry if present
+    mcp_data["mcpServers"].pop("maestro", None)
+    updated = False
+    for name, server in maestro_mcp.items():
+        if name not in mcp_data["mcpServers"]:
+            mcp_data["mcpServers"][name] = server
+            updated = True
+    if updated:
         mcp_json_path.write_text(
             json.dumps(mcp_data, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         click.echo(f"MCP config merged: {mcp_json_path}")
     else:
-        click.echo(f"MCP config already has maestro entry: {mcp_json_path}")
+        click.echo(f"MCP config already has maestro entries: {mcp_json_path}")
 
     # 5. Add .maestro/ to .gitignore (if git repo)
     is_git = (root / ".git").exists() or (root / ".git").is_file()

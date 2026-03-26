@@ -99,7 +99,13 @@ class TestInit:
             import json
 
             mcp = json.loads(mcp_path.read_text())
-            assert "maestro" in mcp["mcpServers"]
+            assert "maestro-store" in mcp["mcpServers"]
+            assert "maestro-embedding" in mcp["mcpServers"]
+            assert mcp["mcpServers"]["maestro-store"]["command"] == "python"
+            assert mcp["mcpServers"]["maestro-store"]["args"] == [
+                "-m",
+                "maestro.mcp_store",
+            ]
 
     def test_init_git_repo_gitignore(self) -> None:
         runner = CliRunner()
