@@ -145,6 +145,7 @@ class AgentRunner:
         args: list[str],
         cwd: Path,
         on_event: Optional[callable] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> TaskResult:
         """Spawn a subprocess, stream its stdout, and collect results.
 
@@ -169,12 +170,20 @@ class AgentRunner:
         last_assistant_text: Optional[str] = None
 
         try:
+            # Merge daemon env vars into the current environment
+            proc_env = None
+            if env:
+                import os
+
+                proc_env = {**os.environ, **env}
+
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(cwd),
+                env=proc_env,
             )
 
             assert proc.stdout is not None  # PIPE guarantees this
@@ -301,6 +310,7 @@ class AgentRunner:
         on_event: Optional[callable] = None,
         system_prompt: str | None = None,
         permission_mode: str = "bypass",
+        env: Optional[dict[str, str]] = None,
     ) -> TaskResult:
         """Execute a task from scratch using the Claude CLI.
 
@@ -332,7 +342,7 @@ class AgentRunner:
         )
         logger.info("Executing task %s: %s", task.id, args)
 
-        result = await self._stream(args, cwd, on_event=on_event)
+        result = await self._stream(args, cwd, on_event=on_event, env=env)
         result.task_id = task.id
         return result
 
@@ -343,6 +353,7 @@ class AgentRunner:
         instruction: str,
         cwd: Path,
         on_event: Optional[callable] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> TaskResult:
         """Resume an existing Claude CLI session for a task.
 
@@ -364,6 +375,6 @@ class AgentRunner:
         args = self._build_resume_args(session_id, instruction)
         logger.info("Resuming task %s (session=%s): %s", task.id, session_id, args)
 
-        result = await self._stream(args, cwd, on_event=on_event)
+        result = await self._stream(args, cwd, on_event=on_event, env=env)
         result.task_id = task.id
         return result
