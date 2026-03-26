@@ -276,7 +276,7 @@ class Dispatcher:
                     continue  # This goal is full; try next candidate
 
             # -- Resource availability check --
-            # (Resource checks are workspace-based and will be redesigned later;
+            # (Resource checks will be redesigned in a future update;
             #  skipped for now.)
 
             # -- Budget check --

@@ -10,7 +10,7 @@ Protocol: JSON-RPC 2.0 over stdin/stdout (MCP standard).
 
 Tools:
   - maestro_asset_register(asset_type, title, ...) -> registered asset
-  - maestro_asset_search(query, workspace?, type?, ...) -> matching assets
+  - maestro_asset_search(query, type?, ...) -> matching assets
   - maestro_asset_get(asset_id) -> asset details
   - maestro_asset_list(tags?, type?, unused_only?) -> asset list
 """

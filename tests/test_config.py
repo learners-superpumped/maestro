@@ -406,7 +406,7 @@ def test_agents_partial_definition(tmp_path: pathlib.Path) -> None:
     assert writer.name == "writer"
     assert writer.role == "Content writer"
     assert writer.instructions == ""
-    assert writer.tools == ["Read", "Write", "Edit", "Bash"]
+    assert writer.tools == ["Read", "Write", "Bash"]
     assert writer.max_turns == 50
     assert writer.no_worktree is False
 

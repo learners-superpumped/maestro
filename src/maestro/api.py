@@ -256,7 +256,6 @@ async def history_record_handler(request: web.Request) -> web.Response:
     action = {
         "id": body.get("id", uuid.uuid4().hex[:12]),
         "task_id": body.get("task_id", ""),
-        "workspace": body.get("workspace", ""),
         "action_type": body.get("action_type", "unknown"),
         "platform": body.get("platform", "unknown"),
         "content": body.get("content"),
@@ -323,7 +322,6 @@ async def asset_search_handler(request: web.Request) -> web.Response:
 
     results = await am.search(
         query=data["query"],
-        workspace=data.get("workspace"),
         asset_type=data.get("asset_type"),
         tags=data.get("tags"),
         since=data.get("since"),
@@ -771,12 +769,10 @@ async def goal_create_handler(request: web.Request) -> web.Response:
         body = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
-    for field in ("id", "workspace"):
-        if not body.get(field):
-            raise web.HTTPBadRequest(reason=f"'{field}' is required")
+    if not body.get("id"):
+        raise web.HTTPBadRequest(reason="'id' is required")
     await store.create_goal(
         id=body["id"],
-        workspace=body["workspace"],
         description=body.get("description", ""),
         metrics=json.dumps(body["metrics"])
         if isinstance(body.get("metrics"), dict)
@@ -908,22 +904,19 @@ async def webhook_generic_handler(request: web.Request) -> web.Response:
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
 
-    workspace = body.get("workspace")
     task_type = body.get("type")
     title = body.get("title")
     instruction = body.get("instruction")
 
-    if not workspace or not title or not instruction:
-        raise web.HTTPBadRequest(
-            reason="'workspace', 'title', and 'instruction' are required"
-        )
+    if not title or not instruction:
+        raise web.HTTPBadRequest(reason="'title' and 'instruction' are required")
 
     import uuid
 
     task = Task(
         id=uuid.uuid4().hex[:12],
         type=task_type or "generic",
-        workspace=workspace,
+        agent=body.get("agent", "default"),
         title=title,
         instruction=instruction,
         priority=int(body.get("priority", 3)),

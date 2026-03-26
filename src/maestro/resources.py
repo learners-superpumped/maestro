@@ -9,7 +9,6 @@ by multiple agents. Resources are identified by a composite key of
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from maestro.config import MaestroConfig
 
@@ -18,18 +17,15 @@ class ResourceManager:
     """Manages shared resource locks for Maestro agents.
 
     Resources are declared in ``maestro.yaml`` under the ``resources`` section
-    and referenced by workspace MCP configurations.  The manager provides
+    and referenced by agent MCP configurations.  The manager provides
     async lock/unlock semantics so the Dispatcher can skip tasks whose
     required resources are already in use.
     """
 
-    def __init__(
-        self, config: MaestroConfig, workspaces_dir: Path | None = None
-    ) -> None:
+    def __init__(self, config: MaestroConfig) -> None:
         self._locks: dict[str, asyncio.Lock] = {}
         self._acquired: dict[str, bool] = {}
         self._resources = config.resources  # dict[type, dict[profile, ResourceProfile]]
-        self._workspaces_dir = workspaces_dir
 
         # Pre-create locks for all declared resources
         for resource_type, profiles in self._resources.items():
@@ -45,14 +41,14 @@ class ResourceManager:
             self._acquired[resource_name] = False
         return self._locks[resource_name]
 
-    def get_workspace_resources(self, workspace: str) -> list[str]:
-        """Get resource names needed by a workspace.
+    def get_agent_resources(self, agent: str) -> list[str]:
+        """Get resource names needed by an agent.
 
         Resources will be redesigned in a future update.
         Returns an empty list for now.
 
         Args:
-            workspace: Workspace name (unused).
+            agent: Agent name (unused).
 
         Returns:
             Empty list.

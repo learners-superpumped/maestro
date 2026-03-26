@@ -1,8 +1,9 @@
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-from maestro.store import Store
+import pytest
+
 from maestro.scheduler import Scheduler
+from maestro.store import Store
 
 
 @pytest.fixture
@@ -20,7 +21,9 @@ async def scheduler(store):
 @pytest.mark.asyncio
 async def test_cron_schedule_due(store, scheduler):
     await store.create_schedule(
-        name="daily", workspace="w", task_type="t", cron="0 9 * * *",
+        name="daily",
+        task_type="t",
+        cron="0 9 * * *",
     )
     since = datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc)
     now = datetime(2026, 3, 24, 9, 1, tzinfo=timezone.utc)
@@ -32,7 +35,9 @@ async def test_cron_schedule_due(store, scheduler):
 @pytest.mark.asyncio
 async def test_cron_schedule_not_due(store, scheduler):
     await store.create_schedule(
-        name="daily", workspace="w", task_type="t", cron="0 9 * * *",
+        name="daily",
+        task_type="t",
+        cron="0 9 * * *",
     )
     since = datetime(2026, 3, 24, 8, 0, tzinfo=timezone.utc)
     now = datetime(2026, 3, 24, 8, 30, tzinfo=timezone.utc)
@@ -43,7 +48,9 @@ async def test_cron_schedule_not_due(store, scheduler):
 @pytest.mark.asyncio
 async def test_interval_first_run(store, scheduler):
     await store.create_schedule(
-        name="engage", workspace="w", task_type="t", interval_ms=3600000,
+        name="engage",
+        task_type="t",
+        interval_ms=3600000,
     )
     due = await scheduler.get_due_intervals()
     assert len(due) == 1
@@ -52,7 +59,9 @@ async def test_interval_first_run(store, scheduler):
 @pytest.mark.asyncio
 async def test_interval_not_due(store, scheduler):
     await store.create_schedule(
-        name="engage", workspace="w", task_type="t", interval_ms=3600000,
+        name="engage",
+        task_type="t",
+        interval_ms=3600000,
     )
     now = datetime.now(timezone.utc)
     scheduler.mark_triggered("engage", now)
@@ -63,7 +72,9 @@ async def test_interval_not_due(store, scheduler):
 @pytest.mark.asyncio
 async def test_disabled_schedule_excluded(store, scheduler):
     await store.create_schedule(
-        name="disabled", workspace="w", task_type="t", cron="* * * * *",
+        name="disabled",
+        task_type="t",
+        cron="* * * * *",
     )
     await store.update_schedule("disabled", enabled=False)
     since = datetime(2026, 1, 1, tzinfo=timezone.utc)

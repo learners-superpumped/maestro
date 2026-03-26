@@ -7,9 +7,7 @@ import pathlib
 import pytest
 
 from maestro.models import Task, TaskStatus
-from maestro.repository import AssetRepository, BudgetRepository, TaskRepository
 from maestro.store import Store
-
 
 # ---------------------------------------------------------------------------
 # Protocol conformance — static check via isinstance with runtime_checkable
@@ -28,7 +26,6 @@ def _make_task(task_id: str = "repo-t1") -> Task:
     return Task(
         id=task_id,
         type="shell",
-        workspace="test-ws",
         title="Repo Test",
         instruction="do repo things",
         status=TaskStatus.PENDING,
@@ -65,8 +62,8 @@ async def test_store_satisfies_task_repository(store: Store) -> None:
     pending = await store.list_tasks(status=TaskStatus.PENDING)
     assert all(t.status == TaskStatus.PENDING for t in pending)
 
-    ws_tasks = await store.list_tasks(workspace="test-ws")
-    assert all(t.workspace == "test-ws" for t in ws_tasks)
+    agent_tasks = await store.list_tasks(agent="default")
+    assert len(agent_tasks) >= 1
 
     # list_dispatchable_tasks — approved task should be dispatchable
     dispatchable = await store.list_dispatchable_tasks()
@@ -77,9 +74,6 @@ async def test_store_satisfies_task_repository(store: Store) -> None:
     # count_running — no running tasks yet
     count = await store.count_running()
     assert count == 0
-
-    count_ws = await store.count_running(workspace="test-ws")
-    assert count_ws == 0
 
 
 # ---------------------------------------------------------------------------

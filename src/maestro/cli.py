@@ -1520,13 +1520,12 @@ def extract_rule():
 
 
 @extract_rule.command("add")
-@click.option("--workspace", required=True)
 @click.option("--task-type", required=True)
 @click.option("--asset-type", required=True)
 @click.option("--title-field", default=None)
 @click.option("--iterate", default=None)
 @click.option("--tags-from", default=None, help="Comma-separated dot-paths")
-def rule_add(workspace, task_type, asset_type, title_field, iterate, tags_from):
+def rule_add(task_type, asset_type, title_field, iterate, tags_from):
     """Add or update an auto-extract rule."""
 
     async def _run():
@@ -1537,21 +1536,19 @@ def rule_add(workspace, task_type, asset_type, title_field, iterate, tags_from):
         await store.init_db()
         tf = [t.strip() for t in tags_from.split(",")] if tags_from else None
         await store.create_extract_rule(
-            workspace=workspace,
             task_type=task_type,
             asset_type=asset_type,
             title_field=title_field,
             iterate=iterate,
             tags_from=tf,
         )
-        click.echo(f"Rule set: {workspace}/{task_type} → {asset_type}")
+        click.echo(f"Rule set: {task_type} -> {asset_type}")
 
     asyncio.run(_run())
 
 
 @extract_rule.command("list")
-@click.option("--workspace", default=None)
-def rule_list(workspace):
+def rule_list():
     """List auto-extract rules."""
 
     async def _run():
@@ -1560,26 +1557,23 @@ def rule_list(workspace):
 
         store = Store(config.project.store_path)
         await store.init_db()
-        rules = await store.list_extract_rules(workspace=workspace)
+        rules = await store.list_extract_rules()
         if not rules:
             click.echo("No rules.")
             return
-        click.echo(
-            f"{'WORKSPACE':<20} {'TASK_TYPE':<15} {'ASSET_TYPE':<10} {'TITLE_FIELD':<20}"
-        )
-        click.echo("-" * 70)
+        click.echo(f"{'TASK_TYPE':<15} {'ASSET_TYPE':<10} {'TITLE_FIELD':<20}")
+        click.echo("-" * 50)
         for r in rules:
             click.echo(
-                f"{r['workspace']:<20} {r['task_type']:<15} {r['asset_type']:<10} {r.get('title_field') or '':<20}"
+                f"{r['task_type']:<15} {r['asset_type']:<10} {r.get('title_field') or '':<20}"
             )
 
     asyncio.run(_run())
 
 
 @extract_rule.command("remove")
-@click.option("--workspace", required=True)
 @click.option("--task-type", required=True)
-def rule_remove(workspace, task_type):
+def rule_remove(task_type):
     """Remove an auto-extract rule."""
 
     async def _run():
@@ -1588,8 +1582,8 @@ def rule_remove(workspace, task_type):
 
         store = Store(config.project.store_path)
         await store.init_db()
-        await store.delete_extract_rule(workspace, task_type)
-        click.echo(f"Removed rule: {workspace}/{task_type}")
+        await store.delete_extract_rule(task_type)
+        click.echo(f"Removed rule: {task_type}")
 
     asyncio.run(_run())
 

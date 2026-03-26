@@ -34,7 +34,6 @@ from maestro.models import Task, TaskStatus
 from maestro.reconciler import Reconciler
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -49,7 +48,6 @@ def _make_config(
         daemon=DaemonConfig(),
         concurrency=ConcurrencyConfig(
             max_total_agents=max_total_agents,
-            max_per_workspace=5,
         ),
         budget=BudgetConfig(daily_limit_usd=daily_limit_usd, per_task_limit_usd=10.0),
         agent=AgentConfig(),
@@ -65,12 +63,10 @@ def _make_task(
     attempt: int = 0,
     max_retries: int = 3,
     timeout_at: datetime | None = None,
-    workspace: str = "/ws/integration",
 ) -> Task:
     return Task(
         id=task_id or str(uuid.uuid4()),
         type="claude",
-        workspace=workspace,
         title="Integration test task",
         instruction="Do something",
         status=status,
@@ -94,7 +90,7 @@ async def test_level0_auto_approval_and_dispatch_claimed(
     """Level 0 task: PENDING → auto_approve → APPROVED → dispatch_tick → CLAIMED.
 
     The asyncio task spawned by _dispatch_tick will eventually fail because
-    there is no real Claude CLI and the workspace does not exist.  We only
+    there is no real Claude CLI.  We only
     assert that the task is CLAIMED immediately after _dispatch_tick returns,
     before the background asyncio task has a chance to mark it FAILED.
     """
@@ -175,7 +171,6 @@ async def test_concurrency_limit_blocks_dispatch(
         running_task = _make_task(
             task_id=f"running-{i}",
             status=TaskStatus.PENDING,
-            workspace=f"/ws/running-{i}",
         )
         await store.create_task(running_task)
         await store.update_task_status(f"running-{i}", TaskStatus.APPROVED)
@@ -186,7 +181,6 @@ async def test_concurrency_limit_blocks_dispatch(
     blocked_task = _make_task(
         task_id="blocked-task",
         status=TaskStatus.PENDING,
-        workspace="/ws/blocked",
     )
     await store.create_task(blocked_task)
     await store.update_task_status("blocked-task", TaskStatus.APPROVED)
@@ -268,7 +262,6 @@ async def test_budget_limit_blocks_dispatch(
         task_id="budget-blocked",
         status=TaskStatus.PENDING,
         budget_usd=1.0,
-        workspace="/ws/budget",
     )
     await store.create_task(expensive_task)
     await store.update_task_status("budget-blocked", TaskStatus.APPROVED)

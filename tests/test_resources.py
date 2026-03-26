@@ -138,23 +138,23 @@ class TestReleaseUnknown:
 
 
 # ---------------------------------------------------------------------------
-# Workspace resource detection
+# Agent resource detection
 # ---------------------------------------------------------------------------
 
 
-class TestGetWorkspaceResources:
-    """Test workspace-to-resource mapping (now always returns empty list)."""
+class TestGetAgentResources:
+    """Test agent-to-resource mapping (now always returns empty list)."""
 
     def test_always_returns_empty(self) -> None:
         cfg = _config_with_chrome()
         rm = ResourceManager(cfg)
-        assert rm.get_workspace_resources("sns-threads") == []
+        assert rm.get_agent_resources("default") == []
 
-    def test_any_workspace_returns_empty(self) -> None:
+    def test_any_agent_returns_empty(self) -> None:
         cfg = _config_with_chrome()
         rm = ResourceManager(cfg)
-        assert rm.get_workspace_resources("any") == []
-        assert rm.get_workspace_resources("") == []
+        assert rm.get_agent_resources("any") == []
+        assert rm.get_agent_resources("") == []
 
 
 # ---------------------------------------------------------------------------

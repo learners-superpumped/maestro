@@ -13,10 +13,10 @@ from maestro.models import Task, TaskStatus
 from maestro.reconciler import Reconciler
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -27,7 +27,6 @@ def _task(**kwargs) -> Task:
     defaults = dict(
         id=str(uuid.uuid4()),
         type="shell",
-        workspace="/tmp/ws",
         title="Test task",
         instruction="echo hello",
         status=TaskStatus.RUNNING,
@@ -50,6 +49,7 @@ def _reconciler(tasks: list[Task] | None = None) -> tuple[Reconciler, AsyncMock]
 # ---------------------------------------------------------------------------
 # find_timed_out_tasks
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_find_timed_out_tasks_returns_expired_task() -> None:
@@ -103,6 +103,7 @@ async def test_find_timed_out_tasks_mixed_list() -> None:
 # should_retry
 # ---------------------------------------------------------------------------
 
+
 def test_should_retry_when_attempts_remaining() -> None:
     """should_retry returns True when attempt < max_retries."""
     task = _task(attempt=1, max_retries=3)
@@ -147,6 +148,7 @@ def test_should_not_retry_when_max_retries_zero() -> None:
 # handle_timeout
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_handle_timeout_requeues_when_retries_remain() -> None:
     """handle_timeout transitions to RETRY_QUEUED and increments attempt."""
@@ -182,6 +184,7 @@ async def test_handle_timeout_fails_when_retries_exhausted() -> None:
 # reconcile (integration of find + handle)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_reconcile_handles_all_timed_out_tasks() -> None:
     """reconcile() should call handle_timeout for every timed-out task."""
@@ -193,7 +196,9 @@ async def test_reconcile_handles_all_timed_out_tasks() -> None:
     await rec.reconcile()
 
     assert store.update_task_status.await_count == 2
-    calls = {call.args[0]: call.args[1] for call in store.update_task_status.await_args_list}
+    calls = {
+        call.args[0]: call.args[1] for call in store.update_task_status.await_args_list
+    }
     assert calls[expired1.id] == TaskStatus.RETRY_QUEUED
     assert calls[expired2.id] == TaskStatus.FAILED
 

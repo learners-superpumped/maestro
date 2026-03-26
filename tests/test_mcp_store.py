@@ -7,7 +7,6 @@ daemon's internal HTTP API with aioresponses.
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 from aioresponses import aioresponses
@@ -46,7 +45,7 @@ class TestTaskGet:
             "id": "abc123",
             "type": "claude",
             "status": "running",
-            "workspace": "sns-threads",
+            "agent": "default",
             "title": "Test task",
         }
         with aioresponses() as m:
@@ -82,13 +81,12 @@ class TestTaskSubmitResult:
 
 class TestHistorySearch:
     async def test_returns_empty_results(self) -> None:
-        result = await maestro_history_search("sns-threads", "post")
+        result = await maestro_history_search("post")
         assert result["results"] == []
-        assert result["workspace"] == "sns-threads"
         assert result["query"] == "post"
 
     async def test_respects_limit(self) -> None:
-        result = await maestro_history_search("ws", "q", limit=5)
+        result = await maestro_history_search("q", limit=5)
         assert result["limit"] == 5
 
 
@@ -136,23 +134,27 @@ class TestApprovalSubmit:
 
 class TestHandleMessage:
     async def test_initialize(self) -> None:
-        resp = await handle_message({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {},
-        })
+        resp = await handle_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            }
+        )
         assert resp is not None
         assert resp["id"] == 1
         assert "maestro-store" in resp["result"]["serverInfo"]["name"]
 
     async def test_tools_list(self) -> None:
-        resp = await handle_message({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/list",
-            "params": {},
-        })
+        resp = await handle_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {},
+            }
+        )
         assert resp is not None
         tools = resp["result"]["tools"]
         tool_names = {t["name"] for t in tools}
@@ -167,15 +169,17 @@ class TestHandleMessage:
                 f"{BASE}/api/internal/task/x1",
                 payload={"id": "x1", "status": "running"},
             )
-            resp = await handle_message({
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {
-                    "name": "maestro_task_get",
-                    "arguments": {"task_id": "x1"},
-                },
-            })
+            resp = await handle_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "maestro_task_get",
+                        "arguments": {"task_id": "x1"},
+                    },
+                }
+            )
         assert resp is not None
         assert resp["id"] == 3
         content = resp["result"]["content"][0]
@@ -184,40 +188,48 @@ class TestHandleMessage:
         assert data["id"] == "x1"
 
     async def test_tools_call_error(self) -> None:
-        resp = await handle_message({
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "tools/call",
-            "params": {
-                "name": "unknown_tool",
-                "arguments": {},
-            },
-        })
+        resp = await handle_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {
+                    "name": "unknown_tool",
+                    "arguments": {},
+                },
+            }
+        )
         assert resp is not None
         assert resp["result"]["isError"] is True
 
     async def test_ping(self) -> None:
-        resp = await handle_message({
-            "jsonrpc": "2.0",
-            "id": 5,
-            "method": "ping",
-        })
+        resp = await handle_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "ping",
+            }
+        )
         assert resp is not None
         assert resp["id"] == 5
 
     async def test_notification_no_response(self) -> None:
-        resp = await handle_message({
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized",
-        })
+        resp = await handle_message(
+            {
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+            }
+        )
         assert resp is None
 
     async def test_unknown_method(self) -> None:
-        resp = await handle_message({
-            "jsonrpc": "2.0",
-            "id": 6,
-            "method": "nonexistent/method",
-        })
+        resp = await handle_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "nonexistent/method",
+            }
+        )
         assert resp is not None
         assert "error" in resp
         assert resp["error"]["code"] == -32601

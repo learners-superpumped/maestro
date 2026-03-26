@@ -55,7 +55,7 @@ class Daemon:
     Args:
         config:    Fully-loaded MaestroConfig.
         store:     Initialised Store instance (schema already applied).
-        base_path: Root directory for workspaces, PID file, etc.
+        base_path: Root directory for worktrees, PID file, etc.
     """
 
     def __init__(self, config: MaestroConfig, store: Store, base_path: Path) -> None:
@@ -121,7 +121,7 @@ class Daemon:
         for s in raw.get("schedules", []):
             await self._store.create_schedule(
                 name=s["name"],
-                workspace=s["workspace"],
+                agent=s.get("agent", "default"),
                 task_type=s["task_type"],
                 cron=s.get("cron"),
                 interval_ms=s.get("interval_ms"),
@@ -131,11 +131,10 @@ class Daemon:
 
         # Seed auto_extract rules
         assets_cfg = raw.get("assets", {})
-        for workspace, type_rules in assets_cfg.get("auto_extract", {}).items():
+        for agent_name, type_rules in assets_cfg.get("auto_extract", {}).items():
             for task_type, rule in type_rules.items():
                 tags = rule.get("tags_from", [])
                 await self._store.create_extract_rule(
-                    workspace=workspace,
                     task_type=task_type,
                     asset_type=rule["asset_type"],
                     title_field=rule.get("title_field"),
@@ -143,7 +142,7 @@ class Daemon:
                     tags_from=tags if tags else None,
                 )
                 logger.info(
-                    "Seeded extract rule from YAML: %s/%s", workspace, task_type
+                    "Seeded extract rule from YAML: %s/%s", agent_name, task_type
                 )
 
     # ------------------------------------------------------------------
@@ -822,7 +821,6 @@ class Daemon:
                     if isinstance(rj, dict):
                         await self._asset_manager.auto_extract(
                             task_id=task.id,
-                            workspace=task.agent,
                             result_json=rj,
                             rules=rules,
                         )

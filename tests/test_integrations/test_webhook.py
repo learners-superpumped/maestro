@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import pathlib
 
 import pytest
@@ -10,7 +9,6 @@ import pytest
 from maestro.api import create_api_app
 from maestro.models import TaskStatus
 from maestro.store import Store
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -40,7 +38,6 @@ async def test_generic_webhook_creates_task(aiohttp_client, app, store) -> None:
     resp = await client.post(
         "/api/webhooks/generic",
         json={
-            "workspace": "sns-threads",
             "type": "create_post",
             "title": "New post needed",
             "instruction": "Write about the latest feature",
@@ -56,7 +53,6 @@ async def test_generic_webhook_creates_task(aiohttp_client, app, store) -> None:
     # Verify task was persisted
     task = await store.get_task(body["task_id"])
     assert task is not None
-    assert task.workspace == "sns-threads"
     assert task.type == "create_post"
     assert task.title == "New post needed"
     assert task.instruction == "Write about the latest feature"
@@ -72,7 +68,6 @@ async def test_generic_webhook_defaults(aiohttp_client, app, store) -> None:
     resp = await client.post(
         "/api/webhooks/generic",
         json={
-            "workspace": "test-ws",
             "title": "Test task",
             "instruction": "Do something",
         },
@@ -93,7 +88,7 @@ async def test_generic_webhook_missing_fields(aiohttp_client, app) -> None:
 
     resp = await client.post(
         "/api/webhooks/generic",
-        json={"workspace": "test"},
+        json={"title": "test"},
     )
     assert resp.status == 400
 

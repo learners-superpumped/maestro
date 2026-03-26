@@ -95,7 +95,7 @@ class Planner:
     async def _build_planning_task(
         self, signals: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        """Build a planning task spec for the _planner workspace agent."""
+        """Build a planning task spec for the _planner agent."""
         # Enrich signals with goal details from DB
         goals_info = []
         for s in signals:
