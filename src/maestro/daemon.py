@@ -570,6 +570,20 @@ class Daemon:
         cwd = self._resolve_cwd(task)
         system_prompt = self._load_prompt(task.agent)
 
+        # Inject task context so the agent knows its own task ID
+        task_context = (
+            f"## Maestro Task Context\n"
+            f"- Task ID: {task.id}\n"
+            f"- Task Type: {task.type}\n"
+            f"- Task Title: {task.title}\n\n"
+            f"When using maestro MCP tools (e.g. maestro_task_submit_result), "
+            f'use task_id="{task.id}".\n'
+        )
+        if system_prompt:
+            system_prompt = f"{task_context}\n{system_prompt}"
+        else:
+            system_prompt = task_context
+
         # Transition to RUNNING
         now = datetime.now(timezone.utc)
         timeout_ms = self._config.agent.turn_timeout_ms
