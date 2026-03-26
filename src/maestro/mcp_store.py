@@ -15,11 +15,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import aiohttp
+
+from maestro.store import Store
 
 logger = logging.getLogger("maestro.mcp_store")
 
@@ -37,7 +40,6 @@ def _daemon_base_url() -> str:
     2. .maestro/maestro.port file relative to MAESTRO_BASE_PATH
     3. .maestro/maestro.port file relative to cwd (fallback)
     """
-    import os
 
     port = os.environ.get("MAESTRO_DAEMON_PORT", "")
     if port:
@@ -71,6 +73,17 @@ async def _daemon_post(path: str, body: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Store helper
+# ---------------------------------------------------------------------------
+
+
+def _store() -> Store:
+    """Return a Store instance using the configured DB path."""
+    db_path = os.environ.get("MAESTRO_DB_PATH", "./store/maestro.db")
+    return Store(db_path)
+
+
+# ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
 
@@ -95,13 +108,15 @@ async def maestro_history_search(
     query: str,
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Search recent actions in history.
+    """Search past completed/failed tasks by keyword.
 
-    Note: history storage is a placeholder; returns empty results for now.
+    Returns matching tasks ranked by relevance and recency.
+    Use this to find if similar work was done before.
     """
-    # The daemon's history endpoint is a placeholder.
-    # We return an empty list until history persistence is implemented.
-    return {"results": [], "query": query, "limit": limit}
+    store = _store()
+    await store.init_db()
+    results = await store.search_tasks_fts(query, limit)
+    return {"results": results, "query": query}
 
 
 async def maestro_history_record(action: dict[str, Any]) -> dict[str, Any]:
@@ -177,11 +192,18 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "maestro_history_search": {
-        "description": "Search recent actions in history",
+        "description": (
+            "Search past completed/failed tasks by keyword. "
+            "Returns matching tasks ranked by relevance and recency. "
+            "Use this to find if similar work was done before."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query"},
+                "query": {
+                    "type": "string",
+                    "description": "Search keywords (natural language)",
+                },
                 "limit": {
                     "type": "integer",
                     "description": "Max results to return",

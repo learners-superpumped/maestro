@@ -124,9 +124,9 @@ function ReviewSummaryCard({ approvalInfo }: { approvalInfo: { verdict: string |
 
 function ResultCard({ task, defaultExpanded }: { task: any; defaultExpanded: boolean }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
-  const content = typeof (task.result_json ?? task.result) === "string"
-    ? (task.result_json ?? task.result)
-    : JSON.stringify(task.result_json ?? task.result, null, 2)
+  const content = typeof task.result === "string"
+    ? task.result
+    : JSON.stringify(task.result, null, 2)
 
   return (
     <Card className="bg-white border border-[#e8e5df] rounded">
@@ -335,7 +335,7 @@ export function TaskDetail() {
           )}
 
           {/* Result */}
-          {(task.result_json != null || task.result != null) && (
+          {task.result != null && (
             <ResultCard task={task} defaultExpanded={true} />
           )}
 

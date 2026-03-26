@@ -220,10 +220,10 @@ class AssetManager:
         self,
         *,
         task_id: str,
-        result_json: dict,
+        result: dict,
         rules: dict,
     ) -> list[dict]:
-        """Extract assets from task result_json using config rules."""
+        """Extract assets from task result using config rules."""
         # Check for duplicates
         existing = await self._store.list_assets_filtered(
             task_id=task_id,
@@ -233,9 +233,9 @@ class AssetManager:
             return []
 
         assets: list[dict] = []
-        items: list = [result_json]
+        items: list = [result]
         if "iterate" in rules:
-            items = _dot_path(result_json, rules["iterate"]) or []
+            items = _dot_path(result, rules["iterate"]) or []
 
         for item in items:
             title_val = (

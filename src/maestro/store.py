@@ -86,7 +86,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         attempt=d.get("attempt", 0),
         max_retries=d.get("max_retries", 3),
         budget_usd=d.get("budget_usd", 5.0),
-        result_json=_safe_json_loads(d.get("result_json")),
+        result=_safe_json_loads(d.get("result")),
         error=d.get("error"),
         cost_usd=d.get("cost_usd", 0.0),
         review_count=d.get("review_count", 0),
@@ -161,7 +161,7 @@ class Store:
     """Async SQLite store for Maestro tasks and related entities."""
 
     def __init__(self, db_path: pathlib.Path | str) -> None:
-        self._db_path = str(db_path)
+        self._db_path = str(pathlib.Path(db_path).resolve())
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -315,6 +315,19 @@ class Store:
         except Exception:
             pass
 
+        # Rename result_json → result
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute("PRAGMA table_info(tasks)")
+                columns = [row[1] for row in await cursor.fetchall()]
+                if "result_json" in columns and "result" not in columns:
+                    await db.execute(
+                        "ALTER TABLE tasks RENAME COLUMN result_json TO result"
+                    )
+                    await db.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Task CRUD
     # ------------------------------------------------------------------
@@ -335,14 +348,14 @@ class Store:
                     id, task_number, type, status, agent, no_worktree, title, instruction,
                     goal_id, parent_task_id, depends_on, priority, approval_level,
                     schedule, deadline, session_id, attempt, max_retries,
-                    budget_usd, result_json, error, cost_usd, review_count,
+                    budget_usd, result, error, cost_usd, review_count,
                     created_at, scheduled_at, started_at, completed_at,
                     timeout_at, updated_at
                 ) VALUES (
                     :id, :task_number, :type, :status, :agent, :no_worktree, :title, :instruction,
                     :goal_id, :parent_task_id, :depends_on, :priority, :approval_level,
                     :schedule, :deadline, :session_id, :attempt, :max_retries,
-                    :budget_usd, :result_json, :error, :cost_usd, :review_count,
+                    :budget_usd, :result, :error, :cost_usd, :review_count,
                     :created_at, :scheduled_at, :started_at, :completed_at,
                     :timeout_at, :updated_at
                 )
@@ -367,8 +380,8 @@ class Store:
                     "attempt": task.attempt,
                     "max_retries": task.max_retries,
                     "budget_usd": task.budget_usd,
-                    "result_json": json.dumps(task.result_json)
-                    if task.result_json is not None
+                    "result": json.dumps(task.result)
+                    if task.result is not None
                     else None,
                     "error": task.error,
                     "cost_usd": task.cost_usd,
@@ -432,7 +445,7 @@ class Store:
             "attempt",
             "error",
             "cost_usd",
-            "result_json",
+            "result",
             "instruction",
             "started_at",
             "completed_at",
@@ -485,13 +498,15 @@ class Store:
 
     async def list_tasks(
         self,
-        status: Optional[TaskStatus] = None,
+        status: Optional[TaskStatus | list[TaskStatus]] = None,
         goal_id: Optional[str] = None,
         agent: Optional[str] = None,
         limit: int | None = None,
         root_only: bool = False,
     ) -> list[Task] | list[dict]:
         """Return tasks optionally filtered by status, goal_id, and/or agent.
+
+        *status* accepts a single TaskStatus or a list of TaskStatus values.
 
         When *root_only* is True, only top-level tasks (those without a
         parent) are returned, and each result dict includes a
@@ -501,8 +516,13 @@ class Store:
         params: list[Any] = []
 
         if status is not None:
-            clauses.append("status = ?")
-            params.append(status.value)
+            if isinstance(status, list):
+                placeholders = ",".join("?" for _ in status)
+                clauses.append(f"status IN ({placeholders})")
+                params.extend(s.value for s in status)
+            else:
+                clauses.append("status = ?")
+                params.append(status.value)
         if goal_id is not None:
             clauses.append("goal_id = ?")
             params.append(goal_id)
@@ -615,6 +635,105 @@ class Store:
             )
             row = await cursor.fetchone()
         return row[0] if row else 0.0
+
+    # ------------------------------------------------------------------
+    # FTS – full-text search for task history
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_summary(result: Any, max_len: int = 500) -> str:
+        """Extract a searchable text summary from a task result."""
+        if result is None:
+            return ""
+        if isinstance(result, dict):
+            return json.dumps(result, ensure_ascii=False)[:max_len]
+        return str(result)[:max_len]
+
+    async def index_task_fts(self, task: Task) -> None:
+        """Add or update a task in the FTS index."""
+        summary = self._extract_summary(task.result)
+        async with self._conn() as db:
+            await db.execute("DELETE FROM tasks_fts WHERE task_id = ?", (task.id,))
+            await db.execute(
+                "INSERT INTO tasks_fts(task_id, title, instruction, result_summary) "
+                "VALUES (?, ?, ?, ?)",
+                (task.id, task.title, task.instruction, summary),
+            )
+            await db.commit()
+
+    async def search_tasks_fts(
+        self,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search completed/failed tasks using FTS5 with time-decay ranking."""
+        if not query or not query.strip():
+            return []
+
+        # Escape FTS5 special characters by quoting each token
+        tokens = query.replace('"', "").split()
+        if not tokens:
+            return []
+        safe_query = " AND ".join('"' + t + '"' for t in tokens)
+
+        sql = """
+            SELECT t.id, t.task_number, t.title, t.status,
+                   substr(t.result, 1, 500) AS result_summary,
+                   t.created_at,
+                   bm25(tasks_fts) * (1.0 / (1.0 + (julianday('now') - julianday(t.created_at)) / 30.0))
+                     AS score
+            FROM tasks_fts f
+            JOIN tasks t ON t.id = f.task_id
+            WHERE tasks_fts MATCH ?
+              AND t.status IN ('completed', 'failed')
+            ORDER BY score
+            LIMIT ?
+        """
+
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute(sql, (safe_query, limit))
+                rows = await cursor.fetchall()
+                return [
+                    {
+                        "task_id": row[0],
+                        "task_number": row[1],
+                        "title": row[2],
+                        "status": row[3],
+                        "result_summary": row[4],
+                        "created_at": row[5],
+                        "score": row[6],
+                    }
+                    for row in rows
+                ]
+        except Exception:
+            return []
+
+    async def backfill_fts(self) -> None:
+        """Index all completed/failed tasks not yet in FTS."""
+        async with self._conn() as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM tasks_fts")
+            fts_count = (await cursor.fetchone())[0]
+
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM tasks WHERE status IN ('completed', 'failed')"
+            )
+            task_count = (await cursor.fetchone())[0]
+
+            if fts_count >= task_count:
+                return  # Already up to date
+
+            cursor = await db.execute("""
+                SELECT id FROM tasks
+                WHERE status IN ('completed', 'failed')
+                  AND id NOT IN (SELECT task_id FROM tasks_fts)
+            """)
+            missing_ids = [row[0] for row in await cursor.fetchall()]
+
+        for task_id in missing_ids:
+            task = await self.get_task(task_id)
+            if task:
+                await self.index_task_fts(task)
 
     # ------------------------------------------------------------------
     # Asset CRUD

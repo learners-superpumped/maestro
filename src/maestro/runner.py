@@ -166,7 +166,7 @@ class AgentRunner:
         cost_usd: float = 0.0
         success: bool = False
         error: Optional[str] = None
-        result_json: Optional[object] = None
+        result_text: Optional[object] = None
         last_assistant_text: Optional[str] = None
 
         try:
@@ -240,7 +240,7 @@ class AgentRunner:
                         success = not is_error
                         if is_error:
                             error = event.get("result", "CLI error")
-                        result_json = event.get("result")
+                        result_text = event.get("result")
                         if not session_id and "session_id" in event:
                             session_id = event["session_id"]
 
@@ -262,7 +262,7 @@ class AgentRunner:
                         success = not is_error
                         if is_error:
                             error = event.get("result", "CLI error")
-                        result_json = event.get("result")
+                        result_text = event.get("result")
                         if not session_id and "session_id" in event:
                             session_id = event["session_id"]
 
@@ -283,16 +283,16 @@ class AgentRunner:
             success = False
 
         # Treat empty/whitespace-only results as None; fallback to last assistant text
-        if isinstance(result_json, str) and not result_json.strip():
-            result_json = None
-        if result_json is None and last_assistant_text:
-            result_json = last_assistant_text
+        if isinstance(result_text, str) and not result_text.strip():
+            result_text = None
+        if result_text is None and last_assistant_text:
+            result_text = last_assistant_text
 
         return TaskResult(
             task_id="",  # Filled in by callers
             success=success,
             session_id=session_id,
-            result_json=result_json,
+            result=result_text,
             error=error,
             cost_usd=cost_usd,
         )

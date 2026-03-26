@@ -234,6 +234,8 @@ class Daemon:
         # 5. Seed DB from YAML on first run (backward compatibility)
         await self._seed_from_yaml()
 
+        await self._store.backfill_fts()
+
         # 6. Restore scheduler state from DB
         schedules = await self._store.list_schedules(enabled_only=True)
         restored: dict[str, str] = {}
@@ -457,7 +459,7 @@ class Daemon:
                         dep_task = await self._store.get_task(dep_id)
                         if not dep_task:
                             continue
-                        rj = dep_task.result_json
+                        rj = dep_task.result
                         if not rj or (isinstance(rj, str) and not rj.strip()):
                             continue
                         result_str = (
@@ -539,6 +541,7 @@ class Daemon:
         agent_env = {
             "MAESTRO_DAEMON_PORT": str(self._port),
             "MAESTRO_BASE_PATH": str(self._base_path),
+            "MAESTRO_DB_PATH": self._store._db_path,
         }
 
         try:
@@ -620,6 +623,7 @@ class Daemon:
         agent_env = {
             "MAESTRO_DAEMON_PORT": str(self._port),
             "MAESTRO_BASE_PATH": str(self._base_path),
+            "MAESTRO_DB_PATH": self._store._db_path,
         }
 
         try:
@@ -664,12 +668,12 @@ class Daemon:
 
         if result.success:
             now = datetime.now(timezone.utc)
-            if result.result_json is not None:
-                # Re-fetch from DB to check if result_json was already set
+            if result.result is not None:
+                # Re-fetch from DB to check if result was already set
                 # (e.g. from a previous execution before resume)
                 current = await self._store.get_task(task.id)
-                if not current or not current.result_json:
-                    extra_fields["result_json"] = result.result_json
+                if not current or not current.result:
+                    extra_fields["result"] = result.result
             await self._store.update_task_status(
                 task.id,
                 TaskStatus.COMPLETED,
@@ -683,6 +687,14 @@ class Daemon:
                 await self._store.record_spend(today, result.cost_usd)
 
             logger.info("Task %s completed (cost=$%.4f)", task.id, result.cost_usd)
+
+            # Index completed task for FTS search
+            try:
+                completed_task = await self._store.get_task(task.id)
+                if completed_task:
+                    await self._store.index_task_fts(completed_task)
+            except Exception:
+                logger.debug("FTS indexing failed for task %s", task.id, exc_info=True)
 
             # Level 1 post-notification
             if task.approval_level == 1:
@@ -754,6 +766,17 @@ class Daemon:
                     new_attempt,
                     result.error,
                 )
+
+                # Index failed task for FTS search
+                try:
+                    failed_task = await self._store.get_task(task.id)
+                    if failed_task:
+                        await self._store.index_task_fts(failed_task)
+                except Exception:
+                    logger.debug(
+                        "FTS indexing failed for task %s", task.id, exc_info=True
+                    )
+
                 await self._cascade_cancel(task.id)
 
     async def _cascade_cancel(self, task_id: str) -> None:
@@ -869,15 +892,15 @@ class Daemon:
 
     async def _on_task_completed(self, task: Task, result: TaskResult) -> None:
         # planning과 review는 자체 핸들러가 있으므로 approval 체크 불필요
-        if task.type == "planning" and result.result_json:
-            parsed = self._extract_json(result.result_json)
+        if task.type == "planning" and result.result:
+            parsed = self._extract_json(result.result)
             if isinstance(parsed, list):
                 await self._planner.create_planned_tasks(parsed)
             else:
                 logger.error("Failed to parse planning result for task %s", task.id)
             return
 
-        if task.type == "review" and result.result_json:
+        if task.type == "review" and result.result:
             await self._handle_review_result(task, result)
             return
 
@@ -893,8 +916,8 @@ class Daemon:
                 },
             )
 
-        # Auto-extract assets from result_json
-        if result.result_json and self._asset_manager:
+        # Auto-extract assets from result
+        if result.result and self._asset_manager:
             rule = await self._store.get_extract_rule(task.type)
             if rule:
                 rules = {
@@ -904,13 +927,13 @@ class Daemon:
                     "tags_from": rule.get("tags_from"),
                 }
                 try:
-                    rj = result.result_json
+                    rj = result.result
                     if isinstance(rj, str):
                         rj = json.loads(rj)
                     if isinstance(rj, dict):
                         await self._asset_manager.auto_extract(
                             task_id=task.id,
-                            result_json=rj,
+                            result=rj,
                             rules=rules,
                         )
                 except Exception as e:
@@ -941,7 +964,7 @@ class Daemon:
                     or original_task.id,
                     "original_agent": original_task.agent,
                     "original_instruction": original_task.instruction,
-                    "result": result.result_json,
+                    "result": result.result,
                 },
                 ensure_ascii=False,
             ),
@@ -954,7 +977,7 @@ class Daemon:
     async def _handle_review_result(
         self, review_task: Task, result: TaskResult
     ) -> None:
-        review_data = self._extract_json(result.result_json)
+        review_data = self._extract_json(result.result)
         if not isinstance(review_data, dict):
             logger.error("Review result not valid JSON for task %s", review_task.id)
             # Record the failure as an event so it's visible in the Activity feed
@@ -998,7 +1021,7 @@ class Daemon:
                 original_task_id,
                 json.dumps(
                     {
-                        "result": result.result_json,
+                        "result": result.result,
                         "review_summary": review_data.get("summary", ""),
                     }
                 ),
@@ -1008,7 +1031,7 @@ class Daemon:
                 original_task_id,
                 json.dumps(
                     {
-                        "result": result.result_json,
+                        "result": result.result,
                         "review_summary": f"자동 검증 {original_task.review_count}회 실패. 수동 검토 필요.",
                         "issues": review_data.get("issues", []),
                     }
@@ -1024,7 +1047,7 @@ class Daemon:
                 title=f"Revision #{original_task.review_count + 1}: {original_task.title}",
                 instruction=(
                     f"이전 실행의 리뷰어 피드백:\n{feedback}\n\n"
-                    f"이전 실행 결과:\n{original_task.result_json}\n\n"
+                    f"이전 실행 결과:\n{original_task.result}\n\n"
                     f"원본 지시: {original_task.instruction}\n\n"
                     f"위 피드백을 반영하여 수정하라."
                 ),
