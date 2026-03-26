@@ -129,6 +129,9 @@ class Task:
     title: str
     instruction: str
 
+    # --- Short identifier (auto-assigned by store) ---
+    task_number: int = 0
+
     # --- Agent & worktree ---
     agent: str = "default"
     no_worktree: bool = False

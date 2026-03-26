@@ -89,6 +89,7 @@ async def task_get_handler(request: web.Request) -> web.Response:
     return web.json_response(
         {
             "id": task.id,
+            "task_number": task.task_number,
             "type": task.type,
             "agent": task.agent,
             "title": task.title,
@@ -378,6 +379,7 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
         enriched.append(
             {
                 "id": t.id,
+                "task_number": t.task_number,
                 "type": t.type,
                 "agent": t.agent,
                 "title": t.title,
@@ -571,6 +573,7 @@ async def task_children_handler(request: web.Request) -> web.Response:
             "children": [
                 {
                     "id": c.id,
+                    "task_number": c.task_number,
                     "type": c.type,
                     "title": c.title,
                     "status": c.status.value,

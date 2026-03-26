@@ -211,7 +211,7 @@ export function TaskDetail() {
         <div className="flex-1 min-w-0">
           <h1 className="text-[20px] font-semibold text-[#37352f]">{task.title}</h1>
           <div className="flex items-center gap-2 mt-0.5 text-[12px] text-[#9b9a97]">
-            <span className="font-mono">{task.id}</span>
+            <span className="font-mono">MAE-{task.task_number}</span>
             {task.cost_usd > 0 && <><span>·</span><span className="font-mono">${Number(task.cost_usd).toFixed(2)}</span></>}
             {task.updated_at && <><span>·</span><span>{formatRelativeTime(task.updated_at)}</span></>}
           </div>

@@ -53,7 +53,12 @@ function TaskRow({
             <span className="w-5 shrink-0" />
           )}
           <StatusIcon status={status} size={14} />
-          <span className={`text-[13px] truncate ml-2 ${depth === 0 ? "text-[#37352f]" : "text-[#787774]"}`}>
+          {task.task_number != null && (
+            <span className="text-[12px] text-[#9b9a97] font-mono ml-2 shrink-0">
+              MAE-{task.task_number}
+            </span>
+          )}
+          <span className={`text-[13px] truncate ml-1.5 ${depth === 0 ? "text-[#37352f]" : "text-[#787774]"}`}>
             {task.title}
           </span>
           {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (

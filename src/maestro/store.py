@@ -71,6 +71,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         type=d["type"],
         title=d["title"],
         instruction=d["instruction"],
+        task_number=d.get("task_number"),
         status=TaskStatus(d["status"]),
         agent=d.get("agent", "default"),
         no_worktree=bool(d.get("no_worktree", 0)),
@@ -252,6 +253,52 @@ class Store:
         except Exception:
             pass
 
+        # tasks: add task_number + sequence table
+        try:
+            async with self._conn() as db:
+                await db.execute("ALTER TABLE tasks ADD COLUMN task_number INTEGER")
+                await db.commit()
+        except Exception:
+            pass
+        try:
+            async with self._conn() as db:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS task_seq (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        next_val INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+                await db.execute(
+                    "INSERT OR IGNORE INTO task_seq (id, next_val) VALUES (1, 1)"
+                )
+                # Backfill task_number for existing rows
+                cursor = await db.execute(
+                    "SELECT COUNT(*) FROM tasks WHERE task_number IS NULL"
+                )
+                row = await cursor.fetchone()
+                if row and row[0] > 0:
+                    await db.execute("""
+                        WITH numbered AS (
+                            SELECT id, ROW_NUMBER() OVER (ORDER BY created_at ASC) AS rn
+                            FROM tasks WHERE task_number IS NULL
+                        )
+                        UPDATE tasks SET task_number = (
+                            SELECT rn + COALESCE(
+                                (SELECT MAX(task_number)
+                                 FROM tasks
+                                 WHERE task_number IS NOT NULL), 0
+                            ) FROM numbered WHERE numbered.id = tasks.id
+                        ) WHERE task_number IS NULL
+                    """)
+                    await db.execute("""
+                        UPDATE task_seq SET next_val = (
+                            SELECT COALESCE(MAX(task_number), 0) + 1 FROM tasks
+                        ) WHERE id = 1
+                    """)
+                await db.commit()
+        except Exception:
+            pass
+
         # Migrate old assets schema to new asset pipeline schema
         try:
             async with self._conn() as db:
@@ -275,17 +322,24 @@ class Store:
     async def create_task(self, task: Task) -> None:
         """Insert a new task row."""
         async with self._conn() as db:
+            # Atomically claim the next task_number from the sequence table
+            cursor = await db.execute("SELECT next_val FROM task_seq WHERE id = 1")
+            row = await cursor.fetchone()
+            task_number = row[0] if row else 1
+            await db.execute("UPDATE task_seq SET next_val = next_val + 1 WHERE id = 1")
+            task.task_number = task_number
+
             await db.execute(
                 """
                 INSERT INTO tasks (
-                    id, type, status, agent, no_worktree, title, instruction,
+                    id, task_number, type, status, agent, no_worktree, title, instruction,
                     goal_id, parent_task_id, depends_on, priority, approval_level,
                     schedule, deadline, session_id, attempt, max_retries,
                     budget_usd, result_json, error, cost_usd, review_count,
                     created_at, scheduled_at, started_at, completed_at,
                     timeout_at, updated_at
                 ) VALUES (
-                    :id, :type, :status, :agent, :no_worktree, :title, :instruction,
+                    :id, :task_number, :type, :status, :agent, :no_worktree, :title, :instruction,
                     :goal_id, :parent_task_id, :depends_on, :priority, :approval_level,
                     :schedule, :deadline, :session_id, :attempt, :max_retries,
                     :budget_usd, :result_json, :error, :cost_usd, :review_count,
@@ -295,6 +349,7 @@ class Store:
                 """,
                 {
                     "id": task.id,
+                    "task_number": task_number,
                     "type": task.type,
                     "status": task.status.value,
                     "agent": task.agent,

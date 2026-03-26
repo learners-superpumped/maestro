@@ -4,6 +4,7 @@ import { CornerDownRight, ListChecks, DollarSign, Eye, Sparkles } from "lucide-r
 interface TaskCardProps {
   task: {
     id: string
+    task_number: number
     title: string
     type: string
     status: string
@@ -47,7 +48,12 @@ export function TaskBoardCard({ task }: TaskCardProps) {
       className="bg-white border border-[#ebebea] rounded px-3 py-2 cursor-pointer hover:bg-[#f9f9f8] transition-colors"
     >
       {/* Title */}
-      <p className="text-[13px] text-[#37352f] leading-[1.4] line-clamp-2">{task.title}</p>
+      <div className="flex items-start gap-1.5">
+        <span className="text-[11px] text-[#9b9a97] font-mono shrink-0 mt-px">
+          MAE-{task.task_number}
+        </span>
+        <p className="text-[13px] text-[#37352f] leading-[1.4] line-clamp-2">{task.title}</p>
+      </div>
 
       {/* Properties row — Linear style: small icon chips */}
       {hasProperties && (

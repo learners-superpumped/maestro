@@ -74,6 +74,11 @@ function ApprovalCard({ task }: { task: any }) {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <StatusIcon status={task.status} />
+            {task.task_number != null && (
+              <span className="text-[12px] text-[#9b9a97] font-mono shrink-0">
+                MAE-{task.task_number}
+              </span>
+            )}
             <span
               className="text-[14px] text-[#37352f] truncate cursor-pointer hover:underline"
               onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}

@@ -1,8 +1,16 @@
 -- Maestro SQLite schema
 -- Applied via store.py init_db() using aiosqlite executescript().
 
+-- Auto-increment sequence for human-readable task numbers (MAE-1, MAE-2, …)
+CREATE TABLE IF NOT EXISTS task_seq (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    next_val INTEGER NOT NULL DEFAULT 1
+);
+INSERT OR IGNORE INTO task_seq (id, next_val) VALUES (1, 1);
+
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
+    task_number INTEGER NOT NULL UNIQUE,
     type TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     title TEXT NOT NULL,
