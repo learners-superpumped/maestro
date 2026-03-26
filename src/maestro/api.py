@@ -153,7 +153,12 @@ async def task_update_handler(request: web.Request) -> web.Response:
 
 
 async def task_result_handler(request: web.Request) -> web.Response:
-    """POST /api/internal/task/result — complete a task and record daily spend."""
+    """POST /api/internal/task/result — store result_json for a running task.
+
+    Does NOT change task status. The runner is the sole owner of status
+    transitions (RUNNING → COMPLETED). This endpoint only persists the
+    structured result so the runner can pick it up when the CLI session ends.
+    """
     store: Store = request.app["store"]
 
     try:
@@ -163,23 +168,17 @@ async def task_result_handler(request: web.Request) -> web.Response:
 
     task_id: str | None = body.get("task_id")
     result_json = body.get("result_json")
-    cost_usd: float = float(body.get("cost_usd", 0.0))
 
     if not task_id:
         raise web.HTTPBadRequest(reason="'task_id' is required")
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    await store.update_task_status(
-        task_id,
-        TaskStatus.COMPLETED,
-        result_json=json.dumps(result_json) if result_json is not None else None,
-        cost_usd=cost_usd,
-        completed_at=datetime.now(timezone.utc).isoformat(),
-    )
-
-    if cost_usd > 0:
-        await store.record_spend(today, cost_usd)
+    # Only store result_json — do not touch status, cost, or completed_at.
+    # Runner handles those when the CLI session terminates.
+    if result_json is not None:
+        await store.update_task_fields(
+            task_id,
+            result_json=json.dumps(result_json, ensure_ascii=False),
+        )
 
     return web.json_response({"ok": True})
 

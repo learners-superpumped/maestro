@@ -94,15 +94,13 @@ async def maestro_task_update_status(task_id: str, status: str) -> dict[str, Any
 async def maestro_task_submit_result(
     task_id: str,
     result_json: Any,
-    cost_usd: float = 0.0,
 ) -> dict[str, Any]:
-    """Submit task result and mark as completed."""
+    """Submit structured result data. Does not change task status."""
     return await _daemon_post(
         "/api/internal/task/result",
         {
             "task_id": task_id,
             "result_json": result_json,
-            "cost_usd": cost_usd,
         },
     )
 
@@ -193,16 +191,13 @@ TOOLS: dict[str, dict[str, Any]] = {
         },
     },
     "maestro_task_submit_result": {
-        "description": "Submit task result and mark as completed",
+        "description": "Submit structured result data for the current task. Does not change task status — the system handles completion automatically when your session ends.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "task_id": {"type": "string", "description": "Task ID"},
-                "result_json": {"description": "Structured result data"},
-                "cost_usd": {
-                    "type": "number",
-                    "description": "Cost incurred in USD",
-                    "default": 0.0,
+                "result_json": {
+                    "description": "Structured result data (JSON object or string)"
                 },
             },
             "required": ["task_id", "result_json"],
@@ -277,7 +272,6 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
         return await maestro_task_submit_result(
             arguments["task_id"],
             arguments["result_json"],
-            arguments.get("cost_usd", 0.0),
         )
     elif name == "maestro_history_search":
         return await maestro_history_search(
