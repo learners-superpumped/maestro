@@ -125,9 +125,8 @@ class Planner:
                     result_summary = ""
                     if t.result:
                         result_summary = str(t.result)[:300]
-                    status_label = "성공" if t.status.value == "completed" else "실패"
                     history_parts.append(
-                        f"- [{status_label}] {t.title}: {result_summary}"
+                        f"- [{t.status.value}] {t.title}: {result_summary}"
                     )
 
         goals_text = json.dumps(goals_info, ensure_ascii=False)
