@@ -15,8 +15,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -31,7 +31,8 @@ logger = logging.getLogger("maestro.mcp_store")
 
 def _daemon_base_url() -> str:
     """Return the base URL for the Maestro daemon's internal API."""
-    port = os.environ.get("MAESTRO_DAEMON_PORT", "0")
+    port_file = Path(".maestro/maestro.port")
+    port = port_file.read_text().strip() if port_file.exists() else "0"
     return f"http://127.0.0.1:{port}"
 
 

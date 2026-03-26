@@ -7,6 +7,7 @@ daemon's internal HTTP API with aioresponses.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from aioresponses import aioresponses
@@ -26,9 +27,12 @@ from maestro.mcp_store import (
 
 
 @pytest.fixture(autouse=True)
-def set_daemon_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set MAESTRO_DAEMON_PORT for all tests."""
-    monkeypatch.setenv("MAESTRO_DAEMON_PORT", "19876")
+def set_daemon_port(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Write maestro.port file for all tests."""
+    maestro_dir = tmp_path / ".maestro"
+    maestro_dir.mkdir(parents=True)
+    (maestro_dir / "maestro.port").write_text("19876")
+    monkeypatch.chdir(tmp_path)
 
 
 BASE = "http://127.0.0.1:19876"

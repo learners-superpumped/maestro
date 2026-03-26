@@ -80,7 +80,7 @@ def _project_root() -> pathlib.Path:
 
 
 def _pid_file() -> pathlib.Path:
-    return _project_root() / ".maestro" / "store" / "maestro.pid"
+    return _project_root() / ".maestro" / "maestro.pid"
 
 
 def _config_path() -> pathlib.Path:
@@ -157,10 +157,8 @@ def init() -> None:
     asyncio.run(store.init_db())
     click.echo(f"Database initialized: {cfg.project.store_path}")
 
-    # 4. Merge maestro MCP servers into .claude/mcp.json
-    claude_dir = root / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
-    mcp_json_path = claude_dir / "mcp.json"
+    # 4. Merge maestro MCP servers into .mcp.json (project root)
+    mcp_json_path = root / ".mcp.json"
     if mcp_json_path.exists():
         try:
             mcp_data = json.loads(mcp_json_path.read_text(encoding="utf-8"))
@@ -175,12 +173,10 @@ def init() -> None:
         "maestro-store": {
             "command": "python",
             "args": ["-m", "maestro.mcp_store"],
-            "env": {"MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}"},
         },
         "maestro-embedding": {
             "command": "python",
             "args": ["-m", "maestro.mcp_embedding"],
-            "env": {"MAESTRO_DAEMON_PORT": "${MAESTRO_DAEMON_PORT}"},
         },
     }
     # Remove old incorrect "maestro" entry if present

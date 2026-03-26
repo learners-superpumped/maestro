@@ -43,7 +43,8 @@ def _store() -> Store:
 
 
 def _daemon_port() -> int:
-    return int(os.environ.get("MAESTRO_DAEMON_PORT", "18321"))
+    port_file = Path(".maestro/maestro.port")
+    return int(port_file.read_text().strip()) if port_file.exists() else 0
 
 
 async def _post(port: int, path: str, data: dict) -> dict:

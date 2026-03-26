@@ -220,14 +220,13 @@ class Daemon:
 
         logger.info("Internal API listening on 127.0.0.1:%d", actual_port)
 
-        # 3. Export the port so child processes can find us
-        os.environ["MAESTRO_DAEMON_PORT"] = str(actual_port)
-
-        # 4. Write PID file
-        store_dir = self._base_path / "store"
-        store_dir.mkdir(parents=True, exist_ok=True)
-        pid_file = store_dir / "maestro.pid"
+        # 3. Write PID and port files to .maestro/ (fixed location)
+        maestro_dir = self._base_path / ".maestro"
+        maestro_dir.mkdir(parents=True, exist_ok=True)
+        pid_file = maestro_dir / "maestro.pid"
         pid_file.write_text(str(os.getpid()))
+        port_file = maestro_dir / "maestro.port"
+        port_file.write_text(str(actual_port))
         logger.info("PID %d written to %s", os.getpid(), pid_file)
 
         # 5. Seed DB from YAML on first run (backward compatibility)

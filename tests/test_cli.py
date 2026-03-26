@@ -94,7 +94,7 @@ class TestInit:
         with runner.isolated_filesystem():
             result = runner.invoke(main, ["init"])
             assert result.exit_code == 0
-            mcp_path = Path(".claude/mcp.json")
+            mcp_path = Path(".mcp.json")
             assert mcp_path.exists()
             import json
 
@@ -130,10 +130,10 @@ class TestStatus:
     def test_status_stale_pid(self) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem():
-            store_dir = Path(".maestro/store")
-            store_dir.mkdir(parents=True)
+            maestro_dir = Path(".maestro")
+            maestro_dir.mkdir(parents=True)
             # Use a PID that almost certainly doesn't exist
-            (store_dir / "maestro.pid").write_text("999999999")
+            (maestro_dir / "maestro.pid").write_text("999999999")
             result = runner.invoke(main, ["status"])
             assert result.exit_code == 0
             assert "not running" in result.output.lower()
