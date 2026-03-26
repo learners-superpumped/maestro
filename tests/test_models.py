@@ -161,7 +161,7 @@ class TestTaskCreation:
         assert task.schedule is None
         assert task.deadline is None
         assert task.session_id is None
-        assert task.result_json is None
+        assert task.result is None
         assert task.error is None
         assert task.scheduled_at is None
         assert task.started_at is None
@@ -406,11 +406,11 @@ class TestTaskResult:
         result = TaskResult(
             task_id="task-001",
             success=True,
-            result_json={"output": "hello"},
+            result={"output": "hello"},
         )
         assert result.task_id == "task-001"
         assert result.success is True
-        assert result.result_json == {"output": "hello"}
+        assert result.result == {"output": "hello"}
 
     def test_task_result_failure(self):
         result = TaskResult(
@@ -424,7 +424,7 @@ class TestTaskResult:
     def test_task_result_defaults(self):
         result = TaskResult(task_id="task-003", success=True)
         assert result.session_id is None
-        assert result.result_json is None
+        assert result.result is None
         assert result.error is None
         assert result.cost_usd == 0.0
 

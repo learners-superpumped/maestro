@@ -112,7 +112,7 @@ class Task:
     attempt         : Number of execution attempts so far (default 0)
     max_retries     : Maximum retry attempts (default 3)
     budget_usd      : Max spend allowed in USD (default 5.0)
-    result_json     : Structured output from the last execution
+    result          : Structured output from the last execution
     error           : Error message from the last failure
     cost_usd        : Accumulated cost in USD (default 0.0)
     created_at      : Creation timestamp (auto-set)
@@ -157,7 +157,7 @@ class Task:
     budget_usd: float = 5.0
 
     # --- Results ---
-    result_json: Optional[Any] = None
+    result: Optional[Any] = None
     error: Optional[str] = None
     cost_usd: float = 0.0
     review_count: int = 0
@@ -235,7 +235,7 @@ class TaskResult:
     task_id     : ID of the task that was executed
     success     : Whether execution succeeded
     session_id  : Claude CLI session UUID (if applicable)
-    result_json : Structured output (optional)
+    result      : Structured output (optional)
     error       : Error message on failure (optional)
     cost_usd    : Cost incurred by this execution (default 0.0)
     """
@@ -243,6 +243,6 @@ class TaskResult:
     task_id: str
     success: bool
     session_id: Optional[str] = None
-    result_json: Optional[Any] = None
+    result: Optional[Any] = None
     error: Optional[str] = None
     cost_usd: float = 0.0
