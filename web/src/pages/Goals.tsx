@@ -331,11 +331,11 @@ export function Goals() {
                   const goalTargets = parseTargets(g.metrics)
                   return (
                     <TableRow key={g.id} className="border-b border-[#e8e5df] hover:bg-[#f7f6f3]">
-                      <TableCell className="text-[14px] max-w-[300px]">
+                      <TableCell className="text-[14px]">
                         <div className="flex items-start gap-2">
                           <Target className="h-4 w-4 text-[#9b9a97] shrink-0 mt-0.5" />
                           <div className="min-w-0">
-                            <div className="text-[#37352f] font-medium whitespace-pre-line line-clamp-3">
+                            <div className="text-[#37352f] font-medium line-clamp-2">
                               {g.description || g.id}
                             </div>
                             {g.description && g.description !== g.id && (
