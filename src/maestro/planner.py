@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pathlib
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -18,6 +19,8 @@ from maestro.models import Task
 from maestro.store import Store
 
 logger = logging.getLogger("maestro.planner")
+
+_PROMPTS_DIR = pathlib.Path(__file__).resolve().parent / "prompts"
 
 
 def _now_iso() -> str:
@@ -134,28 +137,17 @@ class Planner:
         if history_parts:
             history_text = "\n".join(history_parts)
             history_section = (
-                f"## 과거 작업 이력\n"
-                f"아래는 이 목표에 대해 이전에 실행된 태스크들이다. "
-                f"이 결과를 바탕으로 다음 단계를 계획하라.\n\n"
+                "## 과거 작업 이력\n"
+                "아래는 이 목표에 대해 이전에 실행된 태스크들이다. "
+                "이 결과를 바탕으로 다음 단계를 계획하라.\n\n"
                 f"{history_text}\n\n"
             )
 
-        instruction = (
-            "다음 목표와 신호를 분석하여 실행 태스크를 생성하라.\n\n"
-            f"## Goals\n{goals_text}\n\n"
-            f"{history_section}"
-            f"## Signals\n{signals_text}\n\n"
-            "중요: 각 태스크에 agent 필드를 지정하라. "
-            "agent는 태스크를 실행할 에이전트 유형이다.\n\n"
-            "## 태스크 순서 지정\n"
-            "각 태스크에 depends_on_steps 필드로 선행 태스크의 배열 인덱스(0부터)를 지정하라.\n"
-            "선행 태스크의 결과가 필요한 경우에만 의존성을 추가하라.\n"
-            "병렬 실행 가능한 태스크는 depends_on_steps를 비워두라.\n\n"
-            "예시:\n"
-            '[{"title": "리서치", "agent": "default"},\n'
-            ' {"title": "감사", "agent": "default"},\n'
-            ' {"title": "최적화", "agent": "default", "depends_on_steps": [0, 1]}]\n\n'
-            "JSON 배열로 반환하라."
+        template = (_PROMPTS_DIR / "planner_instruction.md").read_text()
+        instruction = template.format(
+            goals=goals_text,
+            history_section=history_section,
+            signals=signals_text,
         )
 
         return {
