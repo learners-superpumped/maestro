@@ -108,12 +108,42 @@ class Planner:
                 }
             )
 
+        # Fetch past completed/failed tasks for each goal
+        history_parts = []
+        for s in signals:
+            past_tasks = await self._store.list_tasks(goal_id=s["goal_id"])
+            completed = [
+                t for t in past_tasks if t.status.value in ("completed", "failed")
+            ]
+            if completed:
+                # Most recent 5, newest first
+                recent = sorted(completed, key=lambda t: t.created_at, reverse=True)[:5]
+                for t in recent:
+                    result_summary = ""
+                    if t.result:
+                        result_summary = str(t.result)[:300]
+                    status_label = "성공" if t.status.value == "completed" else "실패"
+                    history_parts.append(
+                        f"- [{status_label}] {t.title}: {result_summary}"
+                    )
+
         goals_text = json.dumps(goals_info, ensure_ascii=False)
         signals_text = json.dumps(signals, ensure_ascii=False)
+
+        history_section = ""
+        if history_parts:
+            history_text = "\n".join(history_parts)
+            history_section = (
+                f"## 과거 작업 이력\n"
+                f"아래는 이 목표에 대해 이전에 실행된 태스크들이다. "
+                f"이 결과를 바탕으로 다음 단계를 계획하라.\n\n"
+                f"{history_text}\n\n"
+            )
 
         instruction = (
             "다음 목표와 신호를 분석하여 실행 태스크를 생성하라.\n\n"
             f"## Goals\n{goals_text}\n\n"
+            f"{history_section}"
             f"## Signals\n{signals_text}\n\n"
             "중요: 각 태스크에 agent 필드를 지정하라. "
             "agent는 태스크를 실행할 에이전트 유형이다.\n\n"
