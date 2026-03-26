@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from maestro.config import MaestroConfig
-from maestro.models import Task
+from maestro.models import Task, TaskStatus
 from maestro.store import Store
 
 logger = logging.getLogger("maestro.planner")
@@ -113,15 +113,15 @@ class Planner:
 
         # Fetch past completed/failed tasks for each goal
         history_parts = []
+        terminal_statuses = [TaskStatus.COMPLETED, TaskStatus.FAILED]
         for s in signals:
-            past_tasks = await self._store.list_tasks(goal_id=s["goal_id"])
-            completed = [
-                t for t in past_tasks if t.status.value in ("completed", "failed")
-            ]
-            if completed:
-                # Most recent 5, newest first
-                recent = sorted(completed, key=lambda t: t.created_at, reverse=True)[:5]
-                for t in recent:
+            past_tasks = await self._store.list_tasks(
+                goal_id=s["goal_id"],
+                status=terminal_statuses,
+                limit=5,
+            )
+            if past_tasks:
+                for t in past_tasks:
                     result_summary = ""
                     if t.result:
                         result_summary = str(t.result)[:300]

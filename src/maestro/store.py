@@ -498,13 +498,15 @@ class Store:
 
     async def list_tasks(
         self,
-        status: Optional[TaskStatus] = None,
+        status: Optional[TaskStatus | list[TaskStatus]] = None,
         goal_id: Optional[str] = None,
         agent: Optional[str] = None,
         limit: int | None = None,
         root_only: bool = False,
     ) -> list[Task] | list[dict]:
         """Return tasks optionally filtered by status, goal_id, and/or agent.
+
+        *status* accepts a single TaskStatus or a list of TaskStatus values.
 
         When *root_only* is True, only top-level tasks (those without a
         parent) are returned, and each result dict includes a
@@ -514,8 +516,13 @@ class Store:
         params: list[Any] = []
 
         if status is not None:
-            clauses.append("status = ?")
-            params.append(status.value)
+            if isinstance(status, list):
+                placeholders = ",".join("?" for _ in status)
+                clauses.append(f"status IN ({placeholders})")
+                params.extend(s.value for s in status)
+            else:
+                clauses.append("status = ?")
+                params.append(status.value)
         if goal_id is not None:
             clauses.append("goal_id = ?")
             params.append(goal_id)
