@@ -3,7 +3,7 @@ Maestro Dispatcher — selects approved tasks eligible for immediate execution.
 
 The Dispatcher evaluates all approved tasks against three constraints:
   1. Global concurrency  (max_total_agents)
-  2. Per-workspace concurrency (max_per_workspace)
+  2. Per-goal concurrency (max_per_goal)
   3. Daily budget (daily_limit_usd)
 
 Tasks are evaluated in priority order (as returned by
@@ -158,7 +158,6 @@ class DispatchDecision:
     """Represents a decision to dispatch a single task."""
 
     task_id: str
-    workspace: str
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +170,7 @@ class Dispatcher:
 
     Args:
         store:       The Maestro persistence layer.
-        concurrency: Concurrency limits (global and per-workspace).
+        concurrency: Concurrency limits (global and per-goal).
         budget:      Daily budget configuration.
     """
 
@@ -198,10 +197,12 @@ class Dispatcher:
            ordered by priority ASC.
         4. Walk the candidate list and greedily assign each task to a slot,
            respecting:
-           - global cap  : total_running + already_dispatched < max_total_agents
-           - workspace cap: running_in_ws + dispatched_in_ws < max_per_workspace
-           - budget cap   : daily_spend + sum(dispatched budgets) + task.budget <=
-                            daily_limit_usd
+           - global cap : total_running + already_dispatched < max_total_agents
+           - goal cap   : running_in_goal + dispatched_in_goal < max_per_goal
+                          (only for tasks that belong to a goal; standalone tasks
+                          each get their own worktree so no limit applies)
+           - budget cap : daily_spend + sum(dispatched budgets) + task.budget <=
+                          daily_limit_usd
         5. Return the list of :class:`DispatchDecision` objects.
         """
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -219,10 +220,10 @@ class Dispatcher:
         decisions: list[DispatchDecision] = []
         # Track how much virtual budget we have consumed during this call
         budgeted_so_far: float = 0.0
-        # Track per-workspace running counts already in the DB
+        # Track per-goal running counts already in the DB
         # (fetched lazily and cached to avoid repeated DB calls)
         ws_running_cache: dict[str, int] = {}
-        # Track how many tasks we are dispatching per workspace this cycle
+        # Track how many tasks we are dispatching per goal this cycle
         ws_dispatched: dict[str, int] = {}
 
         now = datetime.now(timezone.utc)
@@ -259,21 +260,24 @@ class Dispatcher:
             if total_running + dispatched_count >= self._concurrency.max_total_agents:
                 break  # No more global slots; no point continuing
 
-            # -- Per-workspace slot check --
-            ws = task.workspace
-            if ws not in ws_running_cache:
-                ws_running_cache[ws] = await self._store.count_running(workspace=ws)
-            ws_running = ws_running_cache[ws]
-            ws_pending = ws_dispatched.get(ws, 0)
+            # -- Per-goal slot check --
+            # Standalone tasks (no goal_id) each get their own worktree, so no
+            # per-goal concurrency limit is applied between them.
+            if task.goal_id is not None:
+                goal_key = task.goal_id
+                if goal_key not in ws_running_cache:
+                    ws_running_cache[goal_key] = await self._store.count_running(
+                        goal_id=task.goal_id
+                    )
+                goal_running = ws_running_cache[goal_key]
+                goal_pending = ws_dispatched.get(goal_key, 0)
 
-            if ws_running + ws_pending >= self._concurrency.max_per_workspace:
-                continue  # This workspace is full; try next candidate
+                if goal_running + goal_pending >= self._concurrency.max_per_goal:
+                    continue  # This goal is full; try next candidate
 
             # -- Resource availability check --
-            if self._resource_manager is not None:
-                required = self._resource_manager.get_workspace_resources(ws)
-                if required and not self._resource_manager.all_available(required):
-                    continue  # Required resources are locked; try next candidate
+            # (Resource checks are workspace-based and will be redesigned later;
+            #  skipped for now.)
 
             # -- Budget check --
             projected_spend = daily_spend + budgeted_so_far + task.budget_usd
@@ -281,8 +285,10 @@ class Dispatcher:
                 continue  # Would exceed daily budget; try next candidate
 
             # -- Accept this task --
-            decisions.append(DispatchDecision(task_id=task.id, workspace=ws))
+            decisions.append(DispatchDecision(task_id=task.id))
             budgeted_so_far += task.budget_usd
-            ws_dispatched[ws] = ws_pending + 1
+            if task.goal_id is not None:
+                goal_key = task.goal_id
+                ws_dispatched[goal_key] = ws_dispatched.get(goal_key, 0) + 1
 
         return decisions
