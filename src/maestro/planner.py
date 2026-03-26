@@ -125,7 +125,7 @@ class Planner:
                     result_summary = ""
                     if t.result:
                         result_summary = str(t.result)[:300]
-                    status_label = "DONE" if t.status.value == "completed" else "FAIL"
+                    status_label = "성공" if t.status.value == "completed" else "실패"
                     history_parts.append(
                         f"- [{status_label}] {t.title}: {result_summary}"
                     )
