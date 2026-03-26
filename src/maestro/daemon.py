@@ -541,6 +541,7 @@ class Daemon:
         agent_env = {
             "MAESTRO_DAEMON_PORT": str(self._port),
             "MAESTRO_BASE_PATH": str(self._base_path),
+            "MAESTRO_DB_PATH": self._store._db_path,
         }
 
         try:
@@ -622,6 +623,7 @@ class Daemon:
         agent_env = {
             "MAESTRO_DAEMON_PORT": str(self._port),
             "MAESTRO_BASE_PATH": str(self._base_path),
+            "MAESTRO_DB_PATH": self._store._db_path,
         }
 
         try:

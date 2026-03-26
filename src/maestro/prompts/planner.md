@@ -23,3 +23,4 @@ instruction에 Goals와 Signals가 JSON으로 전달된다.
 - 실행 가능하고 구체적인 instruction을 작성하라
 - 한 번에 과도한 태스크를 생성하지 마라 (최대 3개)
 - 이미 최근에 유사한 태스크가 실행되었다면 생성하지 마라
+- maestro_history_search 도구로 과거 유사 태스크를 검색하여 중복 여부를 확인하라
