@@ -116,6 +116,11 @@ export const api = {
       request<any>(`/api/internal/goal/${id}/disable`, { method: "POST" }),
     trigger: (id: string) =>
       request<any>(`/api/internal/goal/${id}/trigger`, { method: "POST" }),
+    update: (id: string, data: any) =>
+      request<any>(`/api/internal/goal/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
   },
 
   rules: {

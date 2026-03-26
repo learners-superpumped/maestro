@@ -58,3 +58,16 @@ export function useToggleGoal() {
     onError: (err: Error) => toast.error(err.message),
   })
 }
+
+export function useUpdateGoal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; [key: string]: any }) =>
+      api.goals.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals"] })
+      toast.success("Goal updated")
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
