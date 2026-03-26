@@ -66,6 +66,7 @@ class AgentRunner:
         allowed_tools: list[str],
         max_turns: int,
         system_prompt: str | None = None,
+        permission_mode: str = "bypass",
     ) -> list[str]:
         """Build the argument list for a fresh Claude CLI execution.
 
@@ -74,11 +75,15 @@ class AgentRunner:
         task:
             The task whose ``instruction`` and ``budget_usd`` drive the call.
         allowed_tools:
-            Tool names to pass via ``--allowedTools`` (joined with commas).
+            Tool names to pass via ``--allowedTools`` (only used when
+            ``permission_mode`` is ``"restricted"``).
         max_turns:
             Maximum number of agentic turns to allow.
         system_prompt:
             Optional system prompt to append via ``--append-system-prompt``.
+        permission_mode:
+            ``"bypass"`` uses ``--dangerously-skip-permissions`` (all tools).
+            ``"restricted"`` uses ``--allowedTools`` whitelist.
 
         Returns
         -------
@@ -92,13 +97,15 @@ class AgentRunner:
             "--output-format",
             "stream-json",
             "--verbose",
-            "--allowedTools",
-            ",".join(allowed_tools),
             "--max-turns",
             str(max_turns),
             "--max-budget-usd",
             str(task.budget_usd),
         ]
+        if permission_mode == "bypass":
+            args.append("--dangerously-skip-permissions")
+        else:
+            args += ["--allowedTools", ",".join(allowed_tools)]
         if system_prompt is not None:
             args += ["--append-system-prompt", system_prompt]
         return args
@@ -293,6 +300,7 @@ class AgentRunner:
         max_turns: int = 20,
         on_event: Optional[callable] = None,
         system_prompt: str | None = None,
+        permission_mode: str = "bypass",
     ) -> TaskResult:
         """Execute a task from scratch using the Claude CLI.
 
@@ -303,11 +311,14 @@ class AgentRunner:
         cwd:
             Working directory for the Claude subprocess.
         allowed_tools:
-            Optional list of tool names.  Defaults to an empty list.
+            Optional list of tool names (only used when permission_mode is
+            "restricted").
         max_turns:
             Maximum agentic turns.  Defaults to 20.
         system_prompt:
             Optional system prompt to append via ``--append-system-prompt``.
+        permission_mode:
+            ``"bypass"`` (default) or ``"restricted"``.
 
         Returns
         -------
@@ -316,7 +327,9 @@ class AgentRunner:
         if allowed_tools is None:
             allowed_tools = []
 
-        args = self._build_execute_args(task, allowed_tools, max_turns, system_prompt)
+        args = self._build_execute_args(
+            task, allowed_tools, max_turns, system_prompt, permission_mode
+        )
         logger.info("Executing task %s: %s", task.id, args)
 
         result = await self._stream(args, cwd, on_event=on_event)

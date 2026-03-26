@@ -33,21 +33,22 @@ project:
   name: "{project_name}"
   store_path: .maestro/store/maestro.db
 
+agent:
+  permission_mode: bypass
+  default_max_turns: 20
+
 agents:
   planner:
     role: "Goal을 분석하여 실행 가능한 task로 분해하는 플래너"
     instructions: .maestro/prompts/planner.md
-    tools: [Read, Glob, Grep]
     max_turns: 30
     no_worktree: true
   reviewer:
     role: "Task 결과를 검증하는 리뷰어"
     instructions: .maestro/prompts/reviewer.md
-    tools: [Read, Glob, Grep]
     max_turns: 20
     no_worktree: true
   default:
-    tools: [Read, Write, Edit, Bash]
     max_turns: 50
 
 concurrency:

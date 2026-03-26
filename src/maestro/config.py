@@ -56,10 +56,12 @@ class AgentDefinition:
     tools: list[str] = field(default_factory=lambda: ["Read", "Write", "Bash"])
     max_turns: int = 50
     no_worktree: bool = False
+    permission_mode: str = ""  # empty = inherit from global AgentConfig
 
 
 @dataclass
 class AgentConfig:
+    permission_mode: str = "bypass"
     default_allowed_tools: list[str] = field(
         default_factory=lambda: ["Read", "Write", "Bash"]
     )
@@ -195,6 +197,7 @@ def _parse_budget(data: dict[str, Any]) -> BudgetConfig:
 
 def _parse_agent(data: dict[str, Any]) -> AgentConfig:
     return AgentConfig(
+        permission_mode=str(data.get("permission_mode", "bypass")),
         default_allowed_tools=list(
             data.get("default_allowed_tools", ["Read", "Write", "Bash"])
         ),
@@ -304,6 +307,7 @@ def _parse_agents(data: dict[str, Any]) -> dict[str, AgentDefinition]:
             tools=list(agent_data.get("tools", default.tools)),
             max_turns=int(agent_data.get("max_turns", default.max_turns)),
             no_worktree=bool(agent_data.get("no_worktree", default.no_worktree)),
+            permission_mode=str(agent_data.get("permission_mode", "")),
         )
     return result
 

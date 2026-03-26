@@ -125,10 +125,15 @@ class TestBuildExecuteArgs:
         idx = args.index("--output-format")
         assert args[idx + 1] == "stream-json"
 
-    def test_includes_allowed_tools(self, runner: AgentRunner, sample_task: Task):
+    def test_includes_allowed_tools_in_restricted_mode(
+        self, runner: AgentRunner, sample_task: Task
+    ):
         allowed_tools = ["Read", "Write", "Bash"]
         args = runner._build_execute_args(
-            sample_task, allowed_tools=allowed_tools, max_turns=5
+            sample_task,
+            allowed_tools=allowed_tools,
+            max_turns=5,
+            permission_mode="restricted",
         )
         assert "--allowedTools" in args
         idx = args.index("--allowedTools")
@@ -165,15 +170,20 @@ class TestBuildExecuteArgs:
         idx = args.index("--max-budget-usd")
         assert float(args[idx + 1]) == pytest.approx(2.5)
 
-    def test_empty_allowed_tools_produces_empty_string(
+    def test_empty_allowed_tools_in_restricted_mode(
         self, runner: AgentRunner, sample_task: Task
     ):
-        args = runner._build_execute_args(sample_task, allowed_tools=[], max_turns=5)
+        args = runner._build_execute_args(
+            sample_task,
+            allowed_tools=[],
+            max_turns=5,
+            permission_mode="restricted",
+        )
         idx = args.index("--allowedTools")
         assert args[idx + 1] == ""
 
-    def test_full_args_structure(self, runner: AgentRunner, sample_task: Task):
-        """Integration check: verify the complete expected argument list."""
+    def test_full_args_structure_bypass(self, runner: AgentRunner, sample_task: Task):
+        """Integration check: verify the complete expected argument list (bypass mode)."""
         args = runner._build_execute_args(
             sample_task,
             allowed_tools=["Read", "Write"],
@@ -186,13 +196,42 @@ class TestBuildExecuteArgs:
             "--output-format",
             "stream-json",
             "--verbose",
-            "--allowedTools",
-            "Read,Write",
             "--max-turns",
             "20",
             "--max-budget-usd",
             str(sample_task.budget_usd),
+            "--dangerously-skip-permissions",
         ]
+
+    def test_bypass_mode_uses_skip_permissions(
+        self, runner: AgentRunner, sample_task: Task
+    ):
+        args = runner._build_execute_args(
+            sample_task, allowed_tools=["Read"], max_turns=10, permission_mode="bypass"
+        )
+        assert "--dangerously-skip-permissions" in args
+        assert "--allowedTools" not in args
+
+    def test_restricted_mode_uses_allowed_tools(
+        self, runner: AgentRunner, sample_task: Task
+    ):
+        args = runner._build_execute_args(
+            sample_task,
+            allowed_tools=["Read", "Write"],
+            max_turns=10,
+            permission_mode="restricted",
+        )
+        assert "--allowedTools" in args
+        idx = args.index("--allowedTools")
+        assert args[idx + 1] == "Read,Write"
+        assert "--dangerously-skip-permissions" not in args
+
+    def test_default_permission_mode_is_bypass(
+        self, runner: AgentRunner, sample_task: Task
+    ):
+        args = runner._build_execute_args(sample_task, allowed_tools=[], max_turns=10)
+        assert "--dangerously-skip-permissions" in args
+        assert "--allowedTools" not in args
 
     def test_system_prompt_none_does_not_add_flag(
         self, runner: AgentRunner, sample_task: Task

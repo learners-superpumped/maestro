@@ -438,3 +438,46 @@ def test_max_per_goal_default(tmp_path: pathlib.Path) -> None:
     cfg = load_config(cfg_file)
 
     assert cfg.concurrency.max_per_goal == 1
+
+
+# ---------------------------------------------------------------------------
+# permission_mode
+# ---------------------------------------------------------------------------
+
+
+def test_agent_config_permission_mode_default(tmp_path: pathlib.Path) -> None:
+    """Missing permission_mode defaults to 'bypass'."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(FULL_CONFIG)
+    cfg = load_config(cfg_file)
+    assert cfg.agent.permission_mode == "bypass"
+
+
+def test_agent_config_permission_mode_explicit(tmp_path: pathlib.Path) -> None:
+    """Explicit permission_mode is parsed."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(
+        "project:\n  name: test\nagent:\n  permission_mode: restricted\n"
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.agent.permission_mode == "restricted"
+
+
+def test_agent_definition_permission_mode_inherit(tmp_path: pathlib.Path) -> None:
+    """Agent without permission_mode gets empty string (inherit)."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(
+        "project:\n  name: test\nagents:\n  default:\n    max_turns: 10\n"
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.agents["default"].permission_mode == ""
+
+
+def test_agent_definition_permission_mode_override(tmp_path: pathlib.Path) -> None:
+    """Agent with explicit permission_mode is parsed."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(
+        "project:\n  name: test\nagents:\n  sandbox:\n    permission_mode: restricted\n    tools: [Read]\n"
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.agents["sandbox"].permission_mode == "restricted"

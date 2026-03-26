@@ -41,11 +41,10 @@ budget:
 #   maestro extract-rule add --task-type create_post ...
 
 agent:
-  # Tools agents are permitted to call by default.
-  default_allowed_tools:
-    - Read
-    - Write
-    - Bash
+  # Permission mode for agent tool access.
+  #   bypass     — all tools available, no prompts (--dangerously-skip-permissions)
+  #   restricted — only tools listed in agent definition (--allowedTools whitelist)
+  permission_mode: bypass
   # Maximum agent turns before the task is forcefully stopped.
   default_max_turns: 20
   # If an agent produces no output for this many ms, it is considered stalled.

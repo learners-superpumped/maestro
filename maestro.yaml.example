@@ -3,8 +3,8 @@
 # String values may reference environment variables with $VAR_NAME syntax.
 
 project:
-  name: "clawops-maestro"
-  store_path: ./store/maestro.db
+  name: "my-project"
+  store_path: .maestro/store/maestro.db
 
 daemon:
   # How often the planner wakes to evaluate goals and generate tasks (ms).
@@ -20,14 +20,6 @@ concurrency:
   # Maximum concurrent agents per individual goal.
   max_per_goal: 1
 
-resources:
-  # Named resource pools consumed by agents.
-  # Each sub-key is a pool name; values configure the pool.
-  chrome-profiles:
-    threads:
-      max_concurrent: 1
-      path: ./chrome-profiles/threads
-
 budget:
   # Hard spending ceiling across all agents in a 24-hour rolling window (USD).
   daily_limit_usd: 30.0
@@ -36,23 +28,11 @@ budget:
   # Send an alert when daily spend reaches this percentage of daily_limit_usd.
   alert_threshold_pct: 80
 
-goals:
-  - id: threads-presence
-    description: "Threads brand presence"
-    metrics:
-      post_frequency: "3/week"
-      engagement_check: "daily"
-
-# Schedules and auto-extract rules are managed via CLI/DB:
-#   maestro schedule add --name daily-post --cron "0 9 * * *" ...
-#   maestro extract-rule add --task-type create_post ...
-
 agent:
-  # Tools agents are permitted to call by default.
-  default_allowed_tools:
-    - Read
-    - Write
-    - Bash
+  # Permission mode for agent tool access.
+  #   bypass     — all tools available, no prompts (--dangerously-skip-permissions)
+  #   restricted — only tools listed in agent definition (--allowedTools whitelist)
+  permission_mode: bypass
   # Maximum agent turns before the task is forcefully stopped.
   default_max_turns: 20
   # If an agent produces no output for this many ms, it is considered stalled.
@@ -60,8 +40,26 @@ agent:
   # Hard wall-clock time limit for a single agent turn (ms).
   turn_timeout_ms: 3600000
 
+# agents:
+#   planner:
+#     role: "Goal을 분석하여 실행 가능한 task로 분해하는 플래너"
+#     instructions: .maestro/prompts/planner.md
+#     max_turns: 30
+#     no_worktree: true
+#   reviewer:
+#     role: "Task 결과를 검증하는 리뷰어"
+#     instructions: .maestro/prompts/reviewer.md
+#     max_turns: 20
+#     no_worktree: true
+#   default:
+#     max_turns: 50
+#   sandbox:
+#     permission_mode: restricted
+#     tools: [Read, Bash]
+#     max_turns: 10
+
 logging:
   # Log level: debug | info | warning | error
   level: info
-  # Path to the log file (relative paths are resolved from the config file's directory).
+  # Path to the log file.
   file: ./logs/maestro.log

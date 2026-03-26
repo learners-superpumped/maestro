@@ -591,6 +591,12 @@ class Daemon:
         async def on_event(event: dict) -> None:
             await processor.process_event(task.id, event)
 
+        # Resolve effective permission mode
+        if agent_def and agent_def.permission_mode:
+            effective_permission_mode = agent_def.permission_mode
+        else:
+            effective_permission_mode = self._config.agent.permission_mode
+
         try:
             result = await self._runner.execute(
                 task,
@@ -603,6 +609,7 @@ class Daemon:
                 else self._config.agent.default_max_turns,
                 on_event=on_event,
                 system_prompt=system_prompt,
+                permission_mode=effective_permission_mode,
             )
         except Exception as exc:
             logger.exception("Runner raised for task %s: %s", task.id, exc)
