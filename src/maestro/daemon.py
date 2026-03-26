@@ -879,6 +879,18 @@ class Daemon:
             await self._handle_review_result(task, result)
             return
 
+        # Emit revision event on parent task
+        if task.parent_task_id and task.type != "review":
+            await self._store.record_task_event(
+                task_id=task.parent_task_id,
+                event_type="revision_submitted",
+                actor=f"agent:{task.id}",
+                detail_json={
+                    "cost_usd": result.cost_usd,
+                    "revision_task_id": task.id,
+                },
+            )
+
         # Auto-extract assets from result_json
         if result.result_json and self._asset_manager:
             rule = await self._store.get_extract_rule(task.type)
@@ -948,6 +960,20 @@ class Daemon:
         instruction_data = self._extract_json(review_task.instruction)
         original_task_id = instruction_data["original_task_id"]
         original_task = await self._store.get_task(original_task_id)
+
+        # Emit review event on the original task
+        await self._store.record_task_event(
+            task_id=original_task_id,
+            event_type="review_submitted",
+            actor=f"agent:{review_task.id}",
+            detail_json={
+                "verdict": review_data.get("verdict"),
+                "summary": review_data.get("summary", ""),
+                "issues": review_data.get("issues", []),
+                "review_task_id": review_task.id,
+                "review_round": original_task.review_count + 1,
+            },
+        )
 
         if review_data.get("verdict") == "pass":
             await self._approval_manager.submit_draft(

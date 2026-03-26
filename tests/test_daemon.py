@@ -804,3 +804,97 @@ async def test_revision_includes_original_result(
     revision_tasks = [t for t in all_tasks if "Revision" in t.title]
     assert len(revision_tasks) == 1
     assert "original work" in revision_tasks[0].instruction
+
+
+@pytest.mark.asyncio
+async def test_review_event_emitted(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """리뷰 완료 시 원본 태스크에 review_submitted 이벤트가 기록되어야 함."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    task = _make_task(task_id="evt-orig", approval_level=1)
+    await store.create_task(task)
+    await store.update_task_status(
+        "evt-orig", TaskStatus.COMPLETED, result_json='{"output": "done"}'
+    )
+
+    import json
+
+    review_task = Task(
+        id="evt-review",
+        type="review",
+        agent="reviewer",
+        title="Review: Test",
+        instruction=json.dumps(
+            {
+                "original_task_id": "evt-orig",
+                "original_agent": "default",
+                "original_instruction": "Do something",
+                "result": '{"output": "done"}',
+            }
+        ),
+        approval_level=0,
+        parent_task_id="evt-orig",
+    )
+    await store.create_task(review_task)
+
+    review_result = TaskResult(
+        task_id="evt-review",
+        success=True,
+        result_json=json.dumps(
+            {
+                "verdict": "pass",
+                "issues": [],
+                "summary": "All good",
+            }
+        ),
+    )
+    await daemon._handle_review_result(review_task, review_result)
+
+    events = await store.get_task_events("evt-orig")
+    review_events = [e for e in events if e["event_type"] == "review_submitted"]
+    assert len(review_events) == 1
+    detail = review_events[0]["detail_json"]  # already parsed by store
+    assert detail["verdict"] == "pass"
+    assert detail["summary"] == "All good"
+
+
+@pytest.mark.asyncio
+async def test_revision_event_emitted(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """revision 태스크 완료 시 원본 태스크에 revision_submitted 이벤트가 기록되어야 함."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    task = _make_task(task_id="revt-orig", approval_level=1)
+    await store.create_task(task)
+
+    revision = Task(
+        id="revt-rev1",
+        type="claude",
+        agent="default",
+        title="Revision #1: Test task",
+        instruction="Fix the issues",
+        approval_level=1,
+        parent_task_id="revt-orig",
+    )
+    await store.create_task(revision)
+
+    result = TaskResult(
+        task_id="revt-rev1",
+        success=True,
+        result_json='{"output": "revised"}',
+        cost_usd=0.35,
+    )
+    await daemon._on_task_completed(revision, result)
+
+    events = await store.get_task_events("revt-orig")
+    rev_events = [e for e in events if e["event_type"] == "revision_submitted"]
+    assert len(rev_events) == 1
+    detail = rev_events[0]["detail_json"]  # already parsed by store
+    assert detail["revision_task_id"] == "revt-rev1"
