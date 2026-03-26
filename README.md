@@ -1,6 +1,6 @@
 # Maestro
 
-[English](README.md) | [한국어](README.ko.md)
+[English](README.md) | [한국어](docs/ko/README.md)
 
 Task orchestration daemon for autonomous AI agents. Manages goals, plans tasks, dispatches Claude CLI agents, and tracks results — all running headlessly.
 
@@ -92,7 +92,7 @@ maestro task revise <task-id> --note "Change the tone to be more casual"
 
 ## Configuration
 
-All settings in `maestro.yaml`. See [Configuration Reference](docs/maestro-yaml-reference.md) for full parameter docs.
+All settings in `maestro.yaml`. See [Configuration Reference](docs/en/maestro-yaml-reference.md) for full parameter docs.
 
 ```yaml
 agent:
