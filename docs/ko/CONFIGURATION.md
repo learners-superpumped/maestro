@@ -1,6 +1,6 @@
 # maestro.yaml 설정 레퍼런스
 
-[English](../en/maestro-yaml-reference.md) | [한국어](maestro-yaml-reference.md)
+[English](../en/CONFIGURATION.md) | [한국어](CONFIGURATION.md)
 
 `maestro.yaml`의 모든 설정 파라미터에 대한 레퍼런스입니다.
 

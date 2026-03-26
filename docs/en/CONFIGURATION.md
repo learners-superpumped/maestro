@@ -1,6 +1,6 @@
 # maestro.yaml Configuration Reference
 
-[English](maestro-yaml-reference.md) | [한국어](../ko/maestro-yaml-reference.md)
+[English](CONFIGURATION.md) | [한국어](../ko/CONFIGURATION.md)
 
 Complete reference for all `maestro.yaml` configuration parameters.
 

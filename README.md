@@ -12,19 +12,41 @@ maestro init
 maestro start
 ```
 
-Open the dashboard at the URL shown in `maestro status`.
+## Daemon
 
-## How It Works
+`maestro start` launches the background daemon that runs the full orchestration loop:
 
-```text
-Goal -> Planner -> Tasks -> Dispatcher -> Claude Agents -> Results
+```bash
+maestro start         # Start daemon (background)
+maestro stop          # Stop daemon
+maestro status        # Show PID, port, dashboard URL
 ```
 
-1. **Goals** define what to achieve (with targets and check frequency)
-2. **Planner** evaluates goals and creates tasks
-3. **Dispatcher** assigns tasks to agents
-4. **Agents** execute via Claude CLI with full tool access
-5. **Results** are reviewed, approved, or retried
+The daemon runs four loops concurrently:
+
+- **Planner** — evaluates goals, creates tasks
+- **Dispatcher** — assigns pending tasks to Claude CLI agents
+- **Scheduler** — triggers cron-based recurring tasks
+- **Reconciler** — detects stalled agents, handles timeouts
+
+All agents run via `claude` CLI with `--dangerously-skip-permissions` by default, giving them full access to all tools (MCP servers, WebFetch, WebSearch, etc.).
+
+## Web Dashboard
+
+The dashboard starts automatically with the daemon on a random available port.
+
+```bash
+maestro status        # Shows: http://localhost:<port>
+```
+
+From the dashboard you can:
+
+- View and manage tasks, goals, schedules, assets, and rules
+- Approve / reject / revise agent outputs
+- Watch agent logs in real-time
+- Track costs and activity
+
+The dashboard is a React SPA served from `web/dist/` by the daemon's HTTP server.
 
 ## Usage
 
@@ -63,26 +85,9 @@ maestro schedule add \
   --cron "0 9 * * *"
 ```
 
-### Monitor via CLI
-
-```bash
-maestro status        # Daemon status + dashboard URL
-maestro task list     # List all tasks
-maestro goal list     # List all goals
-maestro schedule list # List schedules
-```
-
-### Monitor via Dashboard
-
-The web dashboard runs automatically with the daemon. Access it at the URL shown by `maestro status`.
-
-- View and manage tasks, goals, schedules, assets, and rules
-- Approve/reject/revise agent outputs
-- Track costs and agent activity in real-time
-
 ### Approve agent work
 
-Tasks with `approval_level: 2` (default) pause after completion for human review. Approve from the dashboard or CLI:
+Tasks with `approval_level: 2` (default) pause after completion for human review:
 
 ```bash
 maestro task approve <task-id>
@@ -92,7 +97,7 @@ maestro task revise <task-id> --note "Change the tone to be more casual"
 
 ## Configuration
 
-All settings in `maestro.yaml`. See [Configuration Reference](docs/en/maestro-yaml-reference.md) for full parameter docs.
+All settings in `maestro.yaml`. See [Configuration Reference](docs/en/CONFIGURATION.md) for full parameter docs.
 
 ```yaml
 agent:
