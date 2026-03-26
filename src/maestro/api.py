@@ -21,7 +21,6 @@ from aiohttp import web
 
 from maestro.models import Task, TaskStatus
 from maestro.store import Store
-from maestro.workspace import WorkspaceManager
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +90,7 @@ async def task_get_handler(request: web.Request) -> web.Response:
         {
             "id": task.id,
             "type": task.type,
-            "workspace": task.workspace,
+            "agent": task.agent,
             "title": task.title,
             "instruction": task.instruction,
             "status": task.status.value,
@@ -302,7 +301,6 @@ async def asset_register_handler(request: web.Request) -> web.Response:
         tags=data.get("tags"),
         description=data.get("description"),
         ttl_days=data.get("ttl_days"),
-        workspace=data.get("workspace", "_shared"),
         created_by=data.get("created_by", "agent"),
         task_id=data.get("task_id"),
     )
@@ -352,13 +350,11 @@ async def asset_list_handler(request: web.Request) -> web.Response:
     store: Store = request.app["store"]
 
     asset_type = request.query.get("type")
-    workspace = request.query.get("workspace")
     tags_str = request.query.get("tags")
     tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
 
     assets = await store.list_assets_filtered(
         asset_type=asset_type,
-        workspace=workspace,
         tags=tags,
     )
 
@@ -378,7 +374,8 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
     store: Store = request.app["store"]
 
     status_str = request.query.get("status")
-    workspace = request.query.get("workspace")
+    goal_id = request.query.get("goal_id")
+    agent = request.query.get("agent")
     root_only = request.query.get("root_only", "").lower() == "true"
 
     status = None
@@ -389,7 +386,7 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
             raise web.HTTPBadRequest(reason=f"Unknown status: '{status_str}'")
 
     tasks = await store.list_tasks(
-        status=status, workspace=workspace, root_only=root_only
+        status=status, goal_id=goal_id, agent=agent, root_only=root_only
     )
 
     if root_only:
@@ -416,7 +413,7 @@ async def tasks_list_handler(request: web.Request) -> web.Response:
             {
                 "id": t.id,
                 "type": t.type,
-                "workspace": t.workspace,
+                "agent": t.agent,
                 "title": t.title,
                 "status": t.status.value,
                 "priority": t.priority,
@@ -566,7 +563,7 @@ async def task_create_handler(request: web.Request) -> web.Response:
         body = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
-    for field in ("workspace", "title", "instruction"):
+    for field in ("title", "instruction"):
         if not body.get(field):
             raise web.HTTPBadRequest(reason=f"'{field}' is required")
     import uuid
@@ -584,7 +581,8 @@ async def task_create_handler(request: web.Request) -> web.Response:
     task = Task(
         id=uuid.uuid4().hex[:8],
         type=body.get("type", "claude"),
-        workspace=body["workspace"],
+        agent=body.get("agent", "default"),
+        no_worktree=bool(body.get("no_worktree", False)),
         title=body["title"],
         instruction=body["instruction"],
         priority=priority,
@@ -702,12 +700,13 @@ async def schedule_create_handler(request: web.Request) -> web.Response:
         body = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
-    for field in ("name", "workspace", "task_type"):
+    for field in ("name", "task_type"):
         if not body.get(field):
             raise web.HTTPBadRequest(reason=f"'{field}' is required")
     await store.create_schedule(
         name=body["name"],
-        workspace=body["workspace"],
+        agent=body.get("agent", "default"),
+        no_worktree=bool(body.get("no_worktree", False)),
         task_type=body["task_type"],
         cron=body.get("cron"),
         interval_ms=body.get("interval_ms"),
@@ -819,8 +818,7 @@ async def goal_disable_handler(request: web.Request) -> web.Response:
 async def rules_list_handler(request: web.Request) -> web.Response:
     """GET /api/internal/rules — list extract rules."""
     store: Store = request.app["store"]
-    workspace = request.query.get("workspace")
-    rules = await store.list_extract_rules(workspace=workspace)
+    rules = await store.list_extract_rules()
     return web.json_response(
         {"rules": rules, "count": len(rules)},
         dumps=lambda obj: json.dumps(obj, default=str),
@@ -834,11 +832,10 @@ async def rule_create_handler(request: web.Request) -> web.Response:
         body = await request.json()
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
-    for field in ("workspace", "task_type", "asset_type"):
+    for field in ("task_type", "asset_type"):
         if not body.get(field):
             raise web.HTTPBadRequest(reason=f"'{field}' is required")
     await store.create_extract_rule(
-        workspace=body["workspace"],
         task_type=body["task_type"],
         asset_type=body["asset_type"],
         title_field=body.get("title_field"),
@@ -849,11 +846,10 @@ async def rule_create_handler(request: web.Request) -> web.Response:
 
 
 async def rule_delete_handler(request: web.Request) -> web.Response:
-    """DELETE /api/internal/rule/{workspace}/{task_type} — delete an extract rule."""
+    """DELETE /api/internal/rule/{task_type} — delete an extract rule."""
     store: Store = request.app["store"]
-    workspace = request.match_info["workspace"]
     task_type = request.match_info["task_type"]
-    await store.delete_extract_rule(workspace, task_type)
+    await store.delete_extract_rule(task_type)
     return web.json_response({"ok": True})
 
 
@@ -896,83 +892,6 @@ async def assets_cleanup_handler(request: web.Request) -> web.Response:
     archived = await store.archive_expired_assets()
     purged = await store.purge_archived_assets(grace_days=grace)
     return web.json_response({"archived": archived, "purged": purged})
-
-
-# ---------------------------------------------------------------------------
-# Workspace handlers
-# ---------------------------------------------------------------------------
-
-
-async def handle_workspace_list(request: web.Request) -> web.Response:
-    """GET /api/internal/workspaces — list all workspaces."""
-    root: pathlib.Path = request.app["project_root"]
-    wm = WorkspaceManager(root)
-    names = wm.list_workspaces()
-    result = []
-    for name in names:
-        warnings = wm.validate_workspace(name)
-        result.append(
-            {
-                "name": name,
-                "valid": len(warnings) == 0,
-                "warnings": warnings,
-            }
-        )
-    return web.json_response({"workspaces": result, "count": len(result)})
-
-
-async def handle_workspace_create(request: web.Request) -> web.Response:
-    """POST /api/internal/workspace — create a workspace."""
-    try:
-        body = await request.json()
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
-
-    name = body.get("name", "").strip()
-    template = body.get("template", "default")
-    if not name:
-        raise web.HTTPBadRequest(reason="'name' is required")
-
-    root: pathlib.Path = request.app["project_root"]
-    wm = WorkspaceManager(root)
-    wm.ensure_base_knowledge()
-
-    try:
-        ws_path = wm.create_workspace(name, template=template)
-    except FileExistsError:
-        raise web.HTTPConflict(reason=f"workspace '{name}' already exists")
-    except ValueError as exc:
-        raise web.HTTPBadRequest(reason=str(exc)) from exc
-
-    warnings = wm.validate_workspace(name)
-    return web.json_response(
-        {
-            "name": name,
-            "path": str(ws_path),
-            "template": template,
-            "valid": len(warnings) == 0,
-            "warnings": warnings,
-        }
-    )
-
-
-async def handle_workspace_validate(request: web.Request) -> web.Response:
-    """GET /api/internal/workspace/{name}/validate — validate a workspace."""
-    name = request.match_info["name"]
-    root: pathlib.Path = request.app["project_root"]
-    wm = WorkspaceManager(root)
-
-    if not wm.workspace_exists(name):
-        raise web.HTTPNotFound(reason=f"workspace '{name}' not found")
-
-    warnings = wm.validate_workspace(name)
-    return web.json_response(
-        {
-            "name": name,
-            "valid": len(warnings) == 0,
-            "warnings": warnings,
-        }
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1044,16 +963,12 @@ def create_api_app(
     Args:
         store: The data store instance.
         slack: Optional SlackNotifier instance for sending notifications.
-        project_root: Root directory of the Maestro project (used by workspace
-            endpoints).  When *None* the workspace endpoints will raise a
-            ``KeyError`` at request time, so callers should supply this.
+        project_root: Retained for backwards compatibility; no longer used.
     """
     app = web.Application(middlewares=[spa_fallback_middleware])
     app["store"] = store
     if slack is not None:
         app["slack"] = slack
-    if project_root is not None:
-        app["project_root"] = project_root
 
     # SPA static assets
     if _WEB_DIST.exists():
@@ -1124,22 +1039,12 @@ def create_api_app(
     # Rules
     app.router.add_get("/api/internal/rules", rules_list_handler)
     app.router.add_post("/api/internal/rule", rule_create_handler)
-    app.router.add_delete(
-        "/api/internal/rule/{workspace}/{task_type}", rule_delete_handler
-    )
+    app.router.add_delete("/api/internal/rule/{task_type}", rule_delete_handler)
 
     # Asset delete/archive/cleanup
     app.router.add_delete("/api/internal/asset/{asset_id}", asset_delete_handler)
     app.router.add_post("/api/internal/asset/{asset_id}/archive", asset_archive_handler)
     app.router.add_post("/api/internal/assets/cleanup", assets_cleanup_handler)
-
-    # Workspaces (require project_root)
-    if project_root is not None:
-        app.router.add_get("/api/internal/workspaces", handle_workspace_list)
-        app.router.add_post("/api/internal/workspace", handle_workspace_create)
-        app.router.add_get(
-            "/api/internal/workspace/{name}/validate", handle_workspace_validate
-        )
 
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)

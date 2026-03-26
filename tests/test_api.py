@@ -24,7 +24,6 @@ def _make_task(task_id: str, status: TaskStatus = TaskStatus.RUNNING) -> Task:
     return Task(
         id=task_id,
         type="shell",
-        workspace="/tmp/test",
         title="Test Task",
         instruction="do something",
         status=status,

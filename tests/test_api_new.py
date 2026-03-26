@@ -25,7 +25,7 @@ async def test_task_create(client):
     resp = await c.post(
         "/api/internal/task",
         json={
-            "workspace": "test-ws",
+            "agent": "default",
             "type": "claude",
             "title": "Test Task",
             "instruction": "Do something",
@@ -46,7 +46,7 @@ async def test_schedule_crud(client):
         "/api/internal/schedule",
         json={
             "name": "test-sched",
-            "workspace": "w",
+            "agent": "default",
             "task_type": "claude",
             "cron": "0 * * * *",
         },
@@ -69,7 +69,6 @@ async def test_rule_crud(client):
     resp = await c.post(
         "/api/internal/rule",
         json={
-            "workspace": "w",
             "task_type": "claude",
             "asset_type": "post",
         },
@@ -80,7 +79,7 @@ async def test_rule_crud(client):
     body = await resp.json()
     assert body["count"] >= 1
 
-    resp = await c.delete("/api/internal/rule/w/claude")
+    resp = await c.delete("/api/internal/rule/claude")
     assert resp.status == 200
 
 
@@ -119,11 +118,10 @@ async def test_asset_archive(client):
 
 async def test_task_children(client):
     c, store = client
-    parent = Task(id="p1", type="test", workspace="w", title="Parent", instruction="I")
+    parent = Task(id="p1", type="test", title="Parent", instruction="I")
     child = Task(
         id="c1",
         type="test",
-        workspace="w",
         title="Child",
         instruction="I",
         parent_task_id="p1",
