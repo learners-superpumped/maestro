@@ -602,10 +602,10 @@ def task_get(task_id: str, full: bool) -> None:
         if review_children:
             click.echo("Reviews:")
             for rc in review_children:
-                if rc.result_json:
+                if rc.result:
                     from maestro.daemon import Daemon
 
-                    parsed = Daemon._extract_json(rc.result_json)
+                    parsed = Daemon._extract_json(rc.result)
                     if isinstance(parsed, dict):
                         verdict = parsed.get("verdict", "?")
                         summary = parsed.get("summary", "")
@@ -633,8 +633,8 @@ def task_get(task_id: str, full: bool) -> None:
                 )
 
         # Result
-        if t.result_json is not None:
-            result_str = str(t.result_json)
+        if t.result is not None:
+            result_str = str(t.result)
             if not full and len(result_str) > 500:
                 click.echo(f"Result:         {result_str[:500]}...")
                 click.echo(
