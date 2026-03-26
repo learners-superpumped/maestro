@@ -1,5 +1,7 @@
 # Maestro
 
+[English](README.md) | [한국어](README.ko.md)
+
 Task orchestration daemon for autonomous AI agents. Manages goals, plans tasks, dispatches Claude CLI agents, and tracks results — all running headlessly.
 
 ## Quick Start
