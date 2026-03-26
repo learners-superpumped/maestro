@@ -205,6 +205,7 @@ class Daemon:
             self._store, slack=self._slack, project_root=self._base_path
         )
         app["asset_manager"] = self._asset_manager
+        app["daemon"] = self
         app.router.add_get("/ws", self._ws_manager.handle)
 
         # 2. Start TCP site on loopback
@@ -382,6 +383,46 @@ class Daemon:
                 current_gap=signal["description"],
                 last_task_created_at=_now_iso(),
             )
+
+    async def trigger_goal(self, goal_id: str) -> int:
+        """Manually trigger planner for a single goal, bypassing cooldown.
+
+        Returns the number of tasks created.
+        """
+
+        goal = await self._store.get_goal(goal_id)
+        if not goal:
+            return 0
+
+        # Build a signal directly, bypassing cooldown/active-task guards
+        signal = {
+            "goal_id": goal["id"],
+            "type": "manual_trigger",
+            "description": f"Manual trigger for goal {goal['id']}",
+            "data": {"metrics": goal.get("metrics", "{}")},
+        }
+
+        task_specs = await self._planner._build_planning_task([signal])
+        task = Task(
+            id=str(uuid.uuid4())[:8],
+            type=task_specs.get("type", "planning"),
+            agent=task_specs.get("agent", "planner"),
+            title=task_specs["title"],
+            instruction=task_specs["instruction"],
+            priority=task_specs.get("priority", 1),
+            approval_level=task_specs.get("approval_level", 0),
+        )
+        await self._store.create_task(task)
+        logger.info("Manual trigger created task %s for goal %s", task.id, goal_id)
+
+        await self._store.update_goal(
+            goal_id,
+            last_evaluated_at=_now_iso(),
+            current_gap=signal["description"],
+            last_task_created_at=_now_iso(),
+        )
+
+        return 1
 
     # ------------------------------------------------------------------
     # Dispatch

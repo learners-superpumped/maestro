@@ -114,6 +114,8 @@ export const api = {
       request<any>(`/api/internal/goal/${id}/enable`, { method: "POST" }),
     disable: (id: string) =>
       request<any>(`/api/internal/goal/${id}/disable`, { method: "POST" }),
+    trigger: (id: string) =>
+      request<any>(`/api/internal/goal/${id}/trigger`, { method: "POST" }),
   },
 
   rules: {

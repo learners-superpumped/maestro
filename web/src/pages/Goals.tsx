@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { Plus, Trash2, Loader2, Target, X } from "lucide-react"
-import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal } from "@/hooks/queries/use-goals"
+import { Plus, Trash2, Loader2, Target, X, Play } from "lucide-react"
+import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal, useTriggerGoal } from "@/hooks/queries/use-goals"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -102,6 +102,7 @@ export function Goals() {
   const createGoal = useCreateGoal()
   const deleteGoal = useDeleteGoal()
   const toggleGoal = useToggleGoal()
+  const triggerGoal = useTriggerGoal()
 
   const goals: any[] = data?.goals ?? []
 
@@ -333,16 +334,28 @@ export function Goals() {
                         />
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => deleteGoal.mutate(g.id)}
-                          disabled={deleteGoal.isPending}
-                          className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#eb5757]/5"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => triggerGoal.mutate(g.id)}
+                            disabled={triggerGoal.isPending || !g.enabled}
+                            className="h-7 w-7 text-[#9b9a97] hover:text-[#2383e2] hover:bg-[#2383e2]/5"
+                            title="Run now"
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => deleteGoal.mutate(g.id)}
+                            disabled={deleteGoal.isPending}
+                            className="h-7 w-7 text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#eb5757]/5"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

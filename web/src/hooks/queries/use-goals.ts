@@ -33,6 +33,19 @@ export function useDeleteGoal() {
   })
 }
 
+export function useTriggerGoal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.goals.trigger(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals"] })
+      queryClient.invalidateQueries({ queryKey: ["tasks"] })
+      toast.success("Goal triggered")
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
 export function useToggleGoal() {
   const queryClient = useQueryClient()
   return useMutation({

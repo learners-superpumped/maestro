@@ -806,6 +806,23 @@ async def goal_disable_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def goal_trigger_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/goal/{id}/trigger — manually trigger a goal's planner tick."""
+    store: Store = request.app["store"]
+    goal_id = request.match_info["id"]
+
+    goal = await store.get_goal(goal_id)
+    if not goal:
+        return web.json_response({"error": "goal not found"}, status=404)
+
+    daemon = request.app.get("daemon")
+    if daemon is None:
+        return web.json_response({"error": "daemon not available"}, status=503)
+
+    tasks_created = await daemon.trigger_goal(goal_id)
+    return web.json_response({"ok": True, "tasks_created": tasks_created})
+
+
 # ---------------------------------------------------------------------------
 # Rule CRUD
 # ---------------------------------------------------------------------------
@@ -1028,6 +1045,7 @@ def create_api_app(
     app.router.add_delete("/api/internal/goal/{id}", goal_delete_handler)
     app.router.add_post("/api/internal/goal/{id}/enable", goal_enable_handler)
     app.router.add_post("/api/internal/goal/{id}/disable", goal_disable_handler)
+    app.router.add_post("/api/internal/goal/{id}/trigger", goal_trigger_handler)
 
     # Rules
     app.router.add_get("/api/internal/rules", rules_list_handler)
