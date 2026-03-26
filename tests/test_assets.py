@@ -242,7 +242,7 @@ async def test_search_respects_limit(asset_manager: AssetManager) -> None:
 
 async def test_auto_extract_with_iterate(asset_manager: AssetManager) -> None:
     await _ensure_task(asset_manager._store, "task-extract")
-    result_json = {
+    result_data = {
         "topics": [
             {"name": "AI Trends", "category": "tech"},
             {"name": "Python Tips", "category": "dev"},
@@ -257,7 +257,7 @@ async def test_auto_extract_with_iterate(asset_manager: AssetManager) -> None:
 
     assets = await asset_manager.auto_extract(
         task_id="task-extract",
-        result_json=result_json,
+        result=result_data,
         rules=rules,
     )
 
@@ -272,7 +272,7 @@ async def test_auto_extract_with_iterate(asset_manager: AssetManager) -> None:
 
 async def test_auto_extract_skips_duplicates(asset_manager: AssetManager) -> None:
     await _ensure_task(asset_manager._store, "task-dup")
-    result_json = {"topics": [{"name": "Topic A"}]}
+    result_data = {"topics": [{"name": "Topic A"}]}
     rules = {
         "asset_type": "research",
         "iterate": "topics",
@@ -282,7 +282,7 @@ async def test_auto_extract_skips_duplicates(asset_manager: AssetManager) -> Non
     # First extraction
     first = await asset_manager.auto_extract(
         task_id="task-dup",
-        result_json=result_json,
+        result=result_data,
         rules=rules,
     )
     assert len(first) == 1
@@ -290,16 +290,16 @@ async def test_auto_extract_skips_duplicates(asset_manager: AssetManager) -> Non
     # Second extraction with same task_id + asset_type -> skip
     second = await asset_manager.auto_extract(
         task_id="task-dup",
-        result_json=result_json,
+        result=result_data,
         rules=rules,
     )
     assert second == []
 
 
 async def test_auto_extract_without_iterate(asset_manager: AssetManager) -> None:
-    """When no 'iterate' key, treat result_json itself as a single item."""
+    """When no 'iterate' key, treat result itself as a single item."""
     await _ensure_task(asset_manager._store, "task-single")
-    result_json = {"name": "Single Item", "category": "misc"}
+    result_data = {"name": "Single Item", "category": "misc"}
     rules = {
         "asset_type": "post",
         "title_field": "name",
@@ -307,7 +307,7 @@ async def test_auto_extract_without_iterate(asset_manager: AssetManager) -> None
 
     assets = await asset_manager.auto_extract(
         task_id="task-single",
-        result_json=result_json,
+        result=result_data,
         rules=rules,
     )
 

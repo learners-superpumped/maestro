@@ -112,82 +112,6 @@ async def test_task_update_invalid_status_returns_400(aiohttp_client, app):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/internal/task/result
-# ---------------------------------------------------------------------------
-
-
-async def test_task_result_completes_task_and_records_spend(aiohttp_client, app, store):
-    task = _make_task("task-result-1", status=TaskStatus.RUNNING)
-    await store.create_task(task)
-
-    client = await aiohttp_client(app)
-    resp = await client.post(
-        "/api/internal/task/result",
-        json={
-            "task_id": "task-result-1",
-            "result_json": {"output": "hello"},
-            "cost_usd": 0.05,
-        },
-    )
-    assert resp.status == 200
-    data = await resp.json()
-    assert data["ok"] is True
-
-    # Task should be COMPLETED
-    updated = await store.get_task("task-result-1")
-    assert updated is not None
-    assert updated.status == TaskStatus.COMPLETED
-    assert updated.cost_usd == 0.05
-
-
-async def test_task_result_records_daily_spend(aiohttp_client, app, store):
-    from datetime import datetime, timezone
-
-    task = _make_task("task-result-2", status=TaskStatus.RUNNING)
-    await store.create_task(task)
-
-    client = await aiohttp_client(app)
-    await client.post(
-        "/api/internal/task/result",
-        json={"task_id": "task-result-2", "result_json": None, "cost_usd": 1.23},
-    )
-
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    spend = await store.get_daily_spend(today)
-    assert spend >= 1.23
-
-
-async def test_task_result_missing_task_id_returns_400(aiohttp_client, app):
-    client = await aiohttp_client(app)
-    resp = await client.post(
-        "/api/internal/task/result",
-        json={"result_json": None, "cost_usd": 0.0},
-    )
-    assert resp.status == 400
-
-
-async def test_task_result_zero_cost_does_not_record_spend(aiohttp_client, app, store):
-    from datetime import datetime, timezone
-
-    task = _make_task("task-result-zero", status=TaskStatus.RUNNING)
-    await store.create_task(task)
-
-    client = await aiohttp_client(app)
-    await client.post(
-        "/api/internal/task/result",
-        json={"task_id": "task-result-zero", "result_json": None, "cost_usd": 0.0},
-    )
-
-    # No spend record expected for zero cost
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    # We can't assert 0 easily if other tests already wrote for today;
-    # just verify the task completed without error.
-    updated = await store.get_task("task-result-zero")
-    assert updated is not None
-    assert updated.status == TaskStatus.COMPLETED
-
-
-# ---------------------------------------------------------------------------
 # POST /api/internal/approval/submit
 # ---------------------------------------------------------------------------
 
@@ -242,12 +166,11 @@ async def test_history_record_returns_ok(aiohttp_client, app):
 
 async def test_dashboard_root(aiohttp_client, app):
     """GET / returns 200 if web/dist exists, 404 otherwise."""
-    import pathlib
+    from maestro.api import _WEB_DIST
 
-    web_dist = pathlib.Path(__file__).resolve().parent.parent / "web" / "dist"
     client = await aiohttp_client(app)
     resp = await client.get("/")
-    if web_dist.exists():
+    if _WEB_DIST.exists():
         assert resp.status == 200
     else:
         assert resp.status == 404

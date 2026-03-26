@@ -21,7 +21,6 @@ from maestro.mcp_store import (
     maestro_history_record,
     maestro_history_search,
     maestro_task_get,
-    maestro_task_submit_result,
     maestro_task_update_status,
 )
 
@@ -64,22 +63,6 @@ class TestTaskUpdateStatus:
         with aioresponses() as m:
             m.post(f"{BASE}/api/internal/task/update", payload={"ok": True})
             result = await maestro_task_update_status("abc123", "completed")
-        assert result["ok"] is True
-
-
-class TestTaskSubmitResult:
-    async def test_submits_result(self) -> None:
-        with aioresponses() as m:
-            m.post(f"{BASE}/api/internal/task/result", payload={"ok": True})
-            result = await maestro_task_submit_result(
-                "abc123", {"output": "done"}, cost_usd=0.15
-            )
-        assert result["ok"] is True
-
-    async def test_submits_with_default_cost(self) -> None:
-        with aioresponses() as m:
-            m.post(f"{BASE}/api/internal/task/result", payload={"ok": True})
-            result = await maestro_task_submit_result("abc123", {"output": "done"})
         assert result["ok"] is True
 
 
@@ -163,7 +146,6 @@ class TestHandleMessage:
         tools = resp["result"]["tools"]
         tool_names = {t["name"] for t in tools}
         assert "maestro_task_get" in tool_names
-        assert "maestro_task_submit_result" in tool_names
         assert "maestro_approval_submit" in tool_names
         assert len(tools) == len(TOOLS)
 

@@ -390,7 +390,7 @@ async def test_no_review_after_approve(
     result = TaskResult(
         task_id="approved-skip-review",
         success=True,
-        result_json='{"output": "done"}',
+        result='{"output": "done"}',
     )
     await daemon._on_task_completed(task, result)
 
@@ -417,7 +417,7 @@ async def test_review_created_on_first_run(
     result = TaskResult(
         task_id="first-run-task",
         success=True,
-        result_json='{"output": "first result"}',
+        result='{"output": "first result"}',
     )
     await daemon._on_task_completed(task, result)
 
@@ -723,10 +723,10 @@ async def test_handle_result_no_cleanup_no_worktree_flag(
 
 
 @pytest.mark.asyncio
-async def test_result_json_not_overwritten_on_resume(
+async def test_result_not_overwritten_on_resume(
     db_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """resume 후 완료 시 기존 result_json이 보존되어야 함."""
+    """resume 후 완료 시 기존 result가 보존되어야 함."""
     store = Store(db_path)
     config = _make_config()
     daemon = Daemon(config, store, tmp_path)
@@ -734,7 +734,7 @@ async def test_result_json_not_overwritten_on_resume(
     task = _make_task(task_id="preserve-rj", approval_level=2)
     await store.create_task(task)
     await store.update_task_status(
-        "preserve-rj", TaskStatus.COMPLETED, result_json='{"original": "result"}'
+        "preserve-rj", TaskStatus.COMPLETED, result='{"original": "result"}'
     )
 
     task_with_result = await store.get_task("preserve-rj")
@@ -742,12 +742,12 @@ async def test_result_json_not_overwritten_on_resume(
     result = TaskResult(
         task_id="preserve-rj",
         success=True,
-        result_json='{"overwritten": "bad"}',
+        result='{"overwritten": "bad"}',
     )
     await daemon._handle_result(task_with_result, result)
 
     final = await store.get_task("preserve-rj")
-    result_str = str(final.result_json)
+    result_str = str(final.result)
     assert "original" in result_str
     assert "overwritten" not in result_str
 
@@ -756,7 +756,7 @@ async def test_result_json_not_overwritten_on_resume(
 async def test_revision_includes_original_result(
     db_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """revision 태스크 생성 시 원본 result_json이 instruction에 포함되어야 함."""
+    """revision 태스크 생성 시 원본 result가 instruction에 포함되어야 함."""
     store = Store(db_path)
     config = _make_config()
     daemon = Daemon(config, store, tmp_path)
@@ -764,7 +764,7 @@ async def test_revision_includes_original_result(
     task = _make_task(task_id="rev-orig", approval_level=1)
     await store.create_task(task)
     await store.update_task_status(
-        "rev-orig", TaskStatus.COMPLETED, result_json='{"output": "original work"}'
+        "rev-orig", TaskStatus.COMPLETED, result='{"output": "original work"}'
     )
 
     import json
@@ -790,7 +790,7 @@ async def test_revision_includes_original_result(
     review_result = TaskResult(
         task_id="rev-review",
         success=True,
-        result_json=json.dumps(
+        result=json.dumps(
             {
                 "verdict": "revise",
                 "issues": ["fix import order"],
@@ -818,7 +818,7 @@ async def test_review_event_emitted(
     task = _make_task(task_id="evt-orig", approval_level=1)
     await store.create_task(task)
     await store.update_task_status(
-        "evt-orig", TaskStatus.COMPLETED, result_json='{"output": "done"}'
+        "evt-orig", TaskStatus.COMPLETED, result='{"output": "done"}'
     )
 
     import json
@@ -844,7 +844,7 @@ async def test_review_event_emitted(
     review_result = TaskResult(
         task_id="evt-review",
         success=True,
-        result_json=json.dumps(
+        result=json.dumps(
             {
                 "verdict": "pass",
                 "issues": [],
@@ -888,7 +888,7 @@ async def test_revision_event_emitted(
     result = TaskResult(
         task_id="revt-rev1",
         success=True,
-        result_json='{"output": "revised"}',
+        result='{"output": "revised"}',
         cost_usd=0.35,
     )
     await daemon._on_task_completed(revision, result)
