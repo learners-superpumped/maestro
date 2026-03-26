@@ -312,7 +312,13 @@ def status() -> None:
     # Check if the process is alive
     try:
         os.kill(pid, 0)
-        click.echo(f"Maestro daemon is running (PID {pid}).")
+        port_file = _project_root() / ".maestro" / "maestro.port"
+        port_info = ""
+        if port_file.exists():
+            port_info = f", port {port_file.read_text().strip()}"
+        click.echo(f"Maestro daemon is running (PID {pid}{port_info}).")
+        if port_info:
+            click.echo(f"Dashboard: http://127.0.0.1:{port_file.read_text().strip()}")
     except ProcessLookupError:
         click.echo(f"Maestro daemon is not running (stale PID file, PID {pid}).")
     except PermissionError:
