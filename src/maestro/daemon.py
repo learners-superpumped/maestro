@@ -234,6 +234,8 @@ class Daemon:
         # 5. Seed DB from YAML on first run (backward compatibility)
         await self._seed_from_yaml()
 
+        await self._store.backfill_fts()
+
         # 6. Restore scheduler state from DB
         schedules = await self._store.list_schedules(enabled_only=True)
         restored: dict[str, str] = {}
@@ -684,6 +686,14 @@ class Daemon:
 
             logger.info("Task %s completed (cost=$%.4f)", task.id, result.cost_usd)
 
+            # Index completed task for FTS search
+            try:
+                completed_task = await self._store.get_task(task.id)
+                if completed_task:
+                    await self._store.index_task_fts(completed_task)
+            except Exception:
+                logger.debug("FTS indexing failed for task %s", task.id, exc_info=True)
+
             # Level 1 post-notification
             if task.approval_level == 1:
                 await self._notifier.notify(
@@ -754,6 +764,17 @@ class Daemon:
                     new_attempt,
                     result.error,
                 )
+
+                # Index failed task for FTS search
+                try:
+                    failed_task = await self._store.get_task(task.id)
+                    if failed_task:
+                        await self._store.index_task_fts(failed_task)
+                except Exception:
+                    logger.debug(
+                        "FTS indexing failed for task %s", task.id, exc_info=True
+                    )
+
                 await self._cascade_cancel(task.id)
 
     async def _cascade_cancel(self, task_id: str) -> None:
