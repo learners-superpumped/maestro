@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 import pytest
@@ -579,3 +579,187 @@ async def test_update_task_fields(db_path) -> None:
     await store.update_task_fields("utf-01", instruction="updated instruction")
     t = await store.get_task("utf-01")
     assert t.instruction == "updated instruction"
+
+
+# ---------------------------------------------------------------------------
+# FTS – full-text search
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_index_task_fts(tmp_path):
+    """Completed task should be searchable via FTS."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+
+    task = Task(
+        id="fts-1",
+        type="research",
+        title="슬랙 웹훅 알림 설정",
+        instruction="슬랙 채널에 웹훅을 연결하라",
+        result="웹훅 설정 완료",
+        status=TaskStatus.COMPLETED,
+    )
+    await store.create_task(task)
+    await store.index_task_fts(task)
+
+    results = await store.search_tasks_fts("슬랙 알림")
+    assert len(results) >= 1
+    assert results[0]["task_id"] == "fts-1"
+
+
+@pytest.mark.asyncio
+async def test_search_tasks_fts_no_match(tmp_path):
+    """Query with no matches returns empty list."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+    results = await store.search_tasks_fts("존재하지않는검색어xyz")
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_search_tasks_fts_bad_query(tmp_path):
+    """Special characters in query should not raise errors."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+    results = await store.search_tasks_fts('OR AND "unclosed')
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_search_tasks_fts_ranking(tmp_path):
+    """More recent tasks should rank higher with same relevance."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+
+    old_time = datetime.now(timezone.utc) - timedelta(days=60)
+    new_time = datetime.now(timezone.utc)
+
+    old_task = Task(
+        id="old-1",
+        type="research",
+        title="SEO 분석",
+        instruction="SEO 현황을 분석하라",
+        result="분석 완료",
+        status=TaskStatus.COMPLETED,
+        created_at=old_time,
+        updated_at=old_time,
+    )
+    new_task = Task(
+        id="new-1",
+        type="research",
+        title="SEO 분석",
+        instruction="SEO 현황을 분석하라",
+        result="분석 완료",
+        status=TaskStatus.COMPLETED,
+        created_at=new_time,
+        updated_at=new_time,
+    )
+
+    await store.create_task(old_task)
+    await store.create_task(new_task)
+    await store.index_task_fts(old_task)
+    await store.index_task_fts(new_task)
+
+    results = await store.search_tasks_fts("SEO 분석")
+    assert len(results) == 2
+    assert results[0]["task_id"] == "new-1"  # newer ranks higher
+
+
+@pytest.mark.asyncio
+async def test_search_tasks_fts_korean(tmp_path):
+    """Korean query should match Korean content."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+
+    task = Task(
+        id="kr-1",
+        type="research",
+        title="마케팅 전략 수립",
+        instruction="디지털 마케팅 전략을 수립하라",
+        result="전략 보고서 작성 완료",
+        status=TaskStatus.COMPLETED,
+    )
+    await store.create_task(task)
+    await store.index_task_fts(task)
+
+    results = await store.search_tasks_fts("마케팅 전략")
+    assert len(results) >= 1
+    assert results[0]["task_id"] == "kr-1"
+
+
+@pytest.mark.asyncio
+async def test_index_task_fts_upsert(tmp_path):
+    """Re-indexing same task should not create duplicates."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+
+    task = Task(
+        id="upsert-1",
+        type="shell",
+        title="배포 스크립트",
+        instruction="배포를 실행하라",
+        result="배포 성공",
+        status=TaskStatus.COMPLETED,
+    )
+    await store.create_task(task)
+    await store.index_task_fts(task)
+    await store.index_task_fts(task)  # re-index
+
+    results = await store.search_tasks_fts("배포")
+    assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_backfill_fts(tmp_path):
+    """Backfill should index all completed tasks."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+
+    for i in range(3):
+        t = Task(
+            id=f"bf-{i}",
+            type="shell",
+            title=f"작업 {i}",
+            instruction=f"작업 {i}을 수행하라",
+            result=f"완료 {i}",
+            status=TaskStatus.COMPLETED,
+        )
+        await store.create_task(t)
+
+    # Pending task — should NOT be indexed
+    pending = Task(
+        id="bf-pending",
+        type="shell",
+        title="대기 작업",
+        instruction="아직 시작 안 함",
+        status=TaskStatus.PENDING,
+    )
+    await store.create_task(pending)
+
+    await store.backfill_fts()
+    results = await store.search_tasks_fts("작업")
+    assert len(results) == 3
+
+
+@pytest.mark.asyncio
+async def test_backfill_fts_idempotent(tmp_path):
+    """Running backfill twice should not duplicate entries."""
+    store = Store(tmp_path / "test.db")
+    await store.init_db()
+
+    task = Task(
+        id="idem-1",
+        type="shell",
+        title="테스트 작업",
+        instruction="테스트를 실행하라",
+        result="통과",
+        status=TaskStatus.COMPLETED,
+    )
+    await store.create_task(task)
+
+    await store.backfill_fts()
+    await store.backfill_fts()
+
+    results = await store.search_tasks_fts("테스트")
+    assert len(results) == 1

@@ -199,3 +199,12 @@ CREATE TABLE IF NOT EXISTS task_logs (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_task_logs_task ON task_logs(task_id);
+
+-- FTS5 full-text search index for task history
+CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
+    task_id UNINDEXED,
+    title,
+    instruction,
+    result_summary,
+    tokenize='unicode61'
+);

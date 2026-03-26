@@ -630,6 +630,105 @@ class Store:
         return row[0] if row else 0.0
 
     # ------------------------------------------------------------------
+    # FTS – full-text search for task history
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_summary(result: Any, max_len: int = 500) -> str:
+        """Extract a searchable text summary from a task result."""
+        if result is None:
+            return ""
+        if isinstance(result, dict):
+            return json.dumps(result, ensure_ascii=False)[:max_len]
+        return str(result)[:max_len]
+
+    async def index_task_fts(self, task: Task) -> None:
+        """Add or update a task in the FTS index."""
+        summary = self._extract_summary(task.result)
+        async with self._conn() as db:
+            await db.execute("DELETE FROM tasks_fts WHERE task_id = ?", (task.id,))
+            await db.execute(
+                "INSERT INTO tasks_fts(task_id, title, instruction, result_summary) "
+                "VALUES (?, ?, ?, ?)",
+                (task.id, task.title, task.instruction, summary),
+            )
+            await db.commit()
+
+    async def search_tasks_fts(
+        self,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search completed/failed tasks using FTS5 with time-decay ranking."""
+        if not query or not query.strip():
+            return []
+
+        # Escape FTS5 special characters by quoting each token
+        tokens = query.replace('"', "").split()
+        if not tokens:
+            return []
+        safe_query = " AND ".join('"' + t + '"' for t in tokens)
+
+        sql = """
+            SELECT t.id, t.task_number, t.title, t.status,
+                   substr(t.result, 1, 500) AS result_summary,
+                   t.created_at,
+                   bm25(tasks_fts) * (1.0 / (1.0 + (julianday('now') - julianday(t.created_at)) / 30.0))
+                     AS score
+            FROM tasks_fts f
+            JOIN tasks t ON t.id = f.task_id
+            WHERE tasks_fts MATCH ?
+              AND t.status IN ('completed', 'failed')
+            ORDER BY score
+            LIMIT ?
+        """
+
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute(sql, (safe_query, limit))
+                rows = await cursor.fetchall()
+                return [
+                    {
+                        "task_id": row[0],
+                        "task_number": row[1],
+                        "title": row[2],
+                        "status": row[3],
+                        "result_summary": row[4],
+                        "created_at": row[5],
+                        "score": row[6],
+                    }
+                    for row in rows
+                ]
+        except Exception:
+            return []
+
+    async def backfill_fts(self) -> None:
+        """Index all completed/failed tasks not yet in FTS."""
+        async with self._conn() as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM tasks_fts")
+            fts_count = (await cursor.fetchone())[0]
+
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM tasks WHERE status IN ('completed', 'failed')"
+            )
+            task_count = (await cursor.fetchone())[0]
+
+            if fts_count >= task_count:
+                return  # Already up to date
+
+            cursor = await db.execute("""
+                SELECT id FROM tasks
+                WHERE status IN ('completed', 'failed')
+                  AND id NOT IN (SELECT task_id FROM tasks_fts)
+            """)
+            missing_ids = [row[0] for row in await cursor.fetchall()]
+
+        for task_id in missing_ids:
+            task = await self.get_task(task_id)
+            if task:
+                await self.index_task_fts(task)
+
+    # ------------------------------------------------------------------
     # Asset CRUD
     # ------------------------------------------------------------------
 
