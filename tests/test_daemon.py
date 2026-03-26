@@ -244,18 +244,21 @@ async def test_stop_sets_shutdown(
     assert daemon._shutdown.is_set()
 
 
-@pytest.mark.skip(
-    reason="_resume_task uses legacy workspace refs; will be fixed in Task 8"
-)
 @pytest.mark.asyncio
 async def test_resume_approved_paused_task(
     db_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
     """An approved task with session_id should be picked up for resume."""
+    from unittest.mock import AsyncMock
+
     store = Store(db_path)
     config = _make_config()
 
     daemon = Daemon(config, store, tmp_path)
+
+    # Mock worktree manager so _resolve_cwd works without real git repo
+    daemon._worktree_mgr = MagicMock()
+    daemon._worktree_mgr.is_git_repo.return_value = False
 
     # Create task in PENDING state, advance to APPROVED, then set session_id
     task = _make_task(task_id="resume-1", approval_level=2, status=TaskStatus.PENDING)
@@ -293,8 +296,6 @@ async def test_resume_approved_paused_task(
 
     # Call _resume_approved_tasks -- it should claim the task and spawn a resume
     # We mock the runner to avoid actually running CLI
-    from unittest.mock import AsyncMock
-
     daemon._runner.resume = AsyncMock(
         return_value=TaskResult(
             task_id="resume-1",
@@ -605,3 +606,117 @@ def test_load_prompt_builtin_fallback(tmp_path: pathlib.Path) -> None:
     # planner.md exists in maestro.prompts package (created in Task 4)
     assert result is not None
     assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# Worktree auto-cleanup tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handle_result_auto_cleanup_worktree(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """Successful standalone task with no changes should have its worktree removed."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    # Mock worktree manager
+    daemon._worktree_mgr = MagicMock()
+    daemon._worktree_mgr.is_git_repo.return_value = True
+    daemon._worktree_mgr.list_worktrees.return_value = ["task-cleanup-1"]
+    daemon._worktree_mgr.has_changes.return_value = False
+
+    # Create and transition task
+    pending_task = _make_task(
+        task_id="cleanup-1", status=TaskStatus.PENDING, approval_level=0
+    )
+    await store.create_task(pending_task)
+    await store.update_task_status("cleanup-1", TaskStatus.APPROVED)
+    await store.update_task_status("cleanup-1", TaskStatus.CLAIMED)
+    await store.update_task_status("cleanup-1", TaskStatus.RUNNING)
+
+    task = _make_task(task_id="cleanup-1", status=TaskStatus.RUNNING)
+
+    result = TaskResult(
+        task_id="cleanup-1",
+        success=True,
+        cost_usd=0.01,
+    )
+
+    await daemon._handle_result(task, result)
+
+    # Verify worktree was cleaned up
+    daemon._worktree_mgr.has_changes.assert_called_once_with("task-cleanup-1")
+    daemon._worktree_mgr.remove_worktree.assert_called_once_with("task-cleanup-1")
+
+
+@pytest.mark.asyncio
+async def test_handle_result_no_cleanup_with_changes(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """Successful standalone task WITH changes should NOT have its worktree removed."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    # Mock worktree manager
+    daemon._worktree_mgr = MagicMock()
+    daemon._worktree_mgr.is_git_repo.return_value = True
+    daemon._worktree_mgr.list_worktrees.return_value = ["task-keep-1"]
+    daemon._worktree_mgr.has_changes.return_value = True
+
+    # Create and transition task
+    pending_task = _make_task(
+        task_id="keep-1", status=TaskStatus.PENDING, approval_level=0
+    )
+    await store.create_task(pending_task)
+    await store.update_task_status("keep-1", TaskStatus.APPROVED)
+    await store.update_task_status("keep-1", TaskStatus.CLAIMED)
+    await store.update_task_status("keep-1", TaskStatus.RUNNING)
+
+    task = _make_task(task_id="keep-1", status=TaskStatus.RUNNING)
+
+    result = TaskResult(
+        task_id="keep-1",
+        success=True,
+        cost_usd=0.01,
+    )
+
+    await daemon._handle_result(task, result)
+
+    # Verify worktree was NOT removed
+    daemon._worktree_mgr.has_changes.assert_called_once_with("task-keep-1")
+    daemon._worktree_mgr.remove_worktree.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_result_no_cleanup_no_worktree_flag(
+    db_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """Task with no_worktree=True should skip worktree cleanup entirely."""
+    store = Store(db_path)
+    config = _make_config()
+    daemon = Daemon(config, store, tmp_path)
+
+    daemon._worktree_mgr = MagicMock()
+    daemon._worktree_mgr.is_git_repo.return_value = True
+
+    pending_task = _make_task(
+        task_id="nowt-1", status=TaskStatus.PENDING, approval_level=0, no_worktree=True
+    )
+    await store.create_task(pending_task)
+    await store.update_task_status("nowt-1", TaskStatus.APPROVED)
+    await store.update_task_status("nowt-1", TaskStatus.CLAIMED)
+    await store.update_task_status("nowt-1", TaskStatus.RUNNING)
+
+    task = _make_task(task_id="nowt-1", status=TaskStatus.RUNNING, no_worktree=True)
+
+    result = TaskResult(task_id="nowt-1", success=True, cost_usd=0.01)
+
+    await daemon._handle_result(task, result)
+
+    # Should never check worktrees
+    daemon._worktree_mgr.list_worktrees.assert_not_called()
+    daemon._worktree_mgr.remove_worktree.assert_not_called()

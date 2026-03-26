@@ -35,7 +35,6 @@ from maestro.reconciler import Reconciler
 from maestro.runner import AgentRunner
 from maestro.scheduler import Scheduler
 from maestro.store import Store
-from maestro.workspace import WorkspaceManager  # TODO: remove in Task 8
 from maestro.worktree import WorktreeManager
 from maestro.ws import WebSocketManager
 
@@ -101,12 +100,6 @@ class Daemon:
         self._last_reconcile: float = 0.0
         self._last_scheduler_tick: float = 0.0
         self._last_cleanup_tick: float = 0.0
-
-        # Legacy workspace templates — used by _resume_task until Task 8
-        self._internal_templates: dict[str, str] = {
-            "_planner": "planner",
-            "_reviewer": "reviewer",
-        }
 
     # ------------------------------------------------------------------
     # Seed helpers
@@ -488,22 +481,7 @@ class Daemon:
 
     async def _resume_task(self, task: Task, instruction: str) -> None:
         """Resume a paused task's CLI session."""
-        wm = WorkspaceManager(self._base_path)
-        template = self._internal_templates.get(task.workspace)
-        try:
-            workspace_path = wm.resolve_workspace_path(task.workspace, template)
-        except FileNotFoundError:
-            logger.error(
-                "Workspace %s does not exist for resume of task %s",
-                task.workspace,
-                task.id,
-            )
-            await self._store.update_task_status(
-                task.id,
-                TaskStatus.FAILED,
-                error=f"Workspace not found: {task.workspace}",
-            )
-            return
+        cwd = self._resolve_cwd(task)
 
         now = datetime.now(timezone.utc)
         timeout_ms = self._config.agent.turn_timeout_ms
@@ -523,7 +501,7 @@ class Daemon:
                 task,
                 task.session_id,
                 instruction,
-                workspace_path,  # type: ignore[arg-type]
+                cwd,
             )
         except Exception as exc:
             logger.exception("Runner raised resuming task %s: %s", task.id, exc)
@@ -643,6 +621,29 @@ class Daemon:
             # Post-completion processing (planning results, review pipeline)
             if result.success:
                 await self._on_task_completed(task, result)
+
+            # Auto-cleanup worktree if no changes
+            if not task.no_worktree and self._worktree_mgr.is_git_repo():
+                if task.goal_id:
+                    wt_name = f"goal-{task.goal_id}"
+                    # Only cleanup goal worktree if no non-terminal tasks remain
+                    goal_tasks = await self._store.list_tasks(goal_id=task.goal_id)
+                    terminal = {"completed", "failed", "cancelled"}
+                    has_remaining = any(
+                        t.id != task.id and t.status.value not in terminal
+                        for t in goal_tasks
+                    )
+                    if (
+                        not has_remaining
+                        and wt_name in self._worktree_mgr.list_worktrees()
+                    ):
+                        if not self._worktree_mgr.has_changes(wt_name):
+                            self._worktree_mgr.remove_worktree(wt_name)
+                else:
+                    wt_name = f"task-{task.id}"
+                    if wt_name in self._worktree_mgr.list_worktrees():
+                        if not self._worktree_mgr.has_changes(wt_name):
+                            self._worktree_mgr.remove_worktree(wt_name)
         else:
             # Check retry eligibility
             new_attempt = task.attempt + 1
@@ -714,11 +715,12 @@ class Daemon:
             task = Task(
                 id=str(uuid.uuid4())[:8],
                 type=entry["task_type"],
-                workspace=entry["workspace"],
+                agent=entry.get("agent", "default"),
+                no_worktree=bool(entry.get("no_worktree", False)),
                 title=f"Scheduled: {entry['name']}",
                 instruction=(
                     f"스케줄 '{entry['name']}' 실행. task_type: {entry['task_type']}. "
-                    f"knowledge/ 파일을 읽고 적절한 액션을 수행하라."
+                    f"적절한 액션을 수행하라."
                 ),
                 approval_level=entry["approval_level"],
             )
@@ -729,7 +731,7 @@ class Daemon:
         await self._store.set_scheduler_state("last_tick", now.isoformat())
 
     async def _has_active_task_for_schedule(self, entry: dict) -> bool:
-        tasks = await self._store.list_tasks(workspace=entry["workspace"])
+        tasks = await self._store.list_tasks(agent=entry.get("agent", "default"))
         return any(
             t.type == entry["task_type"]
             and t.status.value not in ("completed", "failed", "cancelled")
