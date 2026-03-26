@@ -839,8 +839,15 @@ async def goal_update_handler(request: web.Request) -> web.Response:
     for key in allowed:
         if key in body:
             val = body[key]
-            if key == "metrics" and isinstance(val, dict):
+            if key == "metrics":
+                if not isinstance(val, dict):
+                    raise web.HTTPBadRequest(reason="'metrics' must be a JSON object")
                 val = json.dumps(val)
+            if key == "cooldown_hours":
+                if not isinstance(val, int) or val <= 0:
+                    raise web.HTTPBadRequest(
+                        reason="'cooldown_hours' must be a positive integer"
+                    )
             fields[key] = val
     if not fields:
         raise web.HTTPBadRequest(reason="No updatable fields provided")
