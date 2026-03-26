@@ -823,6 +823,32 @@ async def goal_trigger_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "tasks_created": tasks_created})
 
 
+async def goal_update_handler(request: web.Request) -> web.Response:
+    """PUT /api/internal/goal/{id} — update a goal."""
+    store: Store = request.app["store"]
+    goal_id = request.match_info["id"]
+    goal = await store.get_goal(goal_id)
+    if goal is None:
+        raise web.HTTPNotFound(reason=f"Goal not found: {goal_id}")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+    allowed = {"description", "metrics", "cooldown_hours"}
+    fields = {}
+    for key in allowed:
+        if key in body:
+            val = body[key]
+            if key == "metrics" and isinstance(val, dict):
+                val = json.dumps(val)
+            fields[key] = val
+    if not fields:
+        raise web.HTTPBadRequest(reason="No updatable fields provided")
+    await store.update_goal(goal_id, **fields)
+    updated = await store.get_goal(goal_id)
+    return web.json_response(updated, dumps=lambda obj: json.dumps(obj, default=str))
+
+
 # ---------------------------------------------------------------------------
 # Rule CRUD
 # ---------------------------------------------------------------------------
@@ -1046,6 +1072,7 @@ def create_api_app(
     app.router.add_post("/api/internal/goal/{id}/enable", goal_enable_handler)
     app.router.add_post("/api/internal/goal/{id}/disable", goal_disable_handler)
     app.router.add_post("/api/internal/goal/{id}/trigger", goal_trigger_handler)
+    app.router.add_put("/api/internal/goal/{id}", goal_update_handler)
 
     # Rules
     app.router.add_get("/api/internal/rules", rules_list_handler)
