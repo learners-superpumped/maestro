@@ -582,9 +582,7 @@ class Daemon:
             f"## Maestro Task Context\n"
             f"- Task ID: {task.id}\n"
             f"- Task Type: {task.type}\n"
-            f"- Task Title: {task.title}\n\n"
-            f"When using maestro MCP tools (e.g. maestro_task_submit_result), "
-            f'use task_id="{task.id}".\n'
+            f"- Task Title: {task.title}\n"
         )
         if system_prompt:
             system_prompt = f"{task_context}\n{system_prompt}"
@@ -668,7 +666,7 @@ class Daemon:
             now = datetime.now(timezone.utc)
             if result.result_json is not None:
                 # Re-fetch from DB to check if result_json was already set
-                # (e.g. via MCP submit_result during execution)
+                # (e.g. from a previous execution before resume)
                 current = await self._store.get_task(task.id)
                 if not current or not current.result_json:
                     extra_fields["result_json"] = result.result_json

@@ -152,37 +152,6 @@ async def task_update_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
-async def task_result_handler(request: web.Request) -> web.Response:
-    """POST /api/internal/task/result — store result_json for a running task.
-
-    Does NOT change task status. The runner is the sole owner of status
-    transitions (RUNNING → COMPLETED). This endpoint only persists the
-    structured result so the runner can pick it up when the CLI session ends.
-    """
-    store: Store = request.app["store"]
-
-    try:
-        body = await request.json()
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
-
-    task_id: str | None = body.get("task_id")
-    result_json = body.get("result_json")
-
-    if not task_id:
-        raise web.HTTPBadRequest(reason="'task_id' is required")
-
-    # Only store result_json — do not touch status, cost, or completed_at.
-    # Runner handles those when the CLI session terminates.
-    if result_json is not None:
-        await store.update_task_fields(
-            task_id,
-            result_json=json.dumps(result_json, ensure_ascii=False),
-        )
-
-    return web.json_response({"ok": True})
-
-
 async def approval_submit_handler(request: web.Request) -> web.Response:
     """POST /api/internal/approval/submit — pause a task pending human approval."""
     from maestro.approval import ApprovalManager
@@ -1026,7 +995,6 @@ def create_api_app(
 
     # Tasks — mutations
     app.router.add_post("/api/internal/task/update", task_update_handler)
-    app.router.add_post("/api/internal/task/result", task_result_handler)
     app.router.add_post("/api/internal/task/{task_id}/approve", task_approve_handler)
     app.router.add_post("/api/internal/task/{task_id}/reject", task_reject_handler)
     app.router.add_post("/api/internal/task/{task_id}/revise", task_revise_handler)

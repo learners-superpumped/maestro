@@ -412,7 +412,6 @@ class Store:
             "budget_usd",
             "max_retries",
             "deadline",
-            "result_json",
         }
         sets, params = [], []
         for key, val in kwargs.items():

@@ -91,20 +91,6 @@ async def maestro_task_update_status(task_id: str, status: str) -> dict[str, Any
     )
 
 
-async def maestro_task_submit_result(
-    task_id: str,
-    result_json: Any,
-) -> dict[str, Any]:
-    """Submit structured result data. Does not change task status."""
-    return await _daemon_post(
-        "/api/internal/task/result",
-        {
-            "task_id": task_id,
-            "result_json": result_json,
-        },
-    )
-
-
 async def maestro_history_search(
     query: str,
     limit: int = 10,
@@ -190,19 +176,6 @@ TOOLS: dict[str, dict[str, Any]] = {
             "required": ["task_id", "status"],
         },
     },
-    "maestro_task_submit_result": {
-        "description": "Submit structured result data for the current task. Does not change task status — the system handles completion automatically when your session ends.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "Task ID"},
-                "result_json": {
-                    "description": "Structured result data (JSON object or string)"
-                },
-            },
-            "required": ["task_id", "result_json"],
-        },
-    },
     "maestro_history_search": {
         "description": "Search recent actions in history",
         "inputSchema": {
@@ -267,11 +240,6 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
     elif name == "maestro_task_update_status":
         return await maestro_task_update_status(
             arguments["task_id"], arguments["status"]
-        )
-    elif name == "maestro_task_submit_result":
-        return await maestro_task_submit_result(
-            arguments["task_id"],
-            arguments["result_json"],
         )
     elif name == "maestro_history_search":
         return await maestro_history_search(
