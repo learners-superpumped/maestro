@@ -4,6 +4,7 @@ import {
   CheckCircle2, AlertTriangle, Eye, FileEdit, ChevronDown, ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatRelativeTime } from "@/lib/time"
 
 interface EventProps {
   event: {
@@ -27,7 +28,7 @@ const EVENT_CONFIG: Record<string, { icon: any; color: string; bg: string; label
   paused:             { icon: Pause,         color: "text-[#cb912f]", bg: "bg-[#cb912f]/10",    label: "Paused" },
   completed:          { icon: CheckCircle2,  color: "text-[#4dab9a]", bg: "bg-[#4dab9a]/10",    label: "Completed" },
   failed:             { icon: AlertTriangle, color: "text-[#eb5757]", bg: "bg-[#eb5757]/10",    label: "Failed" },
-  review_submitted:   { icon: Eye,           color: "text-[#2383e2]", bg: "bg-[#2383e2]/10",    label: "Review submitted" },
+  review_submitted:   { icon: Eye,           color: "text-[#2383e2]", bg: "bg-[#2383e2]/10",    label: "Review" },
   revision_submitted: { icon: FileEdit,      color: "text-[#2383e2]", bg: "bg-[#2383e2]/10",    label: "Revision submitted" },
 }
 
@@ -40,28 +41,45 @@ function formatActor(actor: string): string {
   return actor
 }
 
-function formatRelativeTime(iso: string): string {
-  const date = new Date(iso)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  const diffHr = Math.floor(diffMin / 60)
-  const diffDay = Math.floor(diffHr / 24)
-
-  if (diffMin < 1) return "just now"
-  if (diffMin < 60) return `${diffMin}m ago`
-  if (diffHr < 24) return `${diffHr}h ago`
-  if (diffDay < 7) return `${diffDay}d ago`
-  return date.toLocaleDateString([], { month: "short", day: "numeric" })
+function getReviewConfig(verdict?: string) {
+  if (verdict === "pass") {
+    return { icon: CheckCircle2, color: "text-[#4dab9a]", bg: "bg-[#4dab9a]/10" }
+  }
+  if (verdict === "revise") {
+    return { icon: AlertTriangle, color: "text-[#eb5757]", bg: "bg-[#eb5757]/10" }
+  }
+  return null
 }
 
 export function ActivityEvent({ event, isLast = false }: EventProps) {
   const [expanded, setExpanded] = useState(false)
-  const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.created
-  const Icon = config.icon
   const detail = event.detail_json
+  const baseConfig = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.created
 
-  const hasDetail = detail && (detail.note || detail.error || detail.verdict || detail.summary || detail.cost_usd)
+  // Override icon/color for review_submitted based on verdict
+  const reviewOverride = event.event_type === "review_submitted" && detail
+    ? getReviewConfig(detail.verdict)
+    : null
+  const config = reviewOverride
+    ? { ...baseConfig, ...reviewOverride }
+    : baseConfig
+
+  const Icon = config.icon
+
+  const isReview = event.event_type === "review_submitted"
+  const isRevision = event.event_type === "revision_submitted"
+  const isCompleted = event.event_type === "completed"
+
+  // For non-review/revision events, keep toggle behavior for detail
+  const hasToggleDetail = !isReview && detail && (
+    detail.note || detail.error || detail.verdict || detail.summary ||
+    (detail.cost_usd && !isCompleted)
+  )
+
+  // Review label: "Review #N"
+  const label = isReview && detail?.review_round
+    ? `Review #${detail.review_round}`
+    : config.label
 
   return (
     <div className="flex gap-2.5">
@@ -77,8 +95,19 @@ export function ActivityEvent({ event, isLast = false }: EventProps) {
       <div className={cn("flex-1 min-w-0", isLast ? "pb-0" : "pb-3")}>
         <div className="flex items-baseline justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[13px] text-[#37352f] font-medium shrink-0">{config.label}</span>
-            {hasDetail && (
+            <span className="text-[13px] text-[#37352f] font-medium shrink-0">{label}</span>
+            {/* Verdict badge for review_submitted */}
+            {isReview && detail?.verdict && (
+              <span className={cn(
+                "text-[11px] font-medium px-1.5 py-0.5 rounded-full leading-none",
+                detail.verdict === "pass"
+                  ? "text-[#4dab9a] bg-[#4dab9a]/10"
+                  : "text-[#eb5757] bg-[#eb5757]/10"
+              )}>
+                {detail.verdict}
+              </span>
+            )}
+            {hasToggleDetail && (
               <button onClick={() => setExpanded(!expanded)} className="text-[#9b9a97] hover:text-[#787774] shrink-0">
                 {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               </button>
@@ -86,14 +115,47 @@ export function ActivityEvent({ event, isLast = false }: EventProps) {
           </div>
           <span className="text-[12px] text-[#9b9a97] shrink-0">{formatRelativeTime(event.created_at)}</span>
         </div>
-        <p className="text-[12px] text-[#9b9a97] mt-0.5">{formatActor(event.actor)}</p>
-        {expanded && detail && (
+
+        {/* Actor line */}
+        <p className="text-[12px] text-[#9b9a97] mt-0.5">
+          {formatActor(event.actor)}
+          {/* Inline cost for revision_submitted */}
+          {isRevision && detail?.cost_usd && (
+            <span className="ml-1.5 text-[#9b9a97]">&middot; ${Number(detail.cost_usd).toFixed(4)}</span>
+          )}
+          {/* Inline cost for completed */}
+          {isCompleted && detail?.cost_usd && (
+            <span className="ml-1.5 text-[#9b9a97]">&middot; ${Number(detail.cost_usd).toFixed(4)}</span>
+          )}
+        </p>
+
+        {/* Review content: always visible, not behind toggle */}
+        {isReview && detail && (
+          <div className="mt-1.5 space-y-1.5">
+            {detail.issues && detail.issues.length > 0 && (
+              <div className="text-[12px] bg-[#f7f6f3] rounded px-2.5 py-2">
+                <p className="font-medium text-[#37352f] mb-1">Issues ({detail.issues.length})</p>
+                <ul className="list-disc list-inside text-[#787774] space-y-0.5">
+                  {detail.issues.map((issue: string, i: number) => (
+                    <li key={i}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {detail.summary && (
+              <p className="text-[12px] text-[#787774] bg-[#f7f6f3] rounded px-2.5 py-2">{detail.summary}</p>
+            )}
+          </div>
+        )}
+
+        {/* Toggle detail for other events */}
+        {expanded && detail && !isReview && (
           <div className="mt-1.5 text-[12px] text-[#787774] bg-[#f7f6f3] rounded px-2.5 py-2 space-y-1">
             {detail.note && <p>{detail.note}</p>}
             {detail.error && <p className="text-[#eb5757]">{detail.error}</p>}
             {detail.verdict && <p>Verdict: {detail.verdict}</p>}
             {detail.summary && <p>{detail.summary}</p>}
-            {detail.cost_usd && <p>Cost: ${Number(detail.cost_usd).toFixed(4)}</p>}
+            {detail.cost_usd && !isCompleted && <p>Cost: ${Number(detail.cost_usd).toFixed(4)}</p>}
           </div>
         )}
       </div>
