@@ -3,6 +3,7 @@ import { Plus, Trash2, Loader2, Target, X, Play, Pencil } from "lucide-react"
 import { useGoals, useCreateGoal, useDeleteGoal, useToggleGoal, useTriggerGoal, useUpdateGoal } from "@/hooks/queries/use-goals"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import {
   Select,
@@ -192,12 +193,13 @@ export function Goals() {
 
             <div className="mt-3 space-y-1">
               {/* Name — big, prominent, Notion page-title style */}
-              <Input
+              <Textarea
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="border-0 shadow-none text-[18px] font-medium text-[#37352f] px-0 h-auto py-1 placeholder:text-[#c4c3c0] focus-visible:ring-0"
+                className="border-0 shadow-none text-[18px] font-medium text-[#37352f] px-0 min-h-0 py-1 placeholder:text-[#c4c3c0] focus-visible:ring-0 resize-none"
                 placeholder="What do you want to achieve?"
                 autoFocus
+                rows={2}
               />
             </div>
 
@@ -426,12 +428,13 @@ export function Goals() {
           </DialogHeader>
 
           <div className="mt-3 space-y-1">
-            <Input
+            <Textarea
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="border-0 shadow-none text-[18px] font-medium text-[#37352f] px-0 h-auto py-1 placeholder:text-[#c4c3c0] focus-visible:ring-0"
+              className="border-0 shadow-none text-[18px] font-medium text-[#37352f] px-0 min-h-0 py-1 placeholder:text-[#c4c3c0] focus-visible:ring-0 resize-none"
               placeholder="What do you want to achieve?"
               autoFocus
+              rows={2}
             />
           </div>
 
