@@ -37,7 +37,7 @@ class SignalCollector:
         signals: list[dict[str, Any]] = []
 
         for goal in goals:
-            active_tasks = await self._store.list_tasks(workspace=goal["workspace"])
+            active_tasks = await self._store.list_tasks(goal_id=goal["id"])
             active_non_terminal = [
                 t
                 for t in active_tasks
@@ -68,7 +68,7 @@ class SignalCollector:
         return {
             "goal_id": goal["id"],
             "type": "gap_detected",
-            "description": f"Goal gap for {goal['workspace']}",
+            "description": f"Goal gap for goal {goal['id']}",
             "data": {"metrics": goal.get("metrics", "{}")},
         }
 
@@ -104,7 +104,6 @@ class Planner:
                 {
                     "id": s["goal_id"],
                     "description": goal["description"] if goal else s["description"],
-                    "workspace": goal["workspace"] if goal else "unknown",
                     "metrics": goal.get("metrics", "{}") if goal else "{}",
                 }
             )
@@ -112,30 +111,25 @@ class Planner:
         goals_text = json.dumps(goals_info, ensure_ascii=False)
         signals_text = json.dumps(signals, ensure_ascii=False)
 
-        # Available workspaces
-        all_goals = await self._store.list_goals(enabled_only=True)
-        valid_workspaces = sorted({g["workspace"] for g in all_goals})
-
         instruction = (
             "다음 목표와 신호를 분석하여 실행 태스크를 생성하라.\n\n"
             f"## Goals\n{goals_text}\n\n"
             f"## Signals\n{signals_text}\n\n"
-            f"## 사용 가능한 Workspace\n{json.dumps(valid_workspaces)}\n\n"
-            "중요: 각 태스크의 workspace는 반드시 위 목록에서 선택하라. "
-            "목록에 없는 workspace를 사용하면 실행이 실패한다.\n\n"
+            "중요: 각 태스크에 agent 필드를 지정하라. "
+            "agent는 태스크를 실행할 에이전트 유형이다.\n\n"
             "## 태스크 순서 지정\n"
             "각 태스크에 depends_on_steps 필드로 선행 태스크의 배열 인덱스(0부터)를 지정하라.\n"
             "선행 태스크의 결과가 필요한 경우에만 의존성을 추가하라.\n"
             "병렬 실행 가능한 태스크는 depends_on_steps를 비워두라.\n\n"
             "예시:\n"
-            '[{"title": "리서치", "workspace": "seo"},\n'
-            ' {"title": "감사", "workspace": "seo"},\n'
-            ' {"title": "최적화", "workspace": "seo", "depends_on_steps": [0, 1]}]\n\n'
+            '[{"title": "리서치", "agent": "default"},\n'
+            ' {"title": "감사", "agent": "default"},\n'
+            ' {"title": "최적화", "agent": "default", "depends_on_steps": [0, 1]}]\n\n'
             "JSON 배열로 반환하라."
         )
 
         return {
-            "workspace": "_planner",
+            "agent": "planner",
             "type": "planning",
             "title": f"Plan tasks for {len(signals)} signals",
             "instruction": instruction,
@@ -160,7 +154,7 @@ class Planner:
             task = Task(
                 id=str(uuid.uuid4())[:8],
                 type=spec.get("type", "general"),
-                workspace=spec["workspace"],
+                agent=spec.get("agent", "default"),
                 title=spec["title"],
                 instruction=spec["instruction"],
                 depends_on=depends_on,
