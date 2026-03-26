@@ -15,7 +15,7 @@ daemon:
   reconcile_interval_ms: 30000
 
 concurrency:
-  # Total number of agents that may run at the same time across all workspaces.
+  # Total number of agents that may run at the same time.
   max_total_agents: 5
   # Maximum concurrent agents per individual goal.
   max_per_goal: 1
@@ -42,11 +42,10 @@ goals:
     metrics:
       post_frequency: "3/week"
       engagement_check: "daily"
-    workspace: sns-threads
 
 # Schedules and auto-extract rules are managed via CLI/DB:
 #   maestro schedule add --name daily-post --cron "0 9 * * *" ...
-#   maestro extract-rule add --workspace sns-threads --task-type create_post ...
+#   maestro extract-rule add --task-type create_post ...
 
 agent:
   # Tools agents are permitted to call by default.

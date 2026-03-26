@@ -27,12 +27,6 @@ class TestHelp:
         result = runner.invoke(main, ["init", "--help"])
         assert result.exit_code == 0
 
-    def test_no_workspace_command(self) -> None:
-        """Workspace commands should no longer exist."""
-        runner = CliRunner()
-        result = runner.invoke(main, ["workspace", "--help"])
-        assert result.exit_code != 0
-
     def test_cleanup_help(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["cleanup", "--help"])
@@ -283,9 +277,7 @@ class TestTaskCommands:
             assert result.exit_code == 0
             assert "Detail Task" in result.output
             assert "pending" in result.output.lower()
-            # Should show Agent: instead of Workspace:
             assert "Agent:" in result.output
-            assert "Workspace:" not in result.output
 
     def test_task_get_not_found(self) -> None:
         runner = CliRunner()

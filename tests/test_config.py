@@ -49,17 +49,14 @@ goals:
     metrics:
       post_frequency: "3/week"
       engagement_check: "daily"
-    workspace: sns-threads
 
 schedules:
   - name: threads-daily-post
     cron: "0 9 * * *"
-    workspace: sns-threads
     task_type: create_post
     approval_level: 2
   - name: threads-engagement
     interval_ms: 1800000
-    workspace: sns-threads
     task_type: check_and_engage
     approval_level: 1
 

@@ -11,7 +11,6 @@ instruction에 Goals와 Signals가 JSON으로 전달된다.
 
 각 태스크 객체:
 {
-  "workspace": "워크스페이스명",
   "type": "태스크 유형",
   "title": "태스크 제목",
   "instruction": "에이전트가 실행할 구체적 지시",
@@ -23,5 +22,4 @@ instruction에 Goals와 Signals가 JSON으로 전달된다.
 ## Rules
 - 실행 가능하고 구체적인 instruction을 작성하라
 - 한 번에 과도한 태스크를 생성하지 마라 (최대 3개)
-- workspace는 반드시 존재하는 워크스페이스명을 사용하라
 - 이미 최근에 유사한 태스크가 실행되었다면 생성하지 마라

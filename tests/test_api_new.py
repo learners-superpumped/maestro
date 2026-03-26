@@ -90,7 +90,6 @@ async def test_asset_delete(client):
             "id": "a-del-01",
             "asset_type": "doc",
             "title": "T",
-            "workspace": "_shared",
             "created_by": "test",
         }
     )
@@ -106,7 +105,6 @@ async def test_asset_archive(client):
             "id": "a-arc-01",
             "asset_type": "doc",
             "title": "T",
-            "workspace": "_shared",
             "created_by": "test",
         }
     )

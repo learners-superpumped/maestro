@@ -2,7 +2,7 @@
 
 ## Visual Theme & Atmosphere
 
-Notion-inspired workspace aesthetic. Clean, professional, and content-focused — the interface disappears so users can focus on their tasks and agent outputs. Every surface is deliberately flat with minimal depth cues; structure comes from whitespace and subtle borders rather than shadows or gradients.
+Notion-inspired aesthetic. Clean, professional, and content-focused — the interface disappears so users can focus on their tasks and agent outputs. Every surface is deliberately flat with minimal depth cues; structure comes from whitespace and subtle borders rather than shadows or gradients.
 
 - **Ultra-clean white canvas** with warm-toned neutrals (never blue-gray)
 - **Content-first hierarchy** — typography and spacing do the heavy lifting, not decoration

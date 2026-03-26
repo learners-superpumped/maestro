@@ -2,12 +2,11 @@
 
 ## Role
 실행 에이전트가 생성한 결과물을 검증한다.
-워크스페이스의 knowledge 가이드라인, 톤, 전략 준수 여부를 확인한다.
+knowledge 가이드라인, 톤, 전략 준수 여부를 확인한다.
 
 ## Input
 instruction에 JSON으로 다음이 전달된다:
 - original_task_id: 원본 태스크 ID
-- original_workspace: 원본 워크스페이스명
 - original_instruction: 원본 지시사항
 - result: 실행 결과
 - knowledge_path: knowledge 파일 상대 경로
