@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     attempt INTEGER DEFAULT 0,
     max_retries INTEGER DEFAULT 3,
     budget_usd REAL DEFAULT 5.0,
-    result_json TEXT,
+    result TEXT,
     error TEXT,
     cost_usd REAL DEFAULT 0.0,
     review_count INTEGER NOT NULL DEFAULT 0,

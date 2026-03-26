@@ -86,7 +86,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         attempt=d.get("attempt", 0),
         max_retries=d.get("max_retries", 3),
         budget_usd=d.get("budget_usd", 5.0),
-        result_json=_safe_json_loads(d.get("result_json")),
+        result=_safe_json_loads(d.get("result")),
         error=d.get("error"),
         cost_usd=d.get("cost_usd", 0.0),
         review_count=d.get("review_count", 0),
@@ -315,6 +315,19 @@ class Store:
         except Exception:
             pass
 
+        # Rename result_json → result
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute("PRAGMA table_info(tasks)")
+                columns = [row[1] for row in await cursor.fetchall()]
+                if "result_json" in columns and "result" not in columns:
+                    await db.execute(
+                        "ALTER TABLE tasks RENAME COLUMN result_json TO result"
+                    )
+                    await db.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Task CRUD
     # ------------------------------------------------------------------
@@ -335,14 +348,14 @@ class Store:
                     id, task_number, type, status, agent, no_worktree, title, instruction,
                     goal_id, parent_task_id, depends_on, priority, approval_level,
                     schedule, deadline, session_id, attempt, max_retries,
-                    budget_usd, result_json, error, cost_usd, review_count,
+                    budget_usd, result, error, cost_usd, review_count,
                     created_at, scheduled_at, started_at, completed_at,
                     timeout_at, updated_at
                 ) VALUES (
                     :id, :task_number, :type, :status, :agent, :no_worktree, :title, :instruction,
                     :goal_id, :parent_task_id, :depends_on, :priority, :approval_level,
                     :schedule, :deadline, :session_id, :attempt, :max_retries,
-                    :budget_usd, :result_json, :error, :cost_usd, :review_count,
+                    :budget_usd, :result, :error, :cost_usd, :review_count,
                     :created_at, :scheduled_at, :started_at, :completed_at,
                     :timeout_at, :updated_at
                 )
@@ -367,8 +380,8 @@ class Store:
                     "attempt": task.attempt,
                     "max_retries": task.max_retries,
                     "budget_usd": task.budget_usd,
-                    "result_json": json.dumps(task.result_json)
-                    if task.result_json is not None
+                    "result": json.dumps(task.result)
+                    if task.result is not None
                     else None,
                     "error": task.error,
                     "cost_usd": task.cost_usd,
@@ -432,7 +445,7 @@ class Store:
             "attempt",
             "error",
             "cost_usd",
-            "result_json",
+            "result",
             "instruction",
             "started_at",
             "completed_at",
