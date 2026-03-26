@@ -2,13 +2,14 @@ import { useState } from "react"
 import { useParams, useNavigate } from "@tanstack/react-router"
 import {
   useTask,
-  useTaskChildren,
   useApproveTask,
   useRejectTask,
   useReviseTask,
   useCreateTask,
 } from "@/hooks/queries/use-tasks"
-import { StatusBadge } from "@/components/StatusBadge"
+import { StatusIcon } from "@/components/StatusIcon"
+import { PriorityIcon } from "@/components/PriorityIcon"
+import { formatRelativeTime } from "@/lib/time"
 import { ActivityTimeline } from "@/components/ActivityTimeline"
 import { AgentLogPanel } from "@/components/AgentLogPanel"
 import { Button } from "@/components/ui/button"
@@ -38,18 +39,7 @@ import remarkGfm from "remark-gfm"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { cn } from "@/lib/utils"
-import { TaskTypeBadge, getTaskTypeLabel } from "@/components/TaskTypeBadge"
 import { CheckCircle2, XCircle, Eye } from "lucide-react"
-
-function parseReviewVerdict(resultJson: any): { verdict: string | null; summary: string | null } {
-  const raw = typeof resultJson === "string" ? resultJson : JSON.stringify(resultJson ?? "")
-  const match = raw.match(/"verdict"\s*:\s*"(\w+)"/)
-  const summaryMatch = raw.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/)
-  return {
-    verdict: match ? match[1] : null,
-    summary: summaryMatch ? summaryMatch[1].replace(/\\n/g, " ").replace(/\\\"/g, '"') : null,
-  }
-}
 
 function parseApprovalDraft(draftJson: any): { verdict: string | null; reviewSummary: string | null } {
   if (!draftJson) return { verdict: null, reviewSummary: null }
@@ -162,7 +152,6 @@ export function TaskDetail() {
   const navigate = useNavigate()
 
   const { data: task, isLoading } = useTask(id)
-  const { data: childrenData } = useTaskChildren(id)
 
   const approve = useApproveTask()
   const reject = useRejectTask()
@@ -175,8 +164,6 @@ export function TaskDetail() {
   const [rejectNote, setRejectNote] = useState("")
   const [reviseOpen, setReviseOpen] = useState(false)
   const [reviseNote, setReviseNote] = useState("")
-
-  const children: any[] = childrenData?.children ?? []
 
   // Fetch approval draft for paused tasks
   const { data: approval } = useQuery({
@@ -220,20 +207,13 @@ export function TaskDetail() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
+        <StatusIcon status={task.effective_status ?? task.status} size={20} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-[20px] font-semibold text-[#37352f]">{task.title}</h1>
-            <StatusBadge status={task.effective_status ?? task.status} />
-            <TaskTypeBadge type={task.type} />
-          </div>
+          <h1 className="text-[20px] font-semibold text-[#37352f]">{task.title}</h1>
           <div className="flex items-center gap-2 mt-0.5 text-[12px] text-[#9b9a97]">
-            {task.cost_usd > 0 && (
-              <>
-                <span className="font-mono">${Number(task.cost_usd).toFixed(4)}</span>
-                <span>·</span>
-              </>
-            )}
             <span className="font-mono">{task.id}</span>
+            {task.cost_usd > 0 && <><span>·</span><span className="font-mono">${Number(task.cost_usd).toFixed(2)}</span></>}
+            {task.updated_at && <><span>·</span><span>{formatRelativeTime(task.updated_at)}</span></>}
           </div>
         </div>
 
@@ -396,19 +376,33 @@ export function TaskDetail() {
               </div>
             </CollapsibleSection>
           )}
+
+          {/* Activity Feed */}
+          <div className="border border-[#e8e5df] rounded p-4">
+            <h3 className="text-[13px] font-medium text-[#787774] mb-3">Activity</h3>
+            <ActivityTimeline taskId={id} />
+          </div>
         </div>
 
         {/* ── Sidebar ── */}
-        <div className="lg:w-[320px] shrink-0 space-y-4">
+        <div className="lg:w-[280px] shrink-0 space-y-4">
           {/* Properties — always visible */}
           <div className="border border-[#e8e5df] rounded p-4">
             <h3 className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97] mb-3">Properties</h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <Field label="Status" value={task.effective_status ?? task.status} />
-              <Field label="Priority" value={task.priority} />
-              <Field label="Type" value={getTaskTypeLabel(task.type)} />
+              <div>
+                <p className="text-[12px] text-[#9b9a97] mb-0.5">Priority</p>
+                <div className="flex items-center gap-1.5">
+                  <PriorityIcon priority={task.priority ?? 3} />
+                  <span className="text-[14px] text-[#37352f]">{
+                    task.priority === 1 ? "Urgent" : task.priority === 2 ? "High" : task.priority <= 3 ? "Normal" : "Low"
+                  }</span>
+                </div>
+              </div>
+              <Field label="Agent" value={task.agent} />
+              <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} mono />
               <Field label="Approval" value={task.approval_level === 0 ? "Auto" : task.approval_level === 1 ? "Notify" : "Required"} />
-              <Field label="Cost" value={task.cost_usd != null ? `$${Number(task.cost_usd).toFixed(4)}` : undefined} />
               <Field label="Attempt" value={task.max_retries ? `${(task.attempt ?? 0) + 1}/${task.max_retries}` : undefined} />
               {task.depends_on_tasks && task.depends_on_tasks.length > 0 && (
                 <div className="col-span-2 mt-1">
@@ -420,70 +414,15 @@ export function TaskDetail() {
                         href={`/tasks/${dep.id}`}
                         className="flex items-center gap-2 text-[13px] hover:bg-[#f7f6f3] rounded px-1.5 py-1 -mx-1.5 transition-colors"
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dep.status === "completed" ? "bg-[#4dab9a]" : dep.status === "running" ? "bg-[#2383e2]" : "bg-[#9b9a97]"}`} />
+                        <StatusIcon status={dep.status} size={12} />
                         <span className="text-[#37352f] truncate">{dep.title}</span>
                       </a>
                     ))}
                   </div>
                 </div>
               )}
-              <Field label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : undefined} />
-              <Field label="Updated" value={task.updated_at ? new Date(task.updated_at).toLocaleString() : undefined} />
-              {task.claimed_by && <Field label="Claimed By" value={task.claimed_by} mono />}
-              {task.created_by && <Field label="Created By" value={task.created_by} mono />}
             </div>
           </div>
-
-          {/* Children */}
-          {children.length > 0 && (
-            <div className="border border-[#e8e5df] rounded p-4">
-              <h3 className="text-[12px] uppercase tracking-wider font-medium text-[#9b9a97] mb-3">
-                Children <span className="text-[#9b9a97]">{children.length}</span>
-              </h3>
-              <div className="space-y-2">
-                {children.map((child: any) => {
-                  const review = child.type === "review" ? parseReviewVerdict(child.result_json) : null
-                  return (
-                    <div
-                      key={child.id}
-                      className="flex items-start gap-2.5 px-2.5 py-2 rounded bg-[#f7f6f3] hover:bg-[#ebebea] cursor-pointer transition-colors"
-                      onClick={() => navigate({ to: "/tasks/$id", params: { id: child.id } })}
-                    >
-                      <StatusBadge status={child.status} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[13px] text-[#37352f] truncate">{child.title}</span>
-                          <TaskTypeBadge type={child.type} />
-                        </div>
-                        {review?.verdict && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {review.verdict === "pass" ? (
-                              <CheckCircle2 className="h-3 w-3 text-[#4dab9a]" />
-                            ) : (
-                              <XCircle className="h-3 w-3 text-[#eb5757]" />
-                            )}
-                            <span className={cn(
-                              "text-[12px]",
-                              review.verdict === "pass" ? "text-[#4dab9a]" : "text-[#eb5757]"
-                            )}>
-                              {review.verdict === "pass" ? "Passed" : "Failed"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Activity */}
-          <CollapsibleSection title="Activity" defaultOpen={true}>
-            <div className="pt-2">
-              <ActivityTimeline taskId={id} />
-            </div>
-          </CollapsibleSection>
         </div>
       </div>
 
