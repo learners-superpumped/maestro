@@ -27,12 +27,13 @@ class TaskRepository(Protocol):
     async def list_tasks(
         self,
         status: Optional[TaskStatus] = None,
-        workspace: Optional[str] = None,
+        goal_id: Optional[str] = None,
+        agent: Optional[str] = None,
     ) -> list[Task]: ...
 
     async def list_dispatchable_tasks(self) -> list[Task]: ...
 
-    async def count_running(self, workspace: Optional[str] = None) -> int: ...
+    async def count_running(self, goal_id: Optional[str] = None) -> int: ...
 
 
 class AssetRepository(Protocol):

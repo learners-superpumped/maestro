@@ -69,10 +69,11 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
     return Task(
         id=d["id"],
         type=d["type"],
-        workspace=d["workspace"],
         title=d["title"],
         instruction=d["instruction"],
         status=TaskStatus(d["status"]),
+        agent=d.get("agent", "default"),
+        no_worktree=bool(d.get("no_worktree", 0)),
         goal_id=d.get("goal_id"),
         parent_task_id=d.get("parent_task_id"),
         depends_on=d.get("depends_on"),
@@ -277,14 +278,14 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO tasks (
-                    id, type, status, workspace, title, instruction,
+                    id, type, status, agent, no_worktree, title, instruction,
                     goal_id, parent_task_id, depends_on, priority, approval_level,
                     schedule, deadline, session_id, attempt, max_retries,
                     budget_usd, result_json, error, cost_usd, review_count,
                     created_at, scheduled_at, started_at, completed_at,
                     timeout_at, updated_at
                 ) VALUES (
-                    :id, :type, :status, :workspace, :title, :instruction,
+                    :id, :type, :status, :agent, :no_worktree, :title, :instruction,
                     :goal_id, :parent_task_id, :depends_on, :priority, :approval_level,
                     :schedule, :deadline, :session_id, :attempt, :max_retries,
                     :budget_usd, :result_json, :error, :cost_usd, :review_count,
@@ -296,7 +297,8 @@ class Store:
                     "id": task.id,
                     "type": task.type,
                     "status": task.status.value,
-                    "workspace": task.workspace,
+                    "agent": task.agent,
+                    "no_worktree": 1 if task.no_worktree else 0,
                     "title": task.title,
                     "instruction": task.instruction,
                     "goal_id": task.goal_id,
@@ -429,11 +431,12 @@ class Store:
     async def list_tasks(
         self,
         status: Optional[TaskStatus] = None,
-        workspace: Optional[str] = None,
+        goal_id: Optional[str] = None,
+        agent: Optional[str] = None,
         limit: int | None = None,
         root_only: bool = False,
     ) -> list[Task] | list[dict]:
-        """Return tasks optionally filtered by status and/or workspace.
+        """Return tasks optionally filtered by status, goal_id, and/or agent.
 
         When *root_only* is True, only top-level tasks (those without a
         parent) are returned, and each result dict includes a
@@ -445,9 +448,12 @@ class Store:
         if status is not None:
             clauses.append("status = ?")
             params.append(status.value)
-        if workspace is not None:
-            clauses.append("workspace = ?")
-            params.append(workspace)
+        if goal_id is not None:
+            clauses.append("goal_id = ?")
+            params.append(goal_id)
+        if agent is not None:
+            clauses.append("agent = ?")
+            params.append(agent)
         if root_only:
             clauses.append("(parent_task_id IS NULL OR parent_task_id = '')")
 
@@ -520,22 +526,22 @@ class Store:
             rows = await cursor.fetchall()
         return [_row_to_task(r) for r in rows]
 
-    async def count_running(self, workspace: Optional[str] = None) -> int:
+    async def count_running(self, goal_id: Optional[str] = None) -> int:
         """
         Count tasks currently running or claimed.
 
-        If *workspace* is given, restrict to that workspace only.
+        If *goal_id* is given, restrict to that goal only.
         """
         params: list[Any] = []
-        workspace_clause = ""
-        if workspace is not None:
-            workspace_clause = "AND workspace = ?"
-            params.append(workspace)
+        goal_clause = ""
+        if goal_id is not None:
+            goal_clause = "AND goal_id = ?"
+            params.append(goal_id)
 
         sql = f"""
             SELECT COUNT(*) FROM tasks
             WHERE status IN ('running', 'claimed')
-            {workspace_clause}
+            {goal_clause}
         """
         async with self._conn() as db:
             cursor = await db.execute(sql, params)
@@ -566,13 +572,13 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO assets (
-                    id, task_id, workspace, created_by, asset_type,
+                    id, task_id, created_by, asset_type,
                     media_type, title, description, tags, content_json,
                     file_path, file_size, embedding_model, embedded_at,
                     ttl_days, expires_at, archived,
                     created_at, updated_at
                 ) VALUES (
-                    :id, :task_id, :workspace, :created_by, :asset_type,
+                    :id, :task_id, :created_by, :asset_type,
                     :media_type, :title, :description, :tags, :content_json,
                     :file_path, :file_size, :embedding_model, :embedded_at,
                     :ttl_days, :expires_at, :archived,
@@ -582,7 +588,6 @@ class Store:
                 {
                     "id": asset["id"],
                     "task_id": asset.get("task_id"),
-                    "workspace": asset.get("workspace", "_shared"),
                     "created_by": asset.get("created_by", "human"),
                     "asset_type": asset["asset_type"],
                     "media_type": asset.get("media_type"),
@@ -665,7 +670,6 @@ class Store:
             "embedded_at",
             "asset_type",
             "media_type",
-            "workspace",
             "ttl_days",
             "expires_at",
             "archived",
@@ -707,19 +711,15 @@ class Store:
     async def list_assets_filtered(
         self,
         *,
-        workspace: str | None = None,
         asset_type: str | None = None,
         tags: list[str] | None = None,
         task_id: str | None = None,
         archived: int = 0,
         limit: int = 50,
     ) -> list[dict]:
-        """List assets with filters. Includes _shared when workspace specified."""
+        """List assets with filters. All assets are project-global."""
         conditions = ["archived = ?"]
         params: list = [archived]
-        if workspace:
-            conditions.append("workspace IN (?, '_shared')")
-            params.append(workspace)
         if asset_type:
             conditions.append("asset_type = ?")
             params.append(asset_type)
@@ -839,11 +839,11 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO action_history (
-                    id, task_id, workspace, action_type, platform,
+                    id, task_id, action_type, platform,
                     content, target_url, asset_ids, result_url, metrics,
                     created_at
                 ) VALUES (
-                    :id, :task_id, :workspace, :action_type, :platform,
+                    :id, :task_id, :action_type, :platform,
                     :content, :target_url, :asset_ids, :result_url, :metrics,
                     :created_at
                 )
@@ -851,7 +851,6 @@ class Store:
                 {
                     "id": action["id"],
                     "task_id": action["task_id"],
-                    "workspace": action["workspace"],
                     "action_type": action["action_type"],
                     "platform": action["platform"],
                     "content": action.get("content"),
@@ -872,19 +871,12 @@ class Store:
 
     async def search_history(
         self,
-        workspace: Optional[str] = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Return recent action history, optionally filtered by workspace."""
-        clauses: list[str] = []
+        """Return recent action history."""
         params: list[Any] = []
 
-        if workspace is not None:
-            clauses.append("workspace = ?")
-            params.append(workspace)
-
-        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = f"SELECT * FROM action_history {where} ORDER BY created_at DESC LIMIT ?"
+        sql = "SELECT * FROM action_history ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
 
         async with self._conn() as db:
@@ -1068,19 +1060,27 @@ class Store:
         self,
         *,
         id: str,
-        workspace: str,
         description: str = "",
         metrics: str = "{}",
         cooldown_hours: int = 24,
+        no_worktree: bool = False,
     ) -> dict:
         now = _now_iso()
         async with self._conn() as db:
             await db.execute(
                 """INSERT INTO goals
-                   (id, description, workspace, metrics, cooldown_hours,
+                   (id, description, no_worktree, metrics, cooldown_hours,
                     enabled, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
-                (id, description, workspace, metrics, cooldown_hours, now, now),
+                (
+                    id,
+                    description,
+                    1 if no_worktree else 0,
+                    metrics,
+                    cooldown_hours,
+                    now,
+                    now,
+                ),
             )
             await db.commit()
         return await self.get_goal(id)  # type: ignore[return-value]
@@ -1169,12 +1169,13 @@ class Store:
             sid = str(uuid.uuid4())[:8]
             await db.execute(
                 """INSERT INTO schedules
-                   (id, name, workspace, task_type, cron, interval_ms, approval_level, enabled, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                   (id, name, agent, no_worktree, task_type, cron, interval_ms, approval_level, enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
                 (
                     sid,
                     schedule["name"],
-                    schedule["workspace"],
+                    schedule.get("agent", "default"),
+                    1 if schedule.get("no_worktree") else 0,
                     schedule["task_type"],
                     schedule.get("cron"),
                     schedule.get("interval_ms"),
@@ -1189,8 +1190,9 @@ class Store:
         self,
         *,
         name: str,
-        workspace: str,
         task_type: str,
+        agent: str = "default",
+        no_worktree: bool = False,
         cron: str | None = None,
         interval_ms: int | None = None,
         approval_level: int = 0,
@@ -1200,13 +1202,14 @@ class Store:
         async with self._conn() as db:
             await db.execute(
                 """INSERT INTO schedules
-                   (id, name, workspace, task_type, cron, interval_ms,
+                   (id, name, agent, no_worktree, task_type, cron, interval_ms,
                     approval_level, enabled, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
                 (
                     sid,
                     name,
-                    workspace,
+                    agent,
+                    1 if no_worktree else 0,
                     task_type,
                     cron,
                     interval_ms,
@@ -1330,7 +1333,6 @@ class Store:
     async def create_extract_rule(
         self,
         *,
-        workspace: str,
         task_type: str,
         asset_type: str,
         title_field: str | None = None,
@@ -1343,15 +1345,14 @@ class Store:
         async with self._conn() as db:
             await db.execute(
                 """INSERT INTO auto_extract_rules
-                   (id, workspace, task_type, asset_type, title_field, iterate, tags_from, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(workspace, task_type) DO UPDATE SET
+                   (id, task_type, asset_type, title_field, iterate, tags_from, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(task_type) DO UPDATE SET
                      asset_type=excluded.asset_type, title_field=excluded.title_field,
                      iterate=excluded.iterate, tags_from=excluded.tags_from,
                      updated_at=excluded.updated_at""",
                 (
                     rid,
-                    workspace,
                     task_type,
                     asset_type,
                     title_field,
@@ -1362,13 +1363,13 @@ class Store:
                 ),
             )
             await db.commit()
-        return await self.get_extract_rule(workspace, task_type)
+        return await self.get_extract_rule(task_type)
 
-    async def get_extract_rule(self, workspace: str, task_type: str) -> dict | None:
+    async def get_extract_rule(self, task_type: str) -> dict | None:
         async with self._conn() as db:
             cur = await db.execute(
-                "SELECT * FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
-                (workspace, task_type),
+                "SELECT * FROM auto_extract_rules WHERE task_type = ?",
+                (task_type,),
             )
             row = await cur.fetchone()
             if row is None:
@@ -1378,28 +1379,22 @@ class Store:
                 d["tags_from"] = json.loads(d["tags_from"])
             return d
 
-    async def list_extract_rules(self, *, workspace: str | None = None) -> list[dict]:
+    async def list_extract_rules(self) -> list[dict]:
         async with self._conn() as db:
-            if workspace:
-                cur = await db.execute(
-                    "SELECT * FROM auto_extract_rules WHERE workspace = ? ORDER BY task_type",
-                    (workspace,),
-                )
-            else:
-                cur = await db.execute(
-                    "SELECT * FROM auto_extract_rules ORDER BY workspace, task_type"
-                )
+            cur = await db.execute(
+                "SELECT * FROM auto_extract_rules ORDER BY task_type"
+            )
             rows = [dict(r) for r in await cur.fetchall()]
             for r in rows:
                 if r["tags_from"]:
                     r["tags_from"] = json.loads(r["tags_from"])
             return rows
 
-    async def delete_extract_rule(self, workspace: str, task_type: str) -> None:
+    async def delete_extract_rule(self, task_type: str) -> None:
         async with self._conn() as db:
             await db.execute(
-                "DELETE FROM auto_extract_rules WHERE workspace = ? AND task_type = ?",
-                (workspace, task_type),
+                "DELETE FROM auto_extract_rules WHERE task_type = ?",
+                (task_type,),
             )
             await db.commit()
 

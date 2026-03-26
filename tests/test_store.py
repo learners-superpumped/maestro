@@ -22,7 +22,6 @@ def _task(**kwargs) -> Task:
     defaults = dict(
         id=str(uuid.uuid4()),
         type="shell",
-        workspace="/tmp/ws",
         title="Test task",
         instruction="echo hello",
     )
@@ -73,7 +72,8 @@ async def test_create_and_get_task(db_path: pathlib.Path) -> None:
     assert fetched.title == task.title
     assert fetched.instruction == task.instruction
     assert fetched.status == TaskStatus.PENDING
-    assert fetched.workspace == task.workspace
+    assert fetched.agent == task.agent
+    assert fetched.no_worktree == task.no_worktree
     assert fetched.type == task.type
 
 
@@ -146,21 +146,38 @@ async def test_list_tasks_by_status(db_path: pathlib.Path) -> None:
     assert approved_list[0].id == approved.id
 
 
-async def test_list_tasks_by_workspace(db_path: pathlib.Path) -> None:
+async def test_list_tasks_by_agent(db_path: pathlib.Path) -> None:
     store = Store(db_path)
 
-    t1 = _task(workspace="/ws/alpha")
-    t2 = _task(workspace="/ws/alpha")
-    t3 = _task(workspace="/ws/beta")
+    t1 = _task(agent="agent-alpha")
+    t2 = _task(agent="agent-alpha")
+    t3 = _task(agent="agent-beta")
 
     for t in (t1, t2, t3):
         await store.create_task(t)
 
-    alpha = await store.list_tasks(workspace="/ws/alpha")
+    alpha = await store.list_tasks(agent="agent-alpha")
     assert len(alpha) == 2
 
-    beta = await store.list_tasks(workspace="/ws/beta")
+    beta = await store.list_tasks(agent="agent-beta")
     assert len(beta) == 1
+
+
+async def test_list_tasks_by_goal_id(db_path: pathlib.Path) -> None:
+    store = Store(db_path)
+
+    t1 = _task(goal_id="goal-1")
+    t2 = _task(goal_id="goal-1")
+    t3 = _task(goal_id="goal-2")
+
+    for t in (t1, t2, t3):
+        await store.create_task(t)
+
+    g1 = await store.list_tasks(goal_id="goal-1")
+    assert len(g1) == 2
+
+    g2 = await store.list_tasks(goal_id="goal-2")
+    assert len(g2) == 1
 
 
 async def test_list_tasks_no_filter(db_path: pathlib.Path) -> None:
@@ -232,18 +249,18 @@ async def test_list_dispatchable_excludes_future_scheduled(
 async def test_count_running(db_path: pathlib.Path) -> None:
     store = Store(db_path)
 
-    r1 = _task(workspace="/ws/a", status=TaskStatus.RUNNING)
-    r2 = _task(workspace="/ws/a", status=TaskStatus.CLAIMED)
-    r3 = _task(workspace="/ws/b", status=TaskStatus.RUNNING)
-    pending = _task(workspace="/ws/a", status=TaskStatus.PENDING)
+    r1 = _task(goal_id="goal-a", status=TaskStatus.RUNNING)
+    r2 = _task(goal_id="goal-a", status=TaskStatus.CLAIMED)
+    r3 = _task(goal_id="goal-b", status=TaskStatus.RUNNING)
+    pending = _task(goal_id="goal-a", status=TaskStatus.PENDING)
 
     for t in (r1, r2, r3, pending):
         await store.create_task(t)
 
     assert await store.count_running() == 3
-    assert await store.count_running(workspace="/ws/a") == 2
-    assert await store.count_running(workspace="/ws/b") == 1
-    assert await store.count_running(workspace="/ws/c") == 0
+    assert await store.count_running(goal_id="goal-a") == 2
+    assert await store.count_running(goal_id="goal-b") == 1
+    assert await store.count_running(goal_id="goal-c") == 0
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +319,6 @@ async def test_create_and_get_asset(db_path: pathlib.Path) -> None:
     assert fetched["id"] == asset["id"]
     assert fetched["title"] == asset["title"]
     assert fetched["asset_type"] == asset["asset_type"]
-    assert fetched["workspace"] == "_shared"
     assert fetched["created_by"] == "human"
     assert fetched["tags"] == ["test", "image"]
 
@@ -379,7 +395,6 @@ def _action(**kwargs) -> dict:
     defaults = dict(
         id=str(uuid.uuid4()),
         task_id="task-001",
-        workspace="/ws/test",
         action_type="post",
         platform="twitter",
     )
@@ -413,19 +428,12 @@ async def test_search_history(db_path: pathlib.Path) -> None:
     await store.create_task(task_a)
     await store.create_task(task_b)
 
-    a1 = _action(task_id="task-a", workspace="/ws/alpha", platform="twitter")
-    a2 = _action(task_id="task-b", workspace="/ws/beta", platform="instagram")
-    a3 = _action(task_id="task-a", workspace="/ws/alpha", platform="facebook")
+    a1 = _action(task_id="task-a", platform="twitter")
+    a2 = _action(task_id="task-b", platform="instagram")
+    a3 = _action(task_id="task-a", platform="facebook")
 
     for a in (a1, a2, a3):
         await store.record_action(a)
-
-    # Filter by workspace
-    alpha = await store.search_history(workspace="/ws/alpha")
-    assert len(alpha) == 2
-
-    beta = await store.search_history(workspace="/ws/beta")
-    assert len(beta) == 1
 
     # Limit
     limited = await store.search_history(limit=1)
@@ -449,12 +457,9 @@ async def test_get_goal_none(db_path: pathlib.Path) -> None:
 
 async def test_create_goal(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    goal = await store.create_goal(
-        id="g1", workspace="ws1", description="Test goal", cooldown_hours=12
-    )
+    goal = await store.create_goal(id="g1", description="Test goal", cooldown_hours=12)
     assert goal is not None
     assert goal["id"] == "g1"
-    assert goal["workspace"] == "ws1"
     assert goal["description"] == "Test goal"
     assert goal["cooldown_hours"] == 12
     assert goal["enabled"] == 1
@@ -464,8 +469,8 @@ async def test_create_goal(db_path: pathlib.Path) -> None:
 
 async def test_list_goals(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    await store.create_goal(id="g1", workspace="ws1")
-    await store.create_goal(id="g2", workspace="ws2", description="Second")
+    await store.create_goal(id="g1")
+    await store.create_goal(id="g2", description="Second")
 
     all_goals = await store.list_goals()
     assert len(all_goals) == 2
@@ -475,8 +480,8 @@ async def test_list_goals(db_path: pathlib.Path) -> None:
 
 async def test_list_goals_enabled_only(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    await store.create_goal(id="g1", workspace="ws1")
-    await store.create_goal(id="g2", workspace="ws2")
+    await store.create_goal(id="g1")
+    await store.create_goal(id="g2")
     await store.update_goal("g2", enabled=False)
 
     enabled = await store.list_goals(enabled_only=True)
@@ -486,7 +491,7 @@ async def test_list_goals_enabled_only(db_path: pathlib.Path) -> None:
 
 async def test_update_goal(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    await store.create_goal(id="g1", workspace="ws1", description="old")
+    await store.create_goal(id="g1", description="old")
     await store.update_goal("g1", description="new", current_gap="some gap")
 
     goal = await store.get_goal("g1")
@@ -497,7 +502,7 @@ async def test_update_goal(db_path: pathlib.Path) -> None:
 
 async def test_delete_goal(db_path: pathlib.Path) -> None:
     store = Store(db_path)
-    await store.create_goal(id="g1", workspace="ws1")
+    await store.create_goal(id="g1")
     await store.delete_goal("g1")
 
     result = await store.get_goal("g1")
@@ -517,7 +522,6 @@ async def test_migration_drops_old_assets(tmp_path):
     async with store._conn() as db:
         cursor = await db.execute("PRAGMA table_info(assets)")
         columns = {row[1] for row in await cursor.fetchall()}
-        assert "workspace" in columns
         assert "created_by" in columns
         assert "content_json" in columns
         assert "file_path" in columns
@@ -559,7 +563,6 @@ async def test_delete_asset(db_path) -> None:
         "id": "del-test-01",
         "asset_type": "document",
         "title": "To Delete",
-        "workspace": "_shared",
         "created_by": "test",
     }
     await store.create_asset(asset)
@@ -571,9 +574,7 @@ async def test_delete_asset(db_path) -> None:
 @pytest.mark.asyncio
 async def test_update_task_fields(db_path) -> None:
     store = Store(db_path)
-    task = Task(
-        id="utf-01", type="test", workspace="w", title="Original", instruction="do it"
-    )
+    task = Task(id="utf-01", type="test", title="Original", instruction="do it")
     await store.create_task(task)
     await store.update_task_fields("utf-01", instruction="updated instruction")
     t = await store.get_task("utf-01")
