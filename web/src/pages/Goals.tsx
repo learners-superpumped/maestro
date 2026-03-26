@@ -305,15 +305,15 @@ export function Goals() {
 
       {/* Table */}
       <div className="rounded border border-[#e8e5df] overflow-hidden">
-        <Table>
+        <Table className="table-fixed w-full">
           <TableHeader>
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Goal</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Targets</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Frequency</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Last Run</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Active</TableHead>
-              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-12"></TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-[40%]">Goal</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-[20%]">Targets</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-[10%]">Frequency</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-[10%]">Last Run</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-[10%]">Active</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-[10%]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
