@@ -21,6 +21,7 @@ dependencies = [
 slack = [
     "slack-bolt>=1.18",
     "slack-sdk>=3.27",
+    "markdown-to-mrkdwn>=0.3",
 ]
 dev = [
     "pytest>=8.0",

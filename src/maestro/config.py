@@ -371,6 +371,12 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
             integrations.slack.bot_token = slack_secrets["bot_token"]
         if slack_secrets.get("app_token"):
             integrations.slack.app_token = slack_secrets["app_token"]
+        if slack_secrets.get("channel"):
+            integrations.slack.channel = slack_secrets["channel"]
+
+    # Auto-enable if both tokens are present from secrets
+    if integrations.slack.bot_token and integrations.slack.app_token:
+        integrations.slack.enabled = True
 
     # Env var overrides take highest priority
     env_bot_token = os.environ.get("MAESTRO_SLACK_BOT_TOKEN")
@@ -379,6 +385,8 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     env_app_token = os.environ.get("MAESTRO_SLACK_APP_TOKEN")
     if env_app_token:
         integrations.slack.app_token = env_app_token
+    if integrations.slack.bot_token and integrations.slack.app_token:
+        integrations.slack.enabled = True
 
     resources = _parse_resources(data.get("resources") or {})
     agents = _parse_agents(data.get("agents") or {})
