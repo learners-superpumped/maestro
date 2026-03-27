@@ -180,4 +180,33 @@ export const api = {
         method: "POST",
       }),
   },
+
+  drive: {
+    status: () => request<{
+      connected: boolean;
+      drive_id: string;
+      root_folder_id: string;
+    }>("/api/internal/drive/status"),
+
+    authUrl: (data: { client_id: string; client_secret: string }) =>
+      request<{ auth_url: string; state: string }>("/api/internal/drive/auth-url", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    drives: () => request<{ drives: Array<{ id: string; name: string }> }>(
+      "/api/internal/drive/drives"
+    ),
+
+    folders: (params: { drive_id?: string; parent_id?: string }) =>
+      request<{ folders: Array<{ id: string; name: string }> }>(
+        `/api/internal/drive/folders${buildQuery(params)}`
+      ),
+
+    setup: (data: { drive_id: string; root_folder_id: string }) =>
+      request<{ ok: boolean; drive_id: string; root_folder_id: string }>(
+        "/api/internal/drive/setup",
+        { method: "POST", body: JSON.stringify(data) }
+      ),
+  },
 }
