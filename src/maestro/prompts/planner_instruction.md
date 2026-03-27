@@ -47,7 +47,7 @@ Each task MUST include:
 - instruction — MUST include: CONTEXT, OBJECTIVE, EXECUTION STEPS, CONSTRAINTS, COMPLETION CRITERIA
 - priority — 1 (highest) to 5 (lowest)
 - goal_id — related goal ID
-- approval_level — 0 (auto) to 2 (manual approval required)
+- approval_level — 0 (auto, no review), 1 (auto-approve + post-execution review, **default**), 2 (manual approval required)
 - success_criteria — how to judge if this task succeeded
 - depends_on_steps — array indices (0-based) of prerequisite tasks. Leave empty for parallelizable tasks
 

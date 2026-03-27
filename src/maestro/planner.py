@@ -184,7 +184,7 @@ class Planner:
                 depends_on=depends_on,
                 priority=spec.get("priority", 3),
                 goal_id=spec.get("goal_id"),
-                approval_level=spec.get("approval_level", 2),
+                approval_level=spec.get("approval_level", 1),
             )
             await self._store.create_task(task)
             ids.append(task.id)
