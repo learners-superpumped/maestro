@@ -1318,6 +1318,21 @@ async def slack_setup_handler(request: web.Request) -> web.Response:
     else:
         gitignore_path.write_text(f"{gitignore_entry}\n")
 
+    # Hot-reload: update adapter config and (re)start
+    slack = request.app.get("slack_adapter")
+    if slack:
+        try:
+            if slack.available:
+                await slack.stop()
+            slack._config.bot_token = bot_token
+            slack._config.app_token = app_token
+            slack._config.channel = channel or slack._config.channel
+            slack._config.enabled = True
+            await slack.start()
+            logger.info("Slack adapter hot-reloaded after setup")
+        except Exception:
+            logger.exception("Failed to hot-reload Slack adapter")
+
     return web.json_response({"ok": True, "channel": channel})
 
 
