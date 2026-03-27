@@ -600,8 +600,16 @@ class Daemon:
         cwd = self._resolve_cwd(task)
         system_prompt = self._load_prompt(task.agent)
 
-        # Inject task context so the agent knows its own task ID
+        # Inject headless execution context so the agent understands its environment
         task_context = (
+            "## Execution Environment\n"
+            "You are a HEADLESS autonomous agent in the Maestro orchestration system.\n"
+            "There is NO human operator reading your output. No one can answer questions.\n\n"
+            "RULES:\n"
+            "1. NEVER ask questions, present choices, or wait for input. "
+            "Always make the best judgment call yourself and keep going.\n"
+            "2. If you lack critical information, state your assumptions and proceed.\n"
+            "3. Your final output is stored as the task result. Make it complete and actionable.\n\n"
             f"## Maestro Task Context\n"
             f"- Task ID: {task.id}\n"
             f"- Task Type: {task.type}\n"
@@ -685,6 +693,17 @@ class Daemon:
         extra_fields: dict[str, object] = {}
         if result.session_id:
             extra_fields["session_id"] = result.session_id
+
+        # Deterministic subtype-based handling:
+        # error_max_turns means Claude hit the turn limit — treat as retryable failure
+        if result.subtype == "error_max_turns" and result.session_id:
+            logger.warning(
+                "Task %s hit max_turns limit (subtype=%s)",
+                task.id,
+                result.subtype,
+            )
+            result.success = False
+            result.error = result.error or "Reached max agentic turns limit"
 
         if result.success:
             now = datetime.now(timezone.utc)

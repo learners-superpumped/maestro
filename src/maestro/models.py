@@ -232,12 +232,14 @@ class TaskResult:
 
     Fields
     ------
-    task_id     : ID of the task that was executed
-    success     : Whether execution succeeded
-    session_id  : Claude CLI session UUID (if applicable)
-    result      : Structured output (optional)
-    error       : Error message on failure (optional)
-    cost_usd    : Cost incurred by this execution (default 0.0)
+    task_id        : ID of the task that was executed
+    success        : Whether execution succeeded
+    session_id     : Claude CLI session UUID (if applicable)
+    result         : Structured output (optional)
+    error          : Error message on failure (optional)
+    cost_usd       : Cost incurred by this execution (default 0.0)
+    subtype        : Result event subtype from stream-json (e.g. "success",
+                     "error_max_turns", "error_max_budget_usd")
     """
 
     task_id: str
@@ -246,3 +248,4 @@ class TaskResult:
     result: Optional[Any] = None
     error: Optional[str] = None
     cost_usd: float = 0.0
+    subtype: Optional[str] = None

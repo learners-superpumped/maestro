@@ -168,6 +168,7 @@ class AgentRunner:
         error: Optional[str] = None
         result_text: Optional[object] = None
         last_assistant_text: Optional[str] = None
+        subtype: Optional[str] = None
 
         try:
             # Merge daemon env vars into the current environment
@@ -237,6 +238,7 @@ class AgentRunner:
                     elif event_type == "result":
                         cost_usd = float(event.get("total_cost_usd", 0.0))
                         is_error = event.get("is_error", False)
+                        subtype = event.get("subtype")
                         success = not is_error
                         if is_error:
                             error = event.get("result", "CLI error")
@@ -259,6 +261,7 @@ class AgentRunner:
                     if event_type == "result":
                         cost_usd = float(event.get("total_cost_usd", 0.0))
                         is_error = event.get("is_error", False)
+                        subtype = event.get("subtype")
                         success = not is_error
                         if is_error:
                             error = event.get("result", "CLI error")
@@ -301,6 +304,7 @@ class AgentRunner:
             result=result_text,
             error=error,
             cost_usd=cost_usd,
+            subtype=subtype,
         )
 
     # ------------------------------------------------------------------
