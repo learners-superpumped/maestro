@@ -1,5 +1,6 @@
 import { SlackSetup } from "@/components/settings/SlackSetup"
 import { DriveSetup } from "@/components/settings/DriveSetup"
+import { Card } from "@/components/ui/card"
 
 export function Settings() {
   return (
@@ -9,12 +10,13 @@ export function Settings() {
         <p className="text-[14px] text-[#787774] mt-1">Integrations & configuration</p>
       </div>
       <SlackSetup />
-      <div className="rounded-lg border p-6" style={{ borderColor: "#e8e5df" }}>
-        <h2 className="mb-4 text-lg font-semibold" style={{ color: "#37352f" }}>
-          Google Drive
-        </h2>
+      <Card className="p-4 border border-[#e8e5df] bg-white rounded-lg">
+        <h2 className="text-[14px] font-semibold text-[#37352f] mb-1">Google Drive</h2>
+        <p className="text-[13px] text-[#787774] mb-4">
+          Connect Google Drive to store and manage assets.
+        </p>
         <DriveSetup />
-      </div>
+      </Card>
     </div>
   )
 }

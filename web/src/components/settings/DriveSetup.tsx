@@ -6,6 +6,8 @@ import {
   useDriveFolders,
   useDriveSetup,
 } from "@/hooks/queries/use-drive";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectTrigger,
@@ -17,59 +19,31 @@ import {
 function CopyableCode({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div
-      className="flex items-center gap-2 rounded border px-3 py-2 text-sm font-mono"
-      style={{ borderColor: "#e8e5df", backgroundColor: "#f7f6f3" }}
-    >
-      <span className="flex-1 break-all" style={{ color: "#37352f" }}>
+    <div className="flex items-center gap-2 rounded border border-[#e8e5df] bg-[#f7f6f3] px-3 py-2">
+      <span className="flex-1 break-all font-mono text-[13px] text-[#37352f]">
         {value}
       </span>
-      <button
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0 h-7 px-2 text-[12px] border-[#e8e5df] text-[#37352f] hover:bg-[#ebebea]"
         onClick={() => {
           navigator.clipboard.writeText(value);
           setCopied(true);
           setTimeout(() => setCopied(false), 2000);
         }}
-        className="shrink-0 rounded px-2 py-0.5 text-xs font-medium transition-colors"
-        style={{
-          backgroundColor: copied ? "#e8f5e9" : "#e8e5df",
-          color: copied ? "#2e7d32" : "#37352f",
-        }}
       >
         {copied ? "Copied!" : "Copy"}
-      </button>
+      </Button>
     </div>
   );
 }
 
 function StepBadge({ n }: { n: number }) {
   return (
-    <span
-      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-      style={{ backgroundColor: "#37352f" }}
-    >
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#37352f] text-[12px] font-bold text-white">
       {n}
     </span>
-  );
-}
-
-function ExternalLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="underline"
-      style={{ color: "#0d6efd" }}
-    >
-      {children}
-    </a>
   );
 }
 
@@ -84,7 +58,6 @@ export function DriveSetup() {
 
   const redirectUri = `${window.location.origin}/api/internal/drive/callback`;
 
-  // Listen for OAuth popup completion
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       if (e.data?.type === "drive-oauth-complete") {
@@ -98,22 +71,21 @@ export function DriveSetup() {
   // Connected state
   if (status?.connected && step === 1) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-green-500" />
-          <span className="text-sm font-medium" style={{ color: "#37352f" }}>
+          <span className="inline-block h-2 w-2 rounded-full bg-[#4dab9a]" />
+          <span className="text-[13px] font-medium text-[#37352f]">
             Google Drive connected
           </span>
         </div>
         {status.drive_id && (
-          <p className="text-xs" style={{ color: "#787774" }}>
-            Drive ID: {status.drive_id}
+          <p className="text-[12px] text-[#787774]">
+            Drive ID: <span className="font-mono">{status.drive_id}</span>
           </p>
         )}
         <button
           onClick={() => setStep(2)}
-          className="text-xs underline"
-          style={{ color: "#787774" }}
+          className="text-[12px] text-[#787774] hover:text-[#37352f] underline transition-colors"
         >
           Change settings
         </button>
@@ -124,131 +96,122 @@ export function DriveSetup() {
   // Step 1: OAuth credentials with setup guide
   if (step === 1) {
     return (
-      <div className="space-y-6">
-        {/* Setup Guide */}
-        <div className="space-y-4">
-          <p className="text-sm font-semibold" style={{ color: "#37352f" }}>
+      <div className="space-y-5">
+        <div>
+          <p className="text-[13px] font-medium text-[#37352f] mb-1">
             Connect Google Drive via OAuth 2.0
           </p>
-          <p className="text-xs" style={{ color: "#787774" }}>
+          <p className="text-[12px] text-[#787774]">
             You need a Google Cloud project with the Drive API enabled. Follow
             the steps below — this is a one-time setup.
           </p>
+        </div>
 
-          {/* Step A */}
-          <div className="flex gap-3">
-            <StepBadge n={1} />
-            <div className="space-y-1 text-sm" style={{ color: "#37352f" }}>
-              <p className="font-medium">Enable Google Drive API</p>
-              <p className="text-xs" style={{ color: "#787774" }}>
-                Go to{" "}
-                <ExternalLink href="https://console.cloud.google.com/apis/library/drive.googleapis.com">
-                  Google Cloud Console → APIs & Services → Library
-                </ExternalLink>
-                , search for <strong>Google Drive API</strong>, and click{" "}
-                <strong>Enable</strong>.
-              </p>
-            </div>
-          </div>
-
-          {/* Step B */}
-          <div className="flex gap-3">
-            <StepBadge n={2} />
-            <div className="space-y-1 text-sm" style={{ color: "#37352f" }}>
-              <p className="font-medium">Configure OAuth Consent Screen</p>
-              <p className="text-xs" style={{ color: "#787774" }}>
-                Go to <strong>APIs & Services → OAuth consent screen</strong>.
-              </p>
-              <ol
-                className="list-decimal list-inside space-y-0.5 text-xs"
-                style={{ color: "#787774" }}
+        {/* Step 1 */}
+        <div className="flex gap-3">
+          <StepBadge n={1} />
+          <div className="space-y-1">
+            <p className="text-[13px] font-medium text-[#37352f]">Enable Google Drive API</p>
+            <p className="text-[12px] text-[#787774]">
+              Go to{" "}
+              <a
+                href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#2383e2] hover:underline"
               >
-                <li>
-                  User Type: select <strong>External</strong> → Create
-                </li>
-                <li>
-                  Fill in App name (e.g. <em>Maestro Local</em>) and your email
-                </li>
-                <li>Skip Scopes — click Save and Continue</li>
-                <li>
-                  Under <strong>Test users</strong>, add your Google account
-                  email
-                </li>
-                <li>
-                  Publishing status: leave as <strong>Testing</strong> (no
-                  Google review needed)
-                </li>
-              </ol>
-            </div>
+                Google Cloud Console → APIs & Services → Library
+              </a>
+              , search for <strong>Google Drive API</strong>, and click{" "}
+              <strong>Enable</strong>.
+            </p>
           </div>
+        </div>
 
-          {/* Step C */}
-          <div className="flex gap-3">
-            <StepBadge n={3} />
-            <div className="space-y-2 text-sm" style={{ color: "#37352f" }}>
-              <p className="font-medium">Create OAuth 2.0 Client ID</p>
-              <p className="text-xs" style={{ color: "#787774" }}>
-                Go to{" "}
-                <strong>
-                  APIs & Services → Credentials → Create Credentials → OAuth 2.0
-                  Client ID
-                </strong>
-                .
-              </p>
-              <ol
-                className="list-decimal list-inside space-y-0.5 text-xs"
-                style={{ color: "#787774" }}
-              >
-                <li>
-                  Application type: <strong>Web application</strong>
-                </li>
-                <li>
-                  Under <strong>Authorized redirect URIs</strong>, click{" "}
-                  <strong>Add URI</strong> and paste:
-                </li>
-              </ol>
-              <CopyableCode value={redirectUri} />
-              <p className="text-xs" style={{ color: "#787774" }}>
-                3. Click <strong>Create</strong> — a dialog will show your
-                Client ID and Client Secret.
-              </p>
-            </div>
+        {/* Step 2 */}
+        <div className="flex gap-3">
+          <StepBadge n={2} />
+          <div className="space-y-1">
+            <p className="text-[13px] font-medium text-[#37352f]">Configure OAuth Consent Screen</p>
+            <p className="text-[12px] text-[#787774]">
+              Go to <strong>APIs & Services → OAuth consent screen</strong>.
+            </p>
+            <ol className="list-decimal list-inside space-y-0.5 text-[12px] text-[#787774]">
+              <li>
+                User Type: select <strong>External</strong> → Create
+              </li>
+              <li>
+                Fill in App name (e.g. <em>Maestro Local</em>) and your email
+              </li>
+              <li>Skip Scopes — click Save and Continue</li>
+              <li>
+                Under <strong>Test users</strong>, add your Google account email
+              </li>
+              <li>
+                Publishing status: leave as <strong>Testing</strong> (no Google review needed)
+              </li>
+            </ol>
           </div>
+        </div>
 
-          {/* Step D */}
-          <div className="flex gap-3">
-            <StepBadge n={4} />
-            <div className="space-y-2 text-sm" style={{ color: "#37352f" }}>
-              <p className="font-medium">Paste your credentials below</p>
-              <p className="text-xs" style={{ color: "#787774" }}>
-                Copy the Client ID and Client Secret from the dialog and paste
-                them here.
-              </p>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Client ID  (e.g. 123456789-abc…apps.googleusercontent.com)"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  className="w-full rounded border px-3 py-2 text-sm"
-                  style={{ borderColor: "#e8e5df" }}
-                />
-                <input
-                  type="password"
-                  placeholder="Client Secret  (e.g. GOCSPX-…)"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  className="w-full rounded border px-3 py-2 text-sm"
-                  style={{ borderColor: "#e8e5df" }}
-                />
-              </div>
+        {/* Step 3 */}
+        <div className="flex gap-3">
+          <StepBadge n={3} />
+          <div className="space-y-2">
+            <p className="text-[13px] font-medium text-[#37352f]">Create OAuth 2.0 Client ID</p>
+            <p className="text-[12px] text-[#787774]">
+              Go to{" "}
+              <strong>
+                APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID
+              </strong>
+              .
+            </p>
+            <ol className="list-decimal list-inside space-y-0.5 text-[12px] text-[#787774]">
+              <li>
+                Application type: <strong>Web application</strong>
+              </li>
+              <li>
+                Under <strong>Authorized redirect URIs</strong>, click{" "}
+                <strong>Add URI</strong> and paste:
+              </li>
+            </ol>
+            <CopyableCode value={redirectUri} />
+            <p className="text-[12px] text-[#787774]">
+              3. Click <strong>Create</strong> — a dialog will show your Client ID and Client Secret.
+            </p>
+          </div>
+        </div>
+
+        {/* Step 4 */}
+        <div className="flex gap-3">
+          <StepBadge n={4} />
+          <div className="space-y-2 flex-1">
+            <p className="text-[13px] font-medium text-[#37352f]">Paste your credentials below</p>
+            <p className="text-[12px] text-[#787774]">
+              Copy the Client ID and Client Secret from the dialog and paste them here.
+            </p>
+            <div className="space-y-2">
+              <Input
+                type="text"
+                placeholder="Client ID  (e.g. 123456789-abc…apps.googleusercontent.com)"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]"
+              />
+              <Input
+                type="password"
+                placeholder="Client Secret  (e.g. GOCSPX-…)"
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                className="bg-white border-[#e8e5df] text-[#37352f] text-[13px] h-[32px]"
+              />
             </div>
           </div>
         </div>
 
         {/* Connect button */}
         <div className="space-y-2">
-          <button
+          <Button
             disabled={!clientId || !clientSecret || authUrl.isPending}
             onClick={async () => {
               const result = await authUrl.mutateAsync({
@@ -258,14 +221,13 @@ export function DriveSetup() {
               window.open(result.auth_url, "_blank", "width=520,height=700");
               setStep(2);
             }}
-            className="w-full rounded px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-            style={{ backgroundColor: "#37352f" }}
+            className="w-full bg-[#2383e2] hover:bg-[#1a73cc] text-white text-[13px] h-[32px]"
           >
             {authUrl.isPending
               ? "Generating auth URL…"
               : "Connect Google Drive →"}
-          </button>
-          <p className="text-xs text-center" style={{ color: "#787774" }}>
+          </Button>
+          <p className="text-[12px] text-[#787774] text-center">
             A Google sign-in window will open. After authorizing, you'll be
             redirected back here.
           </p>
@@ -274,7 +236,7 @@ export function DriveSetup() {
     );
   }
 
-  // Step 2: Select drive & folder (after OAuth callback)
+  // Step 2: Select drive & folder
   return (
     <DriveSelector
       onComplete={(driveId, folderId) => {
@@ -311,10 +273,10 @@ function DriveSelector({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-semibold" style={{ color: "#37352f" }}>
+        <p className="text-[13px] font-medium text-[#37352f] mb-1">
           Select Drive &amp; Folder
         </p>
-        <p className="text-xs mt-0.5" style={{ color: "#787774" }}>
+        <p className="text-[12px] text-[#787774]">
           Choose where Maestro will store uploaded assets. Double-click a folder
           to browse into it.
         </p>
@@ -322,9 +284,7 @@ function DriveSelector({
 
       {/* Drive selector */}
       <div>
-        <label className="text-xs font-medium" style={{ color: "#787774" }}>
-          Drive
-        </label>
+        <label className="text-[12px] font-medium text-[#9b9a97]">Drive</label>
         <div className="mt-1">
           <Select
             value={selectedDrive}
@@ -335,7 +295,7 @@ function DriveSelector({
               setSelectedFolder("");
             }}
           >
-            <SelectTrigger className="w-full bg-white border-[#e8e5df] text-[#37352f] h-8 text-[13px]">
+            <SelectTrigger className="w-full bg-white border-[#e8e5df] text-[#37352f] h-[32px] text-[13px]">
               <SelectValue placeholder="Select a drive…" />
             </SelectTrigger>
             <SelectContent className="bg-white border-[#e8e5df]">
@@ -352,27 +312,19 @@ function DriveSelector({
           </Select>
         </div>
         {drives.isLoading && (
-          <p className="text-xs mt-1" style={{ color: "#787774" }}>
-            Loading drives…
-          </p>
+          <p className="text-[12px] text-[#787774] mt-1">Loading drives…</p>
         )}
       </div>
 
       {/* Folder browser */}
       {selectedDrive && (
         <div>
-          <label className="text-xs font-medium" style={{ color: "#787774" }}>
+          <label className="text-[12px] font-medium text-[#9b9a97]">
             Folder (optional)
           </label>
-          <div
-            className="mt-1 rounded border text-sm"
-            style={{ borderColor: "#e8e5df" }}
-          >
+          <div className="mt-1 rounded border border-[#e8e5df]">
             {/* Breadcrumb */}
-            <div
-              className="flex gap-1 flex-wrap border-b px-3 py-1.5 text-xs"
-              style={{ borderColor: "#e8e5df", color: "#787774" }}
-            >
+            <div className="flex gap-1 flex-wrap border-b border-[#e8e5df] px-3 py-1.5 text-[12px] text-[#787774]">
               <button
                 onClick={() => {
                   setParentStack([]);
@@ -399,21 +351,19 @@ function DriveSelector({
             </div>
 
             {/* Folder list */}
-            <div style={{ maxHeight: 180, overflowY: "auto" }}>
+            <div className="max-h-[180px] overflow-y-auto">
               <div
-                className={`cursor-pointer px-3 py-1.5 flex items-center gap-2 ${selectedFolder === "" ? "font-medium" : ""}`}
-                style={{
-                  backgroundColor:
-                    selectedFolder === "" ? "#f7f6f3" : "transparent",
-                }}
+                className={`cursor-pointer px-3 py-1.5 flex items-center gap-2 text-[13px] hover:bg-[#f7f6f3] transition-colors ${
+                  selectedFolder === "" ? "bg-[#f7f6f3] font-medium" : ""
+                }`}
                 onClick={() => setSelectedFolder("")}
               >
                 <span>📁</span>
-                <span style={{ color: "#37352f" }}>Use entire drive</span>
+                <span className="text-[#37352f]">Use entire drive</span>
               </div>
 
               {folders.isLoading && (
-                <p className="px-3 py-2 text-xs" style={{ color: "#787774" }}>
+                <p className="px-3 py-2 text-[12px] text-[#787774]">
                   Loading folders…
                 </p>
               )}
@@ -421,11 +371,9 @@ function DriveSelector({
               {folders.data?.folders.map((f: any) => (
                 <div
                   key={f.id}
-                  className={`cursor-pointer px-3 py-1.5 flex items-center justify-between ${selectedFolder === f.id ? "font-medium" : ""}`}
-                  style={{
-                    backgroundColor:
-                      selectedFolder === f.id ? "#f7f6f3" : "transparent",
-                  }}
+                  className={`cursor-pointer px-3 py-1.5 flex items-center justify-between text-[13px] hover:bg-[#f7f6f3] transition-colors ${
+                    selectedFolder === f.id ? "bg-[#f7f6f3] font-medium" : ""
+                  }`}
                   onClick={() => setSelectedFolder(f.id)}
                   onDoubleClick={() => {
                     setParentStack([...parentStack, f]);
@@ -434,7 +382,7 @@ function DriveSelector({
                 >
                   <span className="flex items-center gap-2">
                     <span>📁</span>
-                    <span style={{ color: "#37352f" }}>{f.name}</span>
+                    <span className="text-[#37352f]">{f.name}</span>
                   </span>
                   <button
                     title="Browse into folder"
@@ -442,8 +390,7 @@ function DriveSelector({
                       e.stopPropagation();
                       setParentStack([...parentStack, f]);
                     }}
-                    className="rounded px-1.5 py-0.5 text-xs hover:bg-gray-100"
-                    style={{ color: "#787774" }}
+                    className="rounded px-1.5 py-0.5 text-[12px] text-[#787774] hover:bg-[#ebebea] transition-colors"
                   >
                     Open →
                   </button>
@@ -451,22 +398,21 @@ function DriveSelector({
               ))}
             </div>
           </div>
-          <p className="text-xs mt-1" style={{ color: "#787774" }}>
+          <p className="text-[12px] text-[#787774] mt-1">
             {selectedFolder
-              ? `Assets will be stored in the selected folder.`
-              : `Assets will be stored at the root of the selected drive.`}
+              ? "Assets will be stored in the selected folder."
+              : "Assets will be stored at the root of the selected drive."}
           </p>
         </div>
       )}
 
-      <button
+      <Button
         disabled={!selectedDrive}
         onClick={() => onComplete(selectedDrive, selectedFolder)}
-        className="w-full rounded px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-        style={{ backgroundColor: "#37352f" }}
+        className="w-full bg-[#2383e2] hover:bg-[#1a73cc] text-white text-[13px] h-[32px]"
       >
         Save Drive Settings
-      </button>
+      </Button>
     </div>
   );
 }

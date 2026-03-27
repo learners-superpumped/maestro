@@ -76,7 +76,7 @@ export function SlackSetup() {
           <div>
             <h2 className="text-[14px] font-semibold text-[#37352f] mb-1">Slack Integration</h2>
             <div className="flex items-center gap-2 mb-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span className="inline-block w-2 h-2 rounded-full bg-[#4dab9a]" />
               <span className="text-[13px] text-[#37352f]">Connected</span>
             </div>
             {statusQuery.data.channel && (
@@ -97,7 +97,7 @@ export function SlackSetup() {
         </div>
         {testResult !== null && (
           <p
-            className={`mt-3 text-[13px] ${testResult.ok ? "text-green-700" : "text-red-600"}`}
+            className={`mt-3 text-[13px] ${testResult.ok ? "text-[#4dab9a]" : "text-[#eb5757]"}`}
           >
             {testResult.ok
               ? "Test message sent successfully."
@@ -146,7 +146,7 @@ export function SlackSetup() {
                 href="https://api.slack.com/apps"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
+                className="text-[#2383e2] hover:underline"
               >
                 api.slack.com/apps
               </a>
@@ -177,7 +177,7 @@ export function SlackSetup() {
           <div className="flex justify-end">
             <Button
               size="sm"
-              className="bg-[#37352f] hover:bg-[#2f2e2b] text-white text-[13px]"
+              className="bg-[#2383e2] hover:bg-[#1a73cc] text-white text-[13px]"
               onClick={() => setStep(2)}
             >
               Next
@@ -232,7 +232,7 @@ export function SlackSetup() {
             </div>
           </div>
           {setupError && (
-            <p className="text-[12px] text-red-600 mb-3">{setupError}</p>
+            <p className="text-[12px] text-[#eb5757] mb-3">{setupError}</p>
           )}
           <div className="flex items-center justify-between">
             <Button
@@ -245,7 +245,7 @@ export function SlackSetup() {
             </Button>
             <Button
               size="sm"
-              className="bg-[#37352f] hover:bg-[#2f2e2b] text-white text-[13px]"
+              className="bg-[#2383e2] hover:bg-[#1a73cc] text-white text-[13px]"
               onClick={handleSetup}
               disabled={
                 !botToken || !appToken || !channel || setupMutation.isPending
@@ -261,7 +261,7 @@ export function SlackSetup() {
       {step === 3 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+            <span className="inline-block w-2 h-2 rounded-full bg-[#4dab9a]" />
             <p className="text-[13px] text-[#37352f] font-medium">Connected successfully!</p>
           </div>
           <p className="text-[13px] text-[#787774] mb-4">
@@ -278,7 +278,7 @@ export function SlackSetup() {
           </Button>
           {testResult !== null && (
             <p
-              className={`text-[13px] ${testResult.ok ? "text-green-700" : "text-red-600"}`}
+              className={`text-[13px] ${testResult.ok ? "text-[#4dab9a]" : "text-[#eb5757]"}`}
             >
               {testResult.ok
                 ? "Test message sent successfully."
