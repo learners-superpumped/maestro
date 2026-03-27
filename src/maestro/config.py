@@ -79,7 +79,10 @@ class LoggingConfig:
 
 @dataclass
 class SlackConfig:
-    webhook_url: str | None = None
+    enabled: bool = False
+    bot_token: str | None = None
+    app_token: str | None = None
+    channel: str = "#maestro-ops"
 
 
 @dataclass
@@ -220,7 +223,10 @@ def _parse_integrations(data: dict[str, Any]) -> IntegrationsConfig:
     linear_data = data.get("linear") or {}
 
     slack = SlackConfig(
-        webhook_url=slack_data.get("webhook_url") or None,
+        enabled=bool(slack_data.get("enabled", False)),
+        bot_token=slack_data.get("bot_token") or None,
+        app_token=slack_data.get("app_token") or None,
+        channel=str(slack_data.get("channel", "#maestro-ops")),
     )
     linear = LinearConfig(
         api_key=linear_data.get("api_key") or None,
@@ -353,6 +359,27 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     agent = _parse_agent(data.get("agent") or {})
     logging_cfg = _parse_logging(data.get("logging") or {})
     integrations = _parse_integrations(data.get("integrations") or {})
+
+    # Load secrets from .maestro/secrets.yaml (relative to config file)
+    secrets_path = path.parent / ".maestro" / "secrets.yaml"
+    if secrets_path.exists():
+        secrets_raw: dict[str, Any] = (
+            yaml.safe_load(secrets_path.read_text(encoding="utf-8")) or {}
+        )
+        slack_secrets = secrets_raw.get("slack") or {}
+        if slack_secrets.get("bot_token"):
+            integrations.slack.bot_token = slack_secrets["bot_token"]
+        if slack_secrets.get("app_token"):
+            integrations.slack.app_token = slack_secrets["app_token"]
+
+    # Env var overrides take highest priority
+    env_bot_token = os.environ.get("MAESTRO_SLACK_BOT_TOKEN")
+    if env_bot_token:
+        integrations.slack.bot_token = env_bot_token
+    env_app_token = os.environ.get("MAESTRO_SLACK_APP_TOKEN")
+    if env_app_token:
+        integrations.slack.app_token = env_app_token
+
     resources = _parse_resources(data.get("resources") or {})
     agents = _parse_agents(data.get("agents") or {})
     assets_raw = data.get("assets", {})

@@ -481,3 +481,90 @@ def test_agent_definition_permission_mode_override(tmp_path: pathlib.Path) -> No
     )
     cfg = load_config(cfg_file)
     assert cfg.agents["sandbox"].permission_mode == "restricted"
+
+
+# ---------------------------------------------------------------------------
+# SlackConfig
+# ---------------------------------------------------------------------------
+
+
+def test_slack_config_defaults(tmp_path: pathlib.Path) -> None:
+    """SlackConfig should default to disabled, no tokens, default channel."""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(MINIMAL_CONFIG)
+    cfg = load_config(cfg_file)
+
+    slack = cfg.integrations.slack
+    assert slack.enabled is False
+    assert slack.bot_token is None
+    assert slack.app_token is None
+    assert slack.channel == "#maestro-ops"
+
+
+def test_slack_config_from_yaml(tmp_path: pathlib.Path) -> None:
+    """SlackConfig should read enabled and channel from maestro.yaml."""
+    yaml_content = """\
+project:
+  name: test
+integrations:
+  slack:
+    enabled: true
+    channel: "#my-channel"
+"""
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(yaml_content)
+    cfg = load_config(cfg_file)
+
+    slack = cfg.integrations.slack
+    assert slack.enabled is True
+    assert slack.channel == "#my-channel"
+    assert slack.bot_token is None
+    assert slack.app_token is None
+
+
+def test_slack_config_from_secrets(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SlackConfig should read tokens from .maestro/secrets.yaml."""
+    # Ensure env vars don't interfere
+    monkeypatch.delenv("MAESTRO_SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("MAESTRO_SLACK_APP_TOKEN", raising=False)
+
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(MINIMAL_CONFIG)
+
+    secrets_dir = tmp_path / ".maestro"
+    secrets_dir.mkdir()
+    (secrets_dir / "secrets.yaml").write_text(
+        "slack:\n  bot_token: xoxb-from-secrets\n  app_token: xapp-from-secrets\n"
+    )
+
+    cfg = load_config(cfg_file)
+
+    slack = cfg.integrations.slack
+    assert slack.bot_token == "xoxb-from-secrets"
+    assert slack.app_token == "xapp-from-secrets"
+
+
+def test_slack_config_env_override(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Env vars MAESTRO_SLACK_BOT_TOKEN and MAESTRO_SLACK_APP_TOKEN override secrets."""
+    monkeypatch.setenv("MAESTRO_SLACK_BOT_TOKEN", "xoxb-from-env")
+    monkeypatch.setenv("MAESTRO_SLACK_APP_TOKEN", "xapp-from-env")
+
+    cfg_file = tmp_path / "maestro.yaml"
+    cfg_file.write_text(MINIMAL_CONFIG)
+
+    # Also write secrets to ensure env vars win
+    secrets_dir = tmp_path / ".maestro"
+    secrets_dir.mkdir()
+    (secrets_dir / "secrets.yaml").write_text(
+        "slack:\n  bot_token: xoxb-from-secrets\n  app_token: xapp-from-secrets\n"
+    )
+
+    cfg = load_config(cfg_file)
+
+    slack = cfg.integrations.slack
+    assert slack.bot_token == "xoxb-from-env"
+    assert slack.app_token == "xapp-from-env"

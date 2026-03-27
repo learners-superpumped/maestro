@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+slack = [
+    "slack-bolt>=1.18",
+    "slack-sdk>=3.27",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -25,6 +29,8 @@ dev = [
     "aioresponses>=0.7",
     "ruff>=0.8",
     "mypy>=1.10",
+    "slack-bolt>=1.18",
+    "slack-sdk>=3.27",
 ]
 
 [project.scripts]
