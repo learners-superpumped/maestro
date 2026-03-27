@@ -194,7 +194,7 @@ export function SlackSetup() {
                 className="text-[13px] border-[#e8e5df] focus:border-[#37352f] h-8"
               />
               <p className="text-[11px] text-[#9b9a97] mt-1">
-                OAuth & Permissions → Install to Workspace → Bot User OAuth Token
+                Settings → Install App → install, then OAuth & Permissions → Bot User OAuth Token
               </p>
             </div>
             <div>
