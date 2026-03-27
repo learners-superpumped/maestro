@@ -196,9 +196,9 @@ export function TaskDetail() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"

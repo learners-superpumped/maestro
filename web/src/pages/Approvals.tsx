@@ -21,7 +21,7 @@ export function Approvals() {
     <div className="space-y-5">
       <div>
         <h1 className="text-[20px] font-semibold text-[#37352f]">Pending Approvals</h1>
-        <p className="text-[14px] text-[#9b9a97] mt-1">
+        <p className="text-[14px] text-[#787774] mt-1">
           {approvals.length} pending
         </p>
       </div>
@@ -30,12 +30,12 @@ export function Approvals() {
         <Table>
           <TableHeader>
             <TableRow className="border-[#e8e5df] hover:bg-transparent">
-              <TableHead className="text-[#9b9a97] text-[12px]">Status</TableHead>
-              <TableHead className="text-[#9b9a97] text-[12px]">Task ID</TableHead>
-              <TableHead className="text-[#9b9a97] text-[12px]">Title</TableHead>
-              <TableHead className="text-[#9b9a97] text-[12px]">Type</TableHead>
-              <TableHead className="text-[#9b9a97] text-[12px]">Draft Preview</TableHead>
-              <TableHead className="text-[#9b9a97] text-[12px] w-28">Actions</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Status</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Task ID</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Title</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Type</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide">Draft Preview</TableHead>
+              <TableHead className="text-[12px] font-medium text-[#9b9a97] uppercase tracking-wide w-28">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
