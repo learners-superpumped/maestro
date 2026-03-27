@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import mimetypes
 import secrets
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Type detection (kept for backward compatibility)
@@ -75,12 +78,23 @@ class AssetManager:
     """Manages asset registration, search, and lifecycle."""
 
     def __init__(
-        self, store: Any, embedding: Any, config: Any, base_path: Path
+        self,
+        store: Any,
+        embedding: Any,
+        config: Any,
+        base_path: Path,
+        drive: Any = None,
     ) -> None:
         self._store = store
         self._embedding = embedding  # EmbeddingClient or None
         self._config = config  # MaestroConfig (has .assets: AssetsConfig)
         self._base_path = base_path
+        self._drive = drive
+        self._cache_dir = base_path / ".maestro" / "cache" / "assets"
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_max_bytes = getattr(
+            getattr(config, "drive", None), "cache_max_bytes", 1_073_741_824
+        )
 
     async def register_asset(
         self,
@@ -95,6 +109,7 @@ class AssetManager:
         created_by: str = "human",
         task_id: Optional[str] = None,
         media_type: Optional[str] = None,
+        source: Optional[str] = None,
     ) -> dict:
         """Register a new asset. Returns the created asset dict."""
         asset_id = secrets.token_hex(6)
@@ -127,6 +142,28 @@ class AssetManager:
                 managed_path = str(dest.relative_to(self._base_path))
                 file_size = src.stat().st_size
 
+        # Upload to Drive if available
+        drive_file_id = None
+        drive_url = None
+        drive_folder_id = None
+
+        if self._drive and self._drive.available and managed_path:
+            try:
+                import datetime as _dt
+
+                month = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m")
+                folder_path = f"{month}/{task_id}" if task_id else "inbox"
+                drive_folder_id = await self._drive.get_or_create_folder(folder_path)
+                drive_result = await self._drive.upload(
+                    Path(self._base_path / managed_path), folder_id=drive_folder_id
+                )
+                drive_file_id = drive_result.id
+                drive_url = drive_result.web_view_link
+            except Exception:
+                logger.warning(
+                    "Drive upload failed, asset stored locally only", exc_info=True
+                )
+
         asset_data: dict[str, Any] = {
             "id": asset_id,
             "task_id": task_id,
@@ -141,6 +178,10 @@ class AssetManager:
             "file_size": file_size,
             "ttl_days": ttl_days,
             "expires_at": expires_at,
+            "drive_file_id": drive_file_id,
+            "drive_url": drive_url,
+            "drive_folder_id": drive_folder_id,
+            "source": source or "local",
         }
 
         await self._store.create_asset(asset_data)
@@ -215,6 +256,53 @@ class AssetManager:
             r.pop("embedding_model", None)
 
         return results
+
+    async def download_asset(self, asset_id: str) -> Path | None:
+        """Download asset file to local cache. Returns local path."""
+        asset = await self._store.get_asset(asset_id)
+        if not asset:
+            return None
+
+        # 1. Local file exists — return directly
+        if asset.get("file_path"):
+            local = self._base_path / asset["file_path"]
+            if local.exists():
+                return local
+
+        drive_file_id = asset.get("drive_file_id")
+        if not drive_file_id or not self._drive:
+            return None
+
+        # 2. Cache hit
+        cached = self._cache_dir / drive_file_id
+        if cached.exists():
+            return cached
+
+        # 3. Fetch from Drive
+        await self._drive.download(drive_file_id, cached)
+        return cached
+
+    async def send_asset(self, asset_id: str) -> dict | None:
+        """Get asset info for sending (drive_url + local path if cached)."""
+        asset = await self._store.get_asset(asset_id)
+        if not asset:
+            return None
+        local_path = await self.download_asset(asset_id)
+        return {
+            "asset": asset,
+            "local_path": str(local_path) if local_path else None,
+            "drive_url": asset.get("drive_url"),
+        }
+
+    async def share_asset(self, asset_id: str) -> str | None:
+        """Generate a shareable Drive link for an asset."""
+        asset = await self._store.get_asset(asset_id)
+        if not asset or not asset.get("drive_file_id") or not self._drive:
+            return None
+        url = await self._drive.share(asset["drive_file_id"])
+        if url and url != asset.get("drive_url"):
+            await self._store.update_asset(asset_id, drive_url=url)
+        return url
 
     async def auto_extract(
         self,
