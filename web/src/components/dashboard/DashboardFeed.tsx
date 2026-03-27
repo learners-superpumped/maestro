@@ -4,10 +4,16 @@ import { RecentTasksSection } from "./RecentTasksSection"
 import { SlackSection } from "./SlackSection"
 import { useConductorConversations } from "@/hooks/queries/use-conductor-conversations"
 import { useTasks } from "@/hooks/queries/use-tasks"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/api/client"
 
 export function DashboardFeed() {
   const { data: convData, isLoading: convLoading } = useConductorConversations()
-  const { data: runningData, isLoading: runningLoading } = useTasks({ status: "running" })
+  const { data: runningData, isLoading: runningLoading } = useQuery({
+    queryKey: ["tasks", { status: "running" }],
+    queryFn: () => api.tasks.list({ status: "running" }),
+    refetchInterval: 10_000,
+  })
   const { data: allTasksData, isLoading: tasksLoading } = useTasks()
 
   const conversations = convData?.conversations ?? []
