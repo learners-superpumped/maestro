@@ -110,7 +110,7 @@ class AgentLogProcessor:
                     log_type="tool_use",
                     tool_name=tool_name,
                     summary=summary,
-                    content=json.dumps(tool_input),
+                    content=json.dumps(tool_input, ensure_ascii=False),
                 )
                 if await self._should_emit(task_id):
                     await self._bus.emit(
