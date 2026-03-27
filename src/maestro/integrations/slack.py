@@ -620,8 +620,11 @@ class SlackAdapter:
             task_type = payload.get("type", "")
             blocks = _format_task_created(task_id, title, agent, task_type)
             try:
-                await client.chat_postMessage(
+                resp = await client.chat_postMessage(
                     channel=channel, blocks=blocks, text=f"New task: {title}"
+                )
+                await self._store.save_task_slack_notification(
+                    task_id, channel, resp["ts"]
                 )
             except Exception:
                 logger.exception("Failed to send task.created notification")
@@ -630,10 +633,19 @@ class SlackAdapter:
             task = await self._store.get_task(task_id)
             title = task.title if task else task_id
             blocks = _format_task_completed(task_id, title)
+            existing = await self._store.get_task_slack_notification(task_id)
             try:
-                await client.chat_postMessage(
-                    channel=channel, blocks=blocks, text=f"Task completed: {title}"
-                )
+                if existing:
+                    await client.chat_update(
+                        channel=existing[0],
+                        ts=existing[1],
+                        blocks=blocks,
+                        text=f"Task completed: {title}",
+                    )
+                else:
+                    await client.chat_postMessage(
+                        channel=channel, blocks=blocks, text=f"Task completed: {title}"
+                    )
             except Exception:
                 logger.exception("Failed to send task.completed notification")
 
@@ -642,10 +654,19 @@ class SlackAdapter:
             title = task.title if task else task_id
             error = payload.get("error")
             blocks = _format_task_failed(task_id, title, error)
+            existing = await self._store.get_task_slack_notification(task_id)
             try:
-                await client.chat_postMessage(
-                    channel=channel, blocks=blocks, text=f"Task failed: {title}"
-                )
+                if existing:
+                    await client.chat_update(
+                        channel=existing[0],
+                        ts=existing[1],
+                        blocks=blocks,
+                        text=f"Task failed: {title}",
+                    )
+                else:
+                    await client.chat_postMessage(
+                        channel=channel, blocks=blocks, text=f"Task failed: {title}"
+                    )
             except Exception:
                 logger.exception("Failed to send task.failed notification")
 

@@ -290,6 +290,7 @@ class TestSlackAdapterOutbound:
         mock_task = MagicMock()
         mock_task.title = "Write blog post"
         store.get_task = AsyncMock(return_value=mock_task)
+        store.get_task_slack_notification = AsyncMock(return_value=None)
 
         adapter = _make_adapter(store=store)
         client = _mock_client()
