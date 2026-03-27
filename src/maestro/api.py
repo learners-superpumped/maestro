@@ -1534,7 +1534,11 @@ async def drive_auth_url_handler(request: web.Request) -> web.Response:
         scopes=["https://www.googleapis.com/auth/drive"],
         redirect_uri=redirect_uri,
     )
-    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        include_granted_scopes="true",
+    )
     # NOTE: OAuth state is stored in-process. A server restart between auth URL
     # generation and callback will require the user to restart the auth flow.
     # This is acceptable for single-user local deployments.
@@ -1543,6 +1547,7 @@ async def drive_auth_url_handler(request: web.Request) -> web.Response:
         "client_secret": client_secret,
         "redirect_uri": redirect_uri,
         "state": state,
+        "code_verifier": flow.code_verifier,
     }
     return web.json_response({"auth_url": auth_url, "state": state})
 
@@ -1572,7 +1577,7 @@ async def drive_callback_handler(request: web.Request) -> web.Response:
         scopes=["https://www.googleapis.com/auth/drive"],
         redirect_uri=oauth_state["redirect_uri"],
     )
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, code_verifier=oauth_state.get("code_verifier"))
     creds = flow.credentials
 
     # Save to secrets.yaml
