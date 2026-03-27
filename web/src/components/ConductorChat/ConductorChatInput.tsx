@@ -39,8 +39,14 @@ export function ConductorChatInput({ onSend, disabled }: ConductorChatInputProps
   const canSend = value.trim().length > 0 && !disabled
 
   return (
-    <div className="border-t border-[#e8e5df] p-3 bg-white">
-      <div className="flex items-end gap-2 rounded-lg border border-[#e8e5df] bg-[#f7f6f3] px-3 py-2 focus-within:border-[#2383e2] focus-within:ring-1 focus-within:ring-[#2383e2]/30 transition-colors">
+    <div className="px-3 pb-3 pt-2 bg-white">
+      <div
+        className={cn(
+          "flex items-end gap-2 rounded-lg border bg-[#f7f6f3] px-3 py-2 transition-colors",
+          "border-[#e8e5df]",
+          "focus-within:border-[#2383e2] focus-within:ring-1 focus-within:ring-[#2383e2]/30"
+        )}
+      >
         <textarea
           ref={textareaRef}
           value={value}
@@ -50,10 +56,10 @@ export function ConductorChatInput({ onSend, disabled }: ConductorChatInputProps
           }}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="지시를 입력하세요..."
+          placeholder="Ask Conductor..."
           rows={1}
           className={cn(
-            "flex-1 resize-none bg-transparent text-[14px] text-[#37352f]",
+            "flex-1 resize-none bg-transparent text-[14px] text-[#37352f] leading-relaxed",
             "placeholder:text-[#9b9a97] outline-none",
             "disabled:opacity-50 disabled:cursor-not-allowed",
             "max-h-[120px]"

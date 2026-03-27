@@ -90,8 +90,20 @@ export function ConductorChatPanel({
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
   const queryClient = useQueryClient()
   const { streamingBlocks, isStreaming, reset } = useConductorStream(conversationId)
+
+  // Input is disabled while sending or streaming
+  const inputDisabled = sending || isStreaming
+
+  // Clear sending state once streaming starts
+  useEffect(() => {
+    if (isStreaming && sending) {
+      setSending(false)
+    }
+  }, [isStreaming, sending])
 
   const { data: conversationsData } = useQuery({
     queryKey: ["conductor-conversations"],
@@ -109,7 +121,7 @@ export function ConductorChatPanel({
     refetchInterval: isStreaming ? false : 5_000,
   })
 
-  const messages: ChatMessage[] = (conversationData?.messages || []).map(
+  const serverMessages: ChatMessage[] = (conversationData?.messages || []).map(
     (m: { id: string; role: string; content: string; blocks?: unknown[]; created_at?: string }) => ({
       id: m.id,
       role: m.role as "user" | "assistant",
@@ -119,11 +131,31 @@ export function ConductorChatPanel({
     })
   )
 
+  // Show optimistic user message immediately while waiting for server
+  const messages: ChatMessage[] = pendingMessage
+    ? [
+        ...serverMessages,
+        {
+          id: "pending",
+          role: "user" as const,
+          content: pendingMessage,
+        },
+      ]
+    : serverMessages
+
+  // Clear pending message once server has it
+  useEffect(() => {
+    if (pendingMessage && serverMessages.some((m) => m.role === "user" && m.content === pendingMessage)) {
+      setPendingMessage(null)
+    }
+  }, [serverMessages, pendingMessage])
+
   const currentTitle = conversationData?.conversation?.title || "Conductor"
 
   const handleSelectConversation = useCallback(
     (id: string) => {
       setConversationId(id)
+      setPendingMessage(null)
       reset()
     },
     [reset]
@@ -132,13 +164,19 @@ export function ConductorChatPanel({
   const handleNewConversation = useCallback(() => {
     setConversationId(null)
     setHistoryOpen(false)
+    setPendingMessage(null)
+    setSending(false)
     reset()
   }, [reset])
 
   const handleSend = useCallback(
     async (message: string) => {
+      // Immediately show user message and disable input
+      setPendingMessage(message)
+      setSending(true)
+      reset()
+
       try {
-        reset()
         const result = await api.conductor.sendMessage({
           conversation_id: conversationId || undefined,
           message,
@@ -152,6 +190,8 @@ export function ConductorChatPanel({
         queryClient.invalidateQueries({ queryKey: ["conductor-conversations"] })
       } catch (err) {
         console.error("Failed to send message:", err)
+        setSending(false)
+        setPendingMessage(null)
       }
     },
     [conversationId, reset, queryClient]
@@ -208,9 +248,9 @@ export function ConductorChatPanel({
       <ConductorChatMessages
         messages={messages}
         streamingBlocks={streamingBlocks}
-        isStreaming={isStreaming}
+        isStreaming={isStreaming || sending}
       />
-      <ConductorChatInput onSend={handleSend} disabled={isStreaming} />
+      <ConductorChatInput onSend={handleSend} disabled={inputDisabled} />
     </div>
   )
 }

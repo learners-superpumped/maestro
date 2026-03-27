@@ -56,17 +56,35 @@ export function Layout() {
       )}>
         {/* Top bar */}
         <header className="flex items-center justify-end gap-3 h-11 px-4 border-b border-[#e8e5df] bg-white shrink-0">
-          <span className={cn(
-            "inline-flex items-center gap-1.5 text-[12px]",
-            healthError ? "text-[#eb5757]" : "text-[#4dab9a]"
-          )}>
+          {/* Status indicators */}
+          <div className="flex items-center gap-2.5">
             <span className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              healthError ? "bg-[#eb5757]" : "bg-[#4dab9a]"
-            )} />
-            {healthError ? "Server offline" : "Server online"}
-          </span>
-          <WsIndicator />
+              "inline-flex items-center gap-1.5 text-[12px]",
+              healthError ? "text-[#eb5757]" : "text-[#4dab9a]"
+            )}>
+              <span className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                healthError ? "bg-[#eb5757]" : "bg-[#4dab9a]"
+              )} />
+              {healthError ? "Offline" : "Online"}
+            </span>
+            <WsIndicator />
+          </div>
+
+          {/* Separator */}
+          <div className="h-4 w-px bg-[#e8e5df]" />
+
+          {/* Action icons */}
+          <button
+            onClick={() => setChatOpen((o) => !o)}
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded hover:bg-[#ebebea] transition-colors",
+              chatOpen ? "text-[#2383e2]" : "text-[#9b9a97] hover:text-[#37352f]"
+            )}
+            title="Conductor"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
         </header>
 
         {/* Page content */}
@@ -77,17 +95,6 @@ export function Layout() {
 
       {/* Conductor Chat Panel */}
       <ConductorChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
-
-      {/* Floating toggle button */}
-      {!chatOpen && (
-        <button
-          onClick={() => setChatOpen(true)}
-          className="fixed bottom-6 right-6 z-50 h-12 w-12 flex items-center justify-center rounded-full bg-[#2383e2] text-white shadow-lg hover:bg-[#1b6ec2] transition-colors hover:scale-105 active:scale-95"
-          title="Conductor Chat"
-        >
-          <MessageSquare className="h-5 w-5" />
-        </button>
-      )}
     </div>
   )
 }
