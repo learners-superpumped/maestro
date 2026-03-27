@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 
-interface LogEntry {
+export interface LogEntry {
   log_id: number
   log_type: string
   tool_name?: string
@@ -13,11 +13,19 @@ export function useAgentLogStream(taskId: string, isLive: boolean) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const prevTaskIdRef = useRef<string>(taskId)
+
+  useEffect(() => {
+    // Only clear logs when the taskId actually changes (new task)
+    if (prevTaskIdRef.current !== taskId) {
+      setLogs([])
+      prevTaskIdRef.current = taskId
+    }
+  }, [taskId])
 
   useEffect(() => {
     if (!isLive || !taskId) return
 
-    setLogs([])
     const protocol = location.protocol === "https:" ? "wss:" : "ws:"
     const ws = new WebSocket(`${protocol}//${location.host}/ws`)
     wsRef.current = ws

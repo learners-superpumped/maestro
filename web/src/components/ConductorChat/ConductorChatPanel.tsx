@@ -114,11 +114,14 @@ export function ConductorChatPanel({
 
   const conversations: Conversation[] = conversationsData?.conversations || []
 
+  // Refetch immediately when streaming ends (blocks still present = just finished),
+  // then fall back to normal 5s polling
+  const needsImmediateRefetch = !isStreaming && streamingBlocks.length > 0
   const { data: conversationData } = useQuery({
     queryKey: ["conductor-conversation", conversationId],
     queryFn: () => api.conductor.conversation(conversationId!),
     enabled: !!conversationId,
-    refetchInterval: isStreaming ? false : 5_000,
+    refetchInterval: isStreaming ? false : needsImmediateRefetch ? 500 : 5_000,
   })
 
   const serverMessages: ChatMessage[] = (conversationData?.messages || []).map(
@@ -160,6 +163,16 @@ export function ConductorChatPanel({
       setPendingMessage(null)
     }
   }, [serverMessages, pendingMessage])
+
+  // Clear streaming blocks once server has the assistant reply (prevents duplicate display)
+  useEffect(() => {
+    if (!isStreaming && streamingBlocks.length > 0 && serverMessages.length > 0) {
+      const lastMsg = serverMessages[serverMessages.length - 1]
+      if (lastMsg.role === "assistant") {
+        reset()
+      }
+    }
+  }, [isStreaming, streamingBlocks.length, serverMessages, reset])
 
   const currentTitle = conversationData?.conversation?.title || "Conductor"
 

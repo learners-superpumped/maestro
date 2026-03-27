@@ -55,7 +55,7 @@ export function ConductorChatMessages({
         />
       ))}
 
-      {isStreaming && streamingBlocks.length > 0 && (
+      {streamingBlocks.length > 0 && (
         <ConductorChatBubble role="assistant" blocks={streamingBlocks} />
       )}
 

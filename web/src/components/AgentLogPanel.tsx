@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { useTaskLogs } from "@/hooks/queries/use-tasks"
 import { useAgentLogStream } from "@/hooks/use-agent-log-stream"
 import { AgentLogEntry } from "@/components/AgentLogEntry"
@@ -27,16 +27,44 @@ export function AgentLogPanel({ taskId, taskStatus, embedded = false }: AgentLog
     }
   }, [isLive, liveLogs.length, scrollToBottom])
 
-  const logs = isLive
-    ? liveLogs.map((l, i) => ({
-        id: l.log_id || i,
-        log_type: l.log_type,
-        tool_name: l.tool_name,
-        summary: l.summary,
-        has_content: l.has_content,
-        created_at: l.created_at,
-      }))
-    : historicalLogs
+  const mappedLiveLogs = liveLogs.map((l, i) => ({
+    id: l.log_id || i,
+    log_type: l.log_type,
+    tool_name: l.tool_name,
+    summary: l.summary,
+    has_content: l.has_content,
+    created_at: l.created_at,
+  }))
+
+  // Use liveLogs as fallback during the transition from live → historical
+  // to prevent the brief flash of empty content while API fetches
+  const rawLogs = isLive
+    ? mappedLiveLogs
+    : (!isLoading || historicalLogs.length > 0)
+      ? historicalLogs
+      : mappedLiveLogs
+
+  // Pair tool_use with subsequent tool_result entries
+  const logs = useMemo(() => {
+    const paired: { log: any; resultLog?: any }[] = []
+    const skipIndices = new Set<number>()
+
+    for (let i = 0; i < rawLogs.length; i++) {
+      if (skipIndices.has(i)) continue
+      const entry = rawLogs[i]
+
+      if (entry.log_type === "tool_use" && i + 1 < rawLogs.length) {
+        const next = rawLogs[i + 1]
+        if (next.log_type === "tool_result") {
+          paired.push({ log: entry, resultLog: next })
+          skipIndices.add(i + 1)
+          continue
+        }
+      }
+      paired.push({ log: entry })
+    }
+    return paired
+  }, [rawLogs])
 
   // Error/loading/empty for embedded mode (no Card wrapper)
   if (embedded) {
@@ -46,9 +74,9 @@ export function AgentLogPanel({ taskId, taskStatus, embedded = false }: AgentLog
 
     return (
       <div ref={scrollRef} className="max-h-[400px] overflow-y-auto">
-        {logs.map((log: any, index: number) => (
+        {logs.map(({ log, resultLog }, index) => (
           <div key={log.id ?? index} className="animate-in" style={{ animationDelay: isLive ? "0ms" : `${index * 20}ms` }}>
-            <AgentLogEntry taskId={taskId} log={log} />
+            <AgentLogEntry taskId={taskId} log={log} resultLog={resultLog} />
           </div>
         ))}
         {isLive && logs.length === 0 && (
@@ -107,9 +135,9 @@ export function AgentLogPanel({ taskId, taskStatus, embedded = false }: AgentLog
       </CardHeader>
       <CardContent>
         <div ref={scrollRef} className="max-h-[400px] overflow-y-auto">
-          {logs.map((log: any, index: number) => (
+          {logs.map(({ log, resultLog }, index) => (
             <div key={log.id ?? index} className="animate-in" style={{ animationDelay: isLive ? "0ms" : `${index * 20}ms` }}>
-              <AgentLogEntry taskId={taskId} log={log} />
+              <AgentLogEntry taskId={taskId} log={log} resultLog={resultLog} />
             </div>
           ))}
           {isLive && logs.length === 0 && (
