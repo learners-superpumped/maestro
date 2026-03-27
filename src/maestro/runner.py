@@ -288,6 +288,12 @@ class AgentRunner:
         if result_text is None and last_assistant_text:
             result_text = last_assistant_text
 
+        # If result event came but result was empty, treat as failure
+        # (e.g. CLI hit max_turns mid-tool-call and exited without final message)
+        if success and result_text is None:
+            success = False
+            error = error or "CLI exited without producing a result"
+
         return TaskResult(
             task_id="",  # Filled in by callers
             success=success,
