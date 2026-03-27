@@ -28,10 +28,10 @@ function ToolUseCard({ block, resultBlock }: { block: ToolCard; resultBlock?: To
     : ""
 
   return (
-    <div className="my-1.5 rounded-md border border-[#e8e5df] bg-[#f7f6f3] text-[13px]">
+    <div className="mx-4 my-1 rounded border border-[#e8e5df] bg-[#f7f6f3] text-[13px]">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left hover:bg-[#ebebea] rounded-md transition-colors"
+        className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-left hover:bg-[#ebebea] rounded transition-colors"
       >
         {expanded ? (
           <ChevronDown className="h-3 w-3 text-[#9b9a97] shrink-0" />
@@ -84,15 +84,16 @@ interface MessageContent {
 export function ConductorChatBubble({ role, text, blocks }: MessageContent) {
   if (role === "user") {
     return (
-      <div className="flex justify-end mb-3">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm px-3.5 py-2 bg-[#2383e2] text-white text-[14px] leading-relaxed whitespace-pre-wrap">
+      <div className="px-4 py-2.5 border-b border-[#e8e5df]/50 bg-white">
+        <div className="text-[12px] font-medium text-[#9b9a97] mb-1">You</div>
+        <div className="text-[14px] text-[#37352f] leading-relaxed whitespace-pre-wrap">
           {text}
         </div>
       </div>
     )
   }
 
-  // Assistant message
+  // Assistant message — flat, no bubble
   const renderedBlocks = blocks || (text ? [{ type: "text" as const, text }] : [])
 
   // Pair tool_use with their tool_result
@@ -104,32 +105,33 @@ export function ConductorChatBubble({ role, text, blocks }: MessageContent) {
   }
 
   return (
-    <div className="flex justify-start mb-3">
-      <div className="max-w-[85%]">
-        {renderedBlocks.map((block, i) => {
-          if (block.type === "text" && block.text) {
-            return (
-              <div
-                key={i}
-                className="rounded-2xl rounded-bl-sm px-3.5 py-2 bg-[#f7f6f3] text-[#37352f] text-[14px] leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-pre:my-1 prose-code:text-[13px]"
-              >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
-              </div>
-            )
-          }
-          if (block.type === "tool_use") {
-            return (
-              <ToolUseCard
-                key={i}
-                block={block as ToolCard}
-                resultBlock={block.tool_use_id ? pairedResults.get(block.tool_use_id) : undefined}
-              />
-            )
-          }
-          // tool_result rendered inside ToolUseCard
-          return null
-        })}
+    <div className="border-b border-[#e8e5df]/50 bg-[#fafaf9]">
+      <div className="px-4 pt-2.5 pb-1">
+        <div className="text-[12px] font-medium text-[#9065b0] mb-1">Conductor</div>
       </div>
+      {renderedBlocks.map((block, i) => {
+        if (block.type === "text" && block.text) {
+          return (
+            <div
+              key={i}
+              className="px-4 pb-2.5 text-[14px] text-[#37352f] leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-pre:my-1 prose-code:text-[13px]"
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+            </div>
+          )
+        }
+        if (block.type === "tool_use") {
+          return (
+            <ToolUseCard
+              key={i}
+              block={block as ToolCard}
+              resultBlock={block.tool_use_id ? pairedResults.get(block.tool_use_id) : undefined}
+            />
+          )
+        }
+        return null
+      })}
+      <div className="h-1" />
     </div>
   )
 }

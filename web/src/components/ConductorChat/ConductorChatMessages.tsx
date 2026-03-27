@@ -34,15 +34,12 @@ export function ConductorChatMessages({
   }, [messages, streamingBlocks])
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto">
       {messages.length === 0 && !isStreaming && (
-        <div className="flex flex-col items-center justify-center h-full text-center px-6">
-          <div className="text-[32px] mb-3">🎼</div>
-          <h3 className="text-[15px] font-medium text-[#37352f] mb-1">Conductor</h3>
+        <div className="flex flex-col items-center justify-center h-full text-center px-8">
+          <p className="text-[14px] font-medium text-[#37352f] mb-1">Conductor</p>
           <p className="text-[13px] text-[#9b9a97] leading-relaxed">
-            자연어로 지시하면 시스템이 즉시 반응합니다.
-            <br />
-            Goal/Task 생성, 현황 브리핑, 전략적 의사결정 등을 지시하세요.
+            자연어로 시스템을 지휘하세요
           </p>
         </div>
       )}
@@ -57,17 +54,13 @@ export function ConductorChatMessages({
       ))}
 
       {isStreaming && streamingBlocks.length > 0 && (
-        <ConductorChatBubble
-          role="assistant"
-          blocks={streamingBlocks}
-        />
+        <ConductorChatBubble role="assistant" blocks={streamingBlocks} />
       )}
 
       {isStreaming && streamingBlocks.length === 0 && (
-        <div className="flex justify-start mb-3">
-          <div className="rounded-2xl rounded-bl-sm px-3.5 py-2.5 bg-[#f7f6f3]">
-            <Loader2 className="h-4 w-4 animate-spin text-[#9b9a97]" />
-          </div>
+        <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#9b9a97]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>처리 중...</span>
         </div>
       )}
     </div>
