@@ -4,22 +4,33 @@
 
 Task orchestration daemon for autonomous AI agents. Manages goals, plans tasks, dispatches Claude CLI agents, and tracks results — all running headlessly.
 
+## Installation
+
+```bash
+pip install maestrod
+```
+
+With Slack integration:
+
+```bash
+pip install maestrod[slack]
+```
+
 ## Quick Start
 
 ```bash
-pip install -e .
-maestro init
-maestro start
+maestrod init
+maestrod start
 ```
 
 ## Daemon
 
-`maestro start` launches the background daemon that runs the full orchestration loop:
+`maestrod start` launches the daemon that runs the full orchestration loop:
 
 ```bash
-maestro start         # Start daemon (background)
-maestro stop          # Stop daemon
-maestro status        # Show PID, port, dashboard URL
+maestrod start         # Start daemon (background)
+maestrod stop          # Stop daemon
+maestrod status        # Show PID, port, dashboard URL
 ```
 
 The daemon runs four loops concurrently:
@@ -36,7 +47,7 @@ All agents run via `claude` CLI with `--dangerously-skip-permissions` by default
 The dashboard starts automatically with the daemon on a random available port.
 
 ```bash
-maestro status        # Shows: http://localhost:<port>
+maestrod status        # Shows: http://localhost:<port>
 ```
 
 From the dashboard you can:
@@ -46,14 +57,14 @@ From the dashboard you can:
 - Watch agent logs in real-time
 - Track costs and activity
 
-The dashboard is a React SPA served from `web/dist/` by the daemon's HTTP server.
+The dashboard is a React SPA bundled with the package and served by the daemon's HTTP server.
 
 ## Usage
 
 ### Initialize a project
 
 ```bash
-maestro init
+maestrod init
 ```
 
 Creates `maestro.yaml`, `.maestro/` directories, SQLite database, and MCP server config.
@@ -61,7 +72,7 @@ Creates `maestro.yaml`, `.maestro/` directories, SQLite database, and MCP server
 ### Define a goal
 
 ```bash
-maestro goal add \
+maestrod goal add \
   --id weekly-posts \
   --description "Publish 3 blog posts per week" \
   --cooldown-hours 168
@@ -70,7 +81,7 @@ maestro goal add \
 ### Create a task manually
 
 ```bash
-maestro task add \
+maestrod task add \
   --title "Write intro post" \
   --instruction "Write a blog post about our new product launch" \
   --priority 2
@@ -79,7 +90,7 @@ maestro task add \
 ### Schedule recurring tasks
 
 ```bash
-maestro schedule add \
+maestrod schedule add \
   --name daily-review \
   --task-type claude \
   --cron "0 9 * * *"
@@ -90,9 +101,9 @@ maestro schedule add \
 Tasks with `approval_level: 2` (default) pause after completion for human review:
 
 ```bash
-maestro task approve <task-id>
-maestro task reject <task-id>
-maestro task revise <task-id> --note "Change the tone to be more casual"
+maestrod task approve <task-id>
+maestrod task reject <task-id>
+maestrod task revise <task-id> --note "Change the tone to be more casual"
 ```
 
 ## Configuration
