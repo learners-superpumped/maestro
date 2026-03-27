@@ -133,10 +133,21 @@ class WorktreeManager:
         return sorted(d.name for d in self._worktrees_dir.iterdir() if d.is_dir())
 
     def has_changes(self, name: str) -> bool:
-        """worktree에 커밋되지 않은 변경이 있는지 확인."""
+        """worktree에 변경이 있는지 확인 (uncommitted + committed ahead of default)."""
         wt_path = self._worktrees_dir / name
         if not wt_path.exists():
             return False
 
+        # Check uncommitted changes
         result = self._git("status", "--porcelain", cwd=wt_path, check=False)
-        return bool(result.stdout.strip())
+        if result.stdout.strip():
+            return True
+
+        # Check if branch has commits ahead of default branch
+        branch = f"maestro/{name}"
+        base = self._default_branch()
+        result = self._git("rev-list", "--count", f"{base}..{branch}", check=False)
+        if result.returncode == 0 and result.stdout.strip() not in ("", "0"):
+            return True
+
+        return False

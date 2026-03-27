@@ -176,6 +176,12 @@ class Daemon:
             return self._base_path
         if task.goal_id:
             return self._worktree_mgr.ensure_worktree(f"goal-{task.goal_id}")
+        # For review/revision tasks without goal_id, reuse parent task's worktree
+        # so reviewer can see the changes the agent actually made
+        if task.parent_task_id:
+            parent_wt = f"task-{task.parent_task_id}"
+            if parent_wt in self._worktree_mgr.list_worktrees():
+                return self._worktree_mgr.ensure_worktree(parent_wt)
         return self._worktree_mgr.ensure_worktree(f"task-{task.id}")
 
     def _load_prompt(self, agent_name: str) -> str | None:
@@ -595,6 +601,27 @@ class Daemon:
         else:
             resume_perm = self._config.agent.permission_mode
 
+        # Re-inject system prompt on resume so agent stays on-role
+        system_prompt = self._load_prompt(task.agent)
+        task_context = (
+            "## Execution Environment\n"
+            "You are a HEADLESS autonomous agent in the Maestro orchestration system.\n"
+            "There is NO human operator reading your output. No one can answer questions.\n\n"
+            "RULES:\n"
+            "1. NEVER ask questions, present choices, or wait for input. "
+            "Always make the best judgment call yourself and keep going.\n"
+            "2. If you lack critical information, state your assumptions and proceed.\n"
+            "3. Your final output is stored as the task result. Make it complete and actionable.\n\n"
+            f"## Maestro Task Context\n"
+            f"- Task ID: {task.id}\n"
+            f"- Task Type: {task.type}\n"
+            f"- Task Title: {task.title}\n"
+        )
+        if system_prompt:
+            system_prompt = f"{task_context}\n{system_prompt}"
+        else:
+            system_prompt = task_context
+
         try:
             result = await self._runner.resume(
                 task,
@@ -603,6 +630,7 @@ class Daemon:
                 cwd,
                 env=agent_env,
                 permission_mode=resume_perm,
+                system_prompt=system_prompt,
             )
         except Exception as exc:
             logger.exception("Runner raised resuming task %s: %s", task.id, exc)
@@ -801,7 +829,12 @@ class Daemon:
                 else:
                     wt_name = f"task-{task.id}"
                     if wt_name in self._worktree_mgr.list_worktrees():
-                        if not self._worktree_mgr.has_changes(wt_name):
+                        # Defer cleanup for tasks entering review pipeline;
+                        # review/revision tasks reuse this worktree via
+                        # parent_task_id fallback in _resolve_cwd
+                        if task.approval_level >= 1 and result.success:
+                            pass
+                        elif not self._worktree_mgr.has_changes(wt_name):
                             self._worktree_mgr.remove_worktree(wt_name)
         else:
             # Check retry eligibility
@@ -1048,6 +1081,24 @@ class Daemon:
         if task.approval_level >= 1:
             await self._create_review_task(task, result)
 
+    def _effective_no_worktree(self, task: Task) -> bool:
+        """Check if a task effectively runs in base_path (no worktree)."""
+        if task.no_worktree:
+            return True
+        agent_def = self._config.agents.get(task.agent)
+        return bool(agent_def and agent_def.no_worktree)
+
+    def _try_deferred_worktree_cleanup(self, task: Task) -> None:
+        """Clean up deferred worktree for independent tasks after review cycle ends."""
+        if task.goal_id or task.no_worktree:
+            return  # Goal worktrees have their own lifecycle
+        if not self._worktree_mgr.is_git_repo():
+            return
+        wt_name = f"task-{task.id}"
+        if wt_name in self._worktree_mgr.list_worktrees():
+            if not self._worktree_mgr.has_changes(wt_name):
+                self._worktree_mgr.remove_worktree(wt_name)
+
     async def _create_review_task(
         self, original_task: Task, result: TaskResult
     ) -> None:
@@ -1068,7 +1119,11 @@ class Daemon:
             ),
             approval_level=0,
             priority=1,
-            parent_task_id=original_task.id,  # track which task triggered this review
+            # Inherit worktree context so reviewer runs in same directory
+            no_worktree=self._effective_no_worktree(original_task),
+            goal_id=original_task.goal_id,
+            # Chain to worktree-owning root task for _resolve_cwd
+            parent_task_id=(original_task.parent_task_id or original_task.id),
         )
         await self._store.create_task(review_task)
 
@@ -1124,6 +1179,7 @@ class Daemon:
                     }
                 ),
             )
+            self._try_deferred_worktree_cleanup(original_task)
         elif original_task.review_count >= self._config.agent.max_review_rounds:
             await self._approval_manager.submit_draft(
                 original_task_id,
@@ -1135,6 +1191,7 @@ class Daemon:
                     }
                 ),
             )
+            self._try_deferred_worktree_cleanup(original_task)
         else:
             await self._store.increment_review_count(original_task_id)
             feedback = "\n".join(review_data.get("issues", []))
@@ -1144,13 +1201,16 @@ class Daemon:
                 agent=original_task.agent,
                 title=f"Revision #{original_task.review_count + 1}: {original_task.title}",
                 instruction=(
-                    f"이전 실행의 리뷰어 피드백:\n{feedback}\n\n"
-                    f"이전 실행 결과:\n{original_task.result}\n\n"
-                    f"원본 지시: {original_task.instruction}\n\n"
-                    f"위 피드백을 반영하여 수정하라."
+                    f"# 리뷰어 피드백 (반드시 해결할 것)\n{feedback}\n\n"
+                    f"# 원본 지시\n{original_task.instruction}\n\n"
+                    f"중요: 이전 시도에서 위 피드백의 문제가 발견되었습니다. "
+                    f"반드시 Edit/Write 도구를 사용하여 파일을 직접 수정하고, "
+                    f"수정 후 파일을 다시 읽어 변경사항이 실제로 적용되었는지 확인하세요. "
+                    f"도구를 사용하지 않고 결과만 보고하는 것은 허용되지 않습니다."
                 ),
                 approval_level=original_task.approval_level,
                 priority=original_task.priority,
+                no_worktree=original_task.no_worktree,
                 goal_id=original_task.goal_id,
                 parent_task_id=original_task_id,
             )

@@ -115,6 +115,7 @@ class AgentRunner:
         session_id: str,
         instruction: str,
         permission_mode: str = "bypass",
+        system_prompt: str | None = None,
     ) -> list[str]:
         """Build the argument list for resuming an existing Claude CLI session.
 
@@ -127,6 +128,8 @@ class AgentRunner:
         permission_mode:
             Permission mode to apply (``"bypass"`` adds
             ``--dangerously-skip-permissions``).
+        system_prompt:
+            Optional system prompt to append via ``--append-system-prompt``.
 
         Returns
         -------
@@ -145,6 +148,8 @@ class AgentRunner:
         ]
         if permission_mode == "bypass":
             args.append("--dangerously-skip-permissions")
+        if system_prompt is not None:
+            args += ["--append-system-prompt", system_prompt]
         return args
 
     # ------------------------------------------------------------------
@@ -386,6 +391,7 @@ class AgentRunner:
         on_event: Optional[callable] = None,
         env: Optional[dict[str, str]] = None,
         permission_mode: str = "bypass",
+        system_prompt: str | None = None,
     ) -> TaskResult:
         """Resume an existing Claude CLI session for a task.
 
@@ -401,12 +407,16 @@ class AgentRunner:
             Working directory for the Claude subprocess.
         permission_mode:
             Permission mode (``"bypass"`` skips permission checks).
+        system_prompt:
+            Optional system prompt to append via ``--append-system-prompt``.
 
         Returns
         -------
         TaskResult
         """
-        args = self._build_resume_args(session_id, instruction, permission_mode)
+        args = self._build_resume_args(
+            session_id, instruction, permission_mode, system_prompt
+        )
         logger.info("Resuming task %s (session=%s): %s", task.id, session_id, args)
 
         result = await self._stream(args, cwd, on_event=on_event, env=env)

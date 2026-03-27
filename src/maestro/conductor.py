@@ -152,6 +152,7 @@ class ConductorAgent:
                 on_event=on_event,
                 env=agent_env,
                 permission_mode="bypass",
+                system_prompt=system_prompt,
             )
         else:
             result = await self._runner.execute(

@@ -45,7 +45,6 @@ agents:
   reviewer:
     role: "Task 결과를 검증하는 리뷰어"
     instructions: .maestro/prompts/reviewer.md
-    no_worktree: true
   default: {{}}
 
 concurrency:
