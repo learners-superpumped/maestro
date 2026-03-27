@@ -270,7 +270,8 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "maestro_asset_download": {
         "name": "maestro_asset_download",
-        "description": "Download an asset file to local path for processing. Returns the local file path.",
+        "description": "Download an asset file to local path for processing."
+        " Returns the local file path.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -281,7 +282,8 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "maestro_asset_create": {
         "name": "maestro_asset_create",
-        "description": "Register a local file as an asset (uploads to Drive + creates embedding).",
+        "description": "Register a local file as an asset"
+        " (uploads to Drive + creates embedding).",
         "inputSchema": {
             "type": "object",
             "properties": {
