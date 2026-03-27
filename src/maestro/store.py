@@ -1972,3 +1972,97 @@ class Store:
                 (id,),
             )
             await db.commit()
+
+    # ------------------------------------------------------------------
+    # Slack thread map
+    # ------------------------------------------------------------------
+
+    async def create_slack_thread(
+        self,
+        channel_id: str,
+        thread_ts: str,
+        conversation_id: str,
+        user_id: str,
+    ) -> dict[str, Any]:
+        """Create a slack_thread_map entry and return it as a dict."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO slack_thread_map
+                    (slack_channel_id, slack_thread_ts, conversation_id, slack_user_id, created_at)
+                VALUES (:channel_id, :thread_ts, :conversation_id, :user_id, :now)
+                """,
+                {
+                    "channel_id": channel_id,
+                    "thread_ts": thread_ts,
+                    "conversation_id": conversation_id,
+                    "user_id": user_id,
+                    "now": now,
+                },
+            )
+            await db.commit()
+        return {
+            "slack_channel_id": channel_id,
+            "slack_thread_ts": thread_ts,
+            "conversation_id": conversation_id,
+            "slack_user_id": user_id,
+            "progress_msg_ts": None,
+            "created_at": now,
+        }
+
+    async def get_slack_thread(
+        self, channel_id: str, thread_ts: str
+    ) -> Optional[dict[str, Any]]:
+        """Return a slack_thread_map entry by (channel_id, thread_ts), or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM slack_thread_map WHERE slack_channel_id = ? AND slack_thread_ts = ?",
+                (channel_id, thread_ts),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def get_slack_thread_by_conversation(
+        self, conversation_id: str
+    ) -> Optional[dict[str, Any]]:
+        """Return a slack_thread_map entry by conversation_id, or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM slack_thread_map WHERE conversation_id = ?",
+                (conversation_id,),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def update_slack_thread_progress(
+        self, channel_id: str, thread_ts: str, progress_msg_ts: str
+    ) -> None:
+        """Update progress_msg_ts for a slack thread entry."""
+        async with self._conn() as db:
+            await db.execute(
+                """
+                UPDATE slack_thread_map
+                SET progress_msg_ts = :progress_msg_ts
+                WHERE slack_channel_id = :channel_id AND slack_thread_ts = :thread_ts
+                """,
+                {
+                    "progress_msg_ts": progress_msg_ts,
+                    "channel_id": channel_id,
+                    "thread_ts": thread_ts,
+                },
+            )
+            await db.commit()
+
+    async def list_slack_threads(self) -> list[dict[str, Any]]:
+        """Return all slack_thread_map entries ordered by created_at ASC."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM slack_thread_map ORDER BY created_at ASC"
+            )
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
