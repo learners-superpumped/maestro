@@ -22,6 +22,13 @@ except ImportError:
     AsyncApp = None  # type: ignore[assignment,misc]
     AsyncSocketModeHandler = None  # type: ignore[assignment,misc]
 
+try:
+    from markdown_to_mrkdwn import SlackMarkdownConverter
+
+    _md_converter = SlackMarkdownConverter()
+except ImportError:
+    _md_converter = None  # type: ignore[assignment]
+
 from maestro.config import SlackConfig
 
 logger = logging.getLogger(__name__)
@@ -31,6 +38,13 @@ _PROGRESS_THROTTLE_SECS = 4.0
 
 # Slack message character limit (official limit is 40k, use 3500 for readability)
 _SLACK_MSG_LIMIT = 3500
+
+
+def _to_mrkdwn(text: str) -> str:
+    """Convert standard Markdown to Slack mrkdwn format."""
+    if _md_converter is not None:
+        return _md_converter.convert(text)
+    return text
 
 
 def _split_message(text: str, limit: int = _SLACK_MSG_LIMIT) -> list[str]:
@@ -714,7 +728,10 @@ class SlackAdapter:
 
             self._progress_last_update[conversation_id] = now
             # Show first portion as preview during processing
-            preview = content[:3000] + ("\n\n_typing…_" if len(content) > 3000 else "")
+            converted = _to_mrkdwn(content)
+            preview = converted[:3000] + (
+                "\n\n_typing…_" if len(converted) > 3000 else ""
+            )
             try:
                 await client.chat_update(
                     channel=channel_id,
@@ -726,9 +743,10 @@ class SlackAdapter:
 
         elif chunk_type == "done":
             # Send final response — split into multiple messages if needed
-            final_text = (
+            raw_text = (
                 self._accumulated_text.pop(conversation_id, None) or "\u2705 Done"
             )
+            final_text = _to_mrkdwn(raw_text)
             chunks = _split_message(final_text)
 
             # First chunk: update the progress message in-place
