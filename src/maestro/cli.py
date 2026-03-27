@@ -1641,5 +1641,219 @@ def rule_remove(task_type):
     asyncio.run(_run())
 
 
+# ---------------------------------------------------------------------------
+# slack group
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def slack() -> None:
+    """Configure Slack integration."""
+
+
+@slack.command("setup")
+def slack_setup() -> None:
+    """Interactive Slack setup wizard."""
+    root = _project_root()
+    project_name = root.name
+
+    # 1. Show Slack App Manifest JSON
+    manifest = {
+        "display_information": {
+            "name": f"Maestro ({project_name})",
+            "description": "AI orchestration assistant",
+            "background_color": "#1a1a2e",
+        },
+        "features": {
+            "bot_user": {
+                "display_name": f"Maestro ({project_name})",
+                "always_online": True,
+            }
+        },
+        "oauth_config": {
+            "scopes": {
+                "bot": [
+                    "app_mentions:read",
+                    "chat:write",
+                    "im:history",
+                    "im:read",
+                    "im:write",
+                    "reactions:read",
+                    "reactions:write",
+                    "channels:history",
+                    "groups:history",
+                    "users:read",
+                ]
+            }
+        },
+        "settings": {
+            "event_subscriptions": {"bot_events": ["app_mention", "message.im"]},
+            "interactivity": {"is_enabled": True},
+            "socket_mode_enabled": True,
+        },
+    }
+
+    click.echo("=== Slack App Manifest ===")
+    click.echo(json.dumps(manifest, indent=2, ensure_ascii=False))
+    click.echo("")
+    click.echo(
+        "1. Go to https://api.slack.com/apps and create a new app 'From an app manifest'."
+    )
+    click.echo("2. Paste the manifest above, then install the app to your workspace.")
+    click.echo("")
+
+    # 2. Prompt for Bot Token
+    bot_token = click.prompt("Bot Token (xoxb-...)", hide_input=True)
+    if not bot_token.startswith("xoxb-"):
+        click.echo("Error: Bot Token must start with 'xoxb-'.", err=True)
+        sys.exit(1)
+
+    # Prompt for App Token
+    app_token = click.prompt("App Token (xapp-...)", hide_input=True)
+    if not app_token.startswith("xapp-"):
+        click.echo("Error: App Token must start with 'xapp-'.", err=True)
+        sys.exit(1)
+
+    # 3. Prompt for channel
+    channel = click.prompt("Slack channel", default="#maestro-ops")
+
+    # 4. Save tokens to .maestro/secrets.yaml
+    secrets_dir = root / ".maestro"
+    secrets_dir.mkdir(parents=True, exist_ok=True)
+    secrets_path = secrets_dir / "secrets.yaml"
+
+    secrets_content = (
+        f'slack:\n  bot_token: "{bot_token}"\n  app_token: "{app_token}"\n'
+    )
+    secrets_path.write_text(secrets_content, encoding="utf-8")
+    click.echo(f"  Tokens saved to {secrets_path}")
+
+    # 5. Update maestro.yaml integrations.slack section
+    config_file = _config_path()
+    if config_file.exists():
+        content = config_file.read_text(encoding="utf-8")
+        slack_block = (
+            f'\nintegrations:\n  slack:\n    enabled: true\n    channel: "{channel}"\n'
+        )
+        if "integrations:" in content:
+            # Replace existing integrations.slack block if present
+            import re
+
+            # Update or insert slack sub-section under integrations
+            if "slack:" in content:
+                # Replace the enabled and channel lines under slack:
+                content = re.sub(
+                    r"(integrations:\s*\n(?:[ \t]+\S[^\n]*\n)*?[ \t]+slack:\s*\n)"
+                    r"((?:[ \t]+[^\n]+\n)*)",
+                    lambda m: (
+                        m.group(1) + f'    enabled: true\n    channel: "{channel}"\n'
+                    ),
+                    content,
+                )
+            else:
+                # Append slack section under integrations:
+                content = re.sub(
+                    r"(integrations:\s*\n)",
+                    r"\1" + f'  slack:\n    enabled: true\n    channel: "{channel}"\n',
+                    content,
+                )
+        else:
+            content += slack_block
+        config_file.write_text(content, encoding="utf-8")
+        click.echo("  maestro.yaml updated with Slack integration settings")
+    else:
+        click.echo(
+            "  Warning: maestro.yaml not found. Run 'maestro init' to create it."
+        )
+
+    # 6. Ensure .gitignore has .maestro/secrets.yaml
+    gitignore = root / ".gitignore"
+    secrets_marker = ".maestro/secrets.yaml"
+    needs_add = True
+    if gitignore.exists():
+        gi_content = gitignore.read_text(encoding="utf-8")
+        if secrets_marker in gi_content:
+            needs_add = False
+    if needs_add:
+        with open(gitignore, "a", encoding="utf-8") as f:
+            f.write(f"\n# Maestro secrets\n{secrets_marker}\n")
+        click.echo(f"  Added {secrets_marker} to .gitignore")
+
+    # 7. Connection test
+    click.echo("\nTesting Slack connection...")
+    try:
+        from slack_sdk.web.async_client import AsyncWebClient
+
+        async def _test():
+            client = AsyncWebClient(token=bot_token)
+            await client.chat_postMessage(
+                channel=channel,
+                text=f"👋 Maestro ({project_name}) Slack 연동 완료!",
+            )
+
+        asyncio.run(_test())
+        click.echo(f"  ✅ 연결 성공 — {channel}에 테스트 메시지를 확인하세요")
+    except ImportError:
+        click.echo("  ⚠️  slack-sdk가 설치되지 않았습니다. pip install 'maestro[slack]'")
+    except Exception as exc:
+        click.echo(f"  ❌ 연결 실패: {exc}", err=True)
+
+    click.echo("\nSlack setup complete.")
+
+
+@slack.command("status")
+def slack_status() -> None:
+    """Show current Slack integration status."""
+    root = _project_root()
+    config_file = _config_path()
+
+    # Load maestro.yaml to get integration settings
+    enabled = False
+    channel = None
+    if config_file.exists():
+        try:
+            import re
+
+            content = config_file.read_text(encoding="utf-8")
+            enabled_match = re.search(
+                r"integrations:\s*\n(?:[ \t]+\S[^\n]*\n)*?[ \t]+slack:\s*\n"
+                r"(?:[ \t]+[^\n]*\n)*?[ \t]+enabled:\s*(true|false)",
+                content,
+            )
+            if enabled_match:
+                enabled = enabled_match.group(1).lower() == "true"
+            channel_match = re.search(
+                r"integrations:\s*\n(?:[ \t]+\S[^\n]*\n)*?[ \t]+slack:\s*\n"
+                r"(?:[ \t]+[^\n]*\n)*?[ \t]+channel:\s*[\"']?([^\s\"'\n]+)[\"']?",
+                content,
+            )
+            if channel_match:
+                channel = channel_match.group(1)
+        except OSError:
+            pass
+
+    # Check token presence in secrets.yaml
+    secrets_path = root / ".maestro" / "secrets.yaml"
+    bot_token_configured = False
+    app_token_configured = False
+    if secrets_path.exists():
+        try:
+            secrets_content = secrets_path.read_text(encoding="utf-8")
+            bot_token_configured = (
+                "bot_token:" in secrets_content and "xoxb-" in secrets_content
+            )
+            app_token_configured = (
+                "app_token:" in secrets_content and "xapp-" in secrets_content
+            )
+        except OSError:
+            pass
+
+    click.echo("=== Slack Integration Status ===")
+    click.echo(f"Enabled:   {'yes' if enabled else 'no'}")
+    click.echo(f"Bot Token: {'configured' if bot_token_configured else 'missing'}")
+    click.echo(f"App Token: {'configured' if app_token_configured else 'missing'}")
+    click.echo(f"Channel:   {channel if channel else '(not set)'}")
+
+
 if __name__ == "__main__":
     main()

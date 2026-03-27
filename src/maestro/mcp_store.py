@@ -201,10 +201,15 @@ async def maestro_goal_update(
     if cooldown_hours is not None:
         body["cooldown_hours"] = cooldown_hours
     url = f"{_daemon_base_url()}/api/internal/goal/{id}"
-    async with aiohttp.ClientSession() as session:
-        async with session.put(url, json=body) as resp:
+    async with aiohttp.ClientSession() as sess:
+        async with sess.put(url, json=body) as resp:
             resp.raise_for_status()
             return await resp.json()
+
+
+async def maestro_goal_trigger(goal_id: str) -> dict[str, Any]:
+    """Trigger a goal — runs the planner for this goal immediately, bypassing cooldown."""
+    return await _daemon_post(f"/api/internal/goal/{goal_id}/trigger", {})
 
 
 async def maestro_task_create(
@@ -408,6 +413,20 @@ TOOLS: dict[str, dict[str, Any]] = {
             "required": ["id"],
         },
     },
+    "maestro_goal_trigger": {
+        "description": (
+            "Trigger a goal immediately — runs the planner for this goal,"
+            " bypassing cooldown, and creates tasks automatically."
+            " Use this when the user wants to 'execute' or 'run' a goal."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "goal_id": {"type": "string", "description": "Goal ID to trigger"},
+            },
+            "required": ["goal_id"],
+        },
+    },
     "maestro_task_create": {
         "description": "Create a new task directly",
         "inputSchema": {
@@ -563,6 +582,8 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
             metrics=arguments.get("metrics"),
             cooldown_hours=arguments.get("cooldown_hours"),
         )
+    elif name == "maestro_goal_trigger":
+        return await maestro_goal_trigger(arguments["goal_id"])
     elif name == "maestro_task_create":
         return await maestro_task_create(
             title=arguments["title"],
