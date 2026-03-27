@@ -104,6 +104,17 @@ class ResourceProfile:
 
 
 @dataclass
+class DriveConfig:
+    enabled: bool = False
+    client_id: str = ""
+    client_secret: str = ""
+    refresh_token: str = ""
+    drive_id: str = ""
+    root_folder_id: str = ""
+    cache_max_bytes: int = 1_073_741_824
+
+
+@dataclass
 class AssetsConfig:
     """에셋 파이프라인 설정."""
 
@@ -133,6 +144,7 @@ class MaestroConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     integrations: IntegrationsConfig = field(default_factory=IntegrationsConfig)
     assets: AssetsConfig = field(default_factory=AssetsConfig)
+    drive: DriveConfig = field(default_factory=DriveConfig)
     agents: dict[str, AgentDefinition] = field(default_factory=dict)
     # dict[resource_type, dict[profile_name, ResourceProfile]]
     resources: dict[str, dict[str, ResourceProfile]] = field(default_factory=dict)
@@ -359,6 +371,7 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
     agent = _parse_agent(data.get("agent") or {})
     logging_cfg = _parse_logging(data.get("logging") or {})
     integrations = _parse_integrations(data.get("integrations") or {})
+    drive = DriveConfig()
 
     # Load secrets from .maestro/secrets.yaml (relative to config file)
     secrets_path = path.parent / ".maestro" / "secrets.yaml"
@@ -373,6 +386,21 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
             integrations.slack.app_token = slack_secrets["app_token"]
         if slack_secrets.get("channel"):
             integrations.slack.channel = slack_secrets["channel"]
+
+        drive_secrets = secrets_raw.get("drive") or {}
+        if drive_secrets.get("client_id"):
+            drive.client_id = drive_secrets["client_id"]
+        if drive_secrets.get("client_secret"):
+            drive.client_secret = drive_secrets["client_secret"]
+        if drive_secrets.get("refresh_token"):
+            drive.refresh_token = drive_secrets["refresh_token"]
+            drive.enabled = True
+        if drive_secrets.get("drive_id"):
+            drive.drive_id = drive_secrets["drive_id"]
+        if drive_secrets.get("root_folder_id"):
+            drive.root_folder_id = drive_secrets["root_folder_id"]
+        if drive_secrets.get("cache_max_bytes"):
+            drive.cache_max_bytes = int(drive_secrets["cache_max_bytes"])
 
     # Auto-enable if both tokens are present from secrets
     if integrations.slack.bot_token and integrations.slack.app_token:
@@ -404,6 +432,7 @@ def load_config(path: pathlib.Path | str) -> MaestroConfig:
         logging=logging_cfg,
         integrations=integrations,
         assets=assets,
+        drive=drive,
         agents=agents,
         resources=resources,
     )

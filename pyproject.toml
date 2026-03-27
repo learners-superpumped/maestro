@@ -30,6 +30,8 @@ dependencies = [
     "croniter>=2.0",
     "sqlite-vec>=0.1",
     "google-genai>=1.0",
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.0",
 ]
 
 [project.optional-dependencies]

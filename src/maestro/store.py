@@ -387,6 +387,27 @@ class Store:
         except Exception:
             pass
 
+        # Add drive columns to assets table if missing
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute("PRAGMA table_info(assets)")
+                columns = {row[1] for row in await cursor.fetchall()}
+                if "drive_file_id" not in columns:
+                    await db.execute("ALTER TABLE assets ADD COLUMN drive_file_id TEXT")
+                if "drive_url" not in columns:
+                    await db.execute("ALTER TABLE assets ADD COLUMN drive_url TEXT")
+                if "drive_folder_id" not in columns:
+                    await db.execute(
+                        "ALTER TABLE assets ADD COLUMN drive_folder_id TEXT"
+                    )
+                if "source" not in columns:
+                    await db.execute(
+                        "ALTER TABLE assets ADD COLUMN source TEXT DEFAULT 'local'"
+                    )
+                await db.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Task CRUD
     # ------------------------------------------------------------------
@@ -832,13 +853,17 @@ class Store:
                 INSERT INTO assets (
                     id, task_id, created_by, asset_type,
                     media_type, title, description, tags, content_json,
-                    file_path, file_size, embedding_model, embedded_at,
+                    file_path, file_size,
+                    drive_file_id, drive_url, drive_folder_id, source,
+                    embedding_model, embedded_at,
                     ttl_days, expires_at, archived,
                     created_at, updated_at
                 ) VALUES (
                     :id, :task_id, :created_by, :asset_type,
                     :media_type, :title, :description, :tags, :content_json,
-                    :file_path, :file_size, :embedding_model, :embedded_at,
+                    :file_path, :file_size,
+                    :drive_file_id, :drive_url, :drive_folder_id, :source,
+                    :embedding_model, :embedded_at,
                     :ttl_days, :expires_at, :archived,
                     :created_at, :updated_at
                 )
@@ -860,6 +885,10 @@ class Store:
                     ),
                     "file_path": asset.get("file_path"),
                     "file_size": asset.get("file_size"),
+                    "drive_file_id": asset.get("drive_file_id"),
+                    "drive_url": asset.get("drive_url"),
+                    "drive_folder_id": asset.get("drive_folder_id"),
+                    "source": asset.get("source", "local"),
                     "embedding_model": asset.get(
                         "embedding_model", "gemini-embedding-2-preview"
                     ),
@@ -924,6 +953,10 @@ class Store:
             "content_json",
             "file_path",
             "file_size",
+            "drive_file_id",
+            "drive_url",
+            "drive_folder_id",
+            "source",
             "embedding_model",
             "embedded_at",
             "asset_type",
