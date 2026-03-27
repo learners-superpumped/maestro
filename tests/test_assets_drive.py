@@ -65,7 +65,7 @@ class TestRegisterWithDrive:
         call_args = store.create_asset.call_args[0][0]
         assert call_args["drive_file_id"] == "drive-file-1"
         assert "drive.google.com" in call_args["drive_url"]
-        assert call_args["source"] == "local"
+        assert call_args["source"] == "drive"  # Drive 업로드 성공 시 "drive"
 
 
 class TestDownloadAsset:
@@ -107,3 +107,67 @@ class TestDownloadAsset:
 
         path = await am.download_asset("abc")
         drive.download.assert_called_once()
+
+
+class TestSendAsset:
+    @pytest.mark.asyncio
+    async def test_send_asset_returns_info(self, tmp_path):
+        am, store, drive = _make_asset_manager()
+        cache_dir = tmp_path / "cache" / "assets"
+        cache_dir.mkdir(parents=True)
+        cached_file = cache_dir / "drive-file-1"
+        cached_file.write_bytes(b"cached")
+        am._cache_dir = cache_dir
+
+        store.get_asset = AsyncMock(
+            return_value={
+                "id": "abc",
+                "drive_file_id": "drive-file-1",
+                "file_path": None,
+                "drive_url": "https://drive.google.com/file/d/drive-file-1/view",
+            }
+        )
+
+        result = await am.send_asset("abc")
+        assert result is not None
+        assert result["local_path"] is not None
+        assert result["drive_url"] is not None
+
+    @pytest.mark.asyncio
+    async def test_send_asset_not_found(self):
+        am, store, drive = _make_asset_manager()
+        store.get_asset = AsyncMock(return_value=None)
+        result = await am.send_asset("nonexistent")
+        assert result is None
+
+
+class TestShareAsset:
+    @pytest.mark.asyncio
+    async def test_share_returns_url(self):
+        am, store, drive = _make_asset_manager()
+        drive.share = AsyncMock(
+            return_value="https://drive.google.com/file/d/drive-file-1/view?sharing=true"
+        )
+
+        store.get_asset = AsyncMock(
+            return_value={
+                "id": "abc",
+                "drive_file_id": "drive-file-1",
+                "drive_url": None,
+            }
+        )
+        store.update_asset = AsyncMock()
+
+        url = await am.share_asset("abc")
+        assert url is not None
+        assert "drive.google.com" in url
+        drive.share.assert_called_once_with("drive-file-1")
+
+    @pytest.mark.asyncio
+    async def test_share_no_drive_file_id_returns_none(self):
+        am, store, drive = _make_asset_manager()
+        store.get_asset = AsyncMock(
+            return_value={"id": "abc", "drive_file_id": None, "drive_url": None}
+        )
+        url = await am.share_asset("abc")
+        assert url is None

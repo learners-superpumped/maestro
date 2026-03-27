@@ -94,7 +94,7 @@ class AssetManager:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache_max_bytes = getattr(
             getattr(config, "drive", None), "cache_max_bytes", 1_073_741_824
-        )
+        )  # TODO: LRU eviction not yet implemented
 
     async def register_asset(
         self,
@@ -149,9 +149,7 @@ class AssetManager:
 
         if self._drive and self._drive.available and managed_path:
             try:
-                import datetime as _dt
-
-                month = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m")
+                month = datetime.now(timezone.utc).strftime("%Y-%m")
                 folder_path = f"{month}/{task_id}" if task_id else "inbox"
                 drive_folder_id = await self._drive.get_or_create_folder(folder_path)
                 drive_result = await self._drive.upload(
@@ -181,7 +179,7 @@ class AssetManager:
             "drive_file_id": drive_file_id,
             "drive_url": drive_url,
             "drive_folder_id": drive_folder_id,
-            "source": source or "local",
+            "source": "drive" if drive_file_id else (source or "local"),
         }
 
         await self._store.create_asset(asset_data)
