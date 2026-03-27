@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import tempfile
 import time
 import uuid
 from typing import Any
+
+import aiohttp
 
 try:
     from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -29,6 +33,7 @@ try:
 except Exception:
     _md_converter = None  # type: ignore[assignment]
 
+from maestro.assets import detect_asset_type
 from maestro.config import SlackConfig
 
 logger = logging.getLogger(__name__)
@@ -415,20 +420,16 @@ class SlackAdapter:
             return []
 
         registered = []
-        for f in files:
-            url = f.get("url_private_download") or f.get("url_private")
-            if not url:
-                continue
-            name = f.get("name", "untitled")
-            mime = f.get("mimetype", "")
+        headers = {"Authorization": f"Bearer {self._config.bot_token}"}
+        async with aiohttp.ClientSession() as session:
+            for f in files:
+                url = f.get("url_private_download") or f.get("url_private")
+                if not url:
+                    continue
+                name = f.get("name", "untitled")
+                mime = f.get("mimetype", "")
 
-            # Download from Slack
-            import tempfile
-
-            import aiohttp
-
-            async with aiohttp.ClientSession() as session:
-                headers = {"Authorization": f"Bearer {self._config.bot_token}"}
+                # Download from Slack
                 async with session.get(url, headers=headers) as resp:
                     if resp.status != 200:
                         continue
@@ -437,23 +438,28 @@ class SlackAdapter:
                     tmp_path = tmp.name
                     tmp.close()
 
-            # Register as asset
-            from maestro.assets import detect_asset_type
-
-            asset_type = detect_asset_type(name)
-            try:
-                asset = await am.register_asset(
-                    asset_type=asset_type,
-                    title=name,
-                    file_path=tmp_path,
-                    task_id=task_id,
-                    created_by="human",
-                    source="slack",
-                    media_type=mime,
-                )
-                registered.append(asset)
-            except Exception:
-                logger.warning(f"Failed to register Slack file: {name}", exc_info=True)
+                # Register as asset
+                asset_type = detect_asset_type(name)
+                try:
+                    asset = await am.register_asset(
+                        asset_type=asset_type,
+                        title=name,
+                        file_path=tmp_path,
+                        task_id=task_id,
+                        created_by="human",
+                        source="slack",
+                        media_type=mime,
+                    )
+                    registered.append(asset)
+                except Exception:
+                    logger.warning(
+                        f"Failed to register Slack file: {name}", exc_info=True
+                    )
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
 
         return registered
 
