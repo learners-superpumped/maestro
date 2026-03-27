@@ -408,6 +408,23 @@ class Store:
         except Exception:
             pass
 
+        # tasks: add Slack notification columns
+        try:
+            async with self._conn() as db:
+                cursor = await db.execute("PRAGMA table_info(tasks)")
+                columns = {row[1] for row in await cursor.fetchall()}
+                if "slack_notification_channel" not in columns:
+                    await db.execute(
+                        "ALTER TABLE tasks ADD COLUMN slack_notification_channel TEXT"
+                    )
+                if "slack_notification_ts" not in columns:
+                    await db.execute(
+                        "ALTER TABLE tasks ADD COLUMN slack_notification_ts TEXT"
+                    )
+                await db.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Task CRUD
     # ------------------------------------------------------------------
@@ -2162,6 +2179,35 @@ class Store:
                 },
             )
             await db.commit()
+
+    async def save_task_slack_notification(
+        self, task_id: str, channel: str, ts: str
+    ) -> None:
+        """Persist the Slack notification message ts for a task."""
+        async with self._conn() as db:
+            await db.execute(
+                """
+                UPDATE tasks
+                SET slack_notification_channel = ?,
+                    slack_notification_ts = ?
+                WHERE id = ?
+                """,
+                (channel, ts, task_id),
+            )
+            await db.commit()
+
+    async def get_task_slack_notification(self, task_id: str) -> tuple[str, str] | None:
+        """Return (channel, ts) for task notification message, or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT slack_notification_channel, slack_notification_ts"
+                " FROM tasks WHERE id = ?",
+                (task_id,),
+            )
+            row = await cursor.fetchone()
+        if row is None or row[0] is None:
+            return None
+        return (row[0], row[1])
 
     async def list_slack_threads(self) -> list[dict[str, Any]]:
         """Return all slack_thread_map entries ordered by created_at ASC."""

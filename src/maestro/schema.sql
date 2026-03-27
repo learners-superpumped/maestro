@@ -37,7 +37,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     started_at TEXT,
     completed_at TEXT,
     timeout_at TEXT,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    slack_notification_channel TEXT,
+    slack_notification_ts TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
