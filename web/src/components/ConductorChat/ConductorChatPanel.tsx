@@ -98,7 +98,7 @@ export function ConductorChatPanel({
   // Input is disabled while sending or streaming
   const inputDisabled = sending || isStreaming
 
-  // Clear sending state once streaming starts
+  // Clear sending state once streaming starts or assistant response arrives via refetch
   useEffect(() => {
     if (isStreaming && sending) {
       setSending(false)
@@ -142,6 +142,17 @@ export function ConductorChatPanel({
         },
       ]
     : serverMessages
+
+  // Fallback: if server messages include an assistant reply, sending is done
+  useEffect(() => {
+    if (sending && serverMessages.length > 0) {
+      const lastMsg = serverMessages[serverMessages.length - 1]
+      if (lastMsg.role === "assistant") {
+        setSending(false)
+        setPendingMessage(null)
+      }
+    }
+  }, [sending, serverMessages])
 
   // Clear pending message once server has it
   useEffect(() => {
