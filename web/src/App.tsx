@@ -31,6 +31,9 @@ const Rules = lazy(() =>
 const Goals = lazy(() =>
   import("@/pages/Goals").then((m) => ({ default: m.Goals }))
 )
+const Settings = lazy(() =>
+  import("@/pages/Settings").then((m) => ({ default: m.Settings }))
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -104,6 +107,12 @@ const goalsRoute = createRoute({
   component: Goals,
 })
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: Settings,
+})
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   tasksRoute,
@@ -113,6 +122,7 @@ const routeTree = rootRoute.addChildren([
   rulesRoute,
   approvalsRoute,
   goalsRoute,
+  settingsRoute,
 ])
 
 const router = createRouter({ routeTree })

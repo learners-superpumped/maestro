@@ -28,7 +28,7 @@ from maestro.conductor import ConductorAgent
 from maestro.config import MaestroConfig
 from maestro.dispatcher import AgentLogProcessor, Dispatcher
 from maestro.events import EventBus, EventEmittingStore
-from maestro.integrations.slack import SlackNotifier
+from maestro.integrations.slack import SlackAdapter
 from maestro.models import Task, TaskResult, TaskStatus
 from maestro.notifications import NotificationManager
 from maestro.planner import Planner
@@ -75,7 +75,6 @@ class Daemon:
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
-        self._slack = SlackNotifier(webhook_url=config.integrations.slack.webhook_url)
         self._budget_mgr = BudgetManager(store, config.budget)
         self._planner = Planner(store, config)
         self._approval_manager = ApprovalManager(store)
@@ -101,6 +100,14 @@ class Daemon:
             bus=self._bus,
             config=config,
             base_path=base_path,
+        )
+
+        self._slack = SlackAdapter(
+            store=self._store,
+            bus=self._bus,
+            conductor=self._conductor,
+            approval_manager=self._approval_manager,
+            config=config.integrations.slack,
         )
 
         self._port: int = 0
@@ -212,12 +219,12 @@ class Daemon:
                   picks an ephemeral port.
         """
         # 1. Create the aiohttp app
-        app = create_api_app(
-            self._store, slack=self._slack, project_root=self._base_path
-        )
+        app = create_api_app(self._store, project_root=self._base_path)
         app["asset_manager"] = self._asset_manager
         app["daemon"] = self
         app["conductor"] = self._conductor
+        app["base_path"] = self._base_path
+        app["slack_adapter"] = self._slack
         app.router.add_get("/ws", self._ws_manager.handle)
 
         # 2. Start TCP site on loopback
@@ -234,6 +241,14 @@ class Daemon:
         self._port = actual_port
         self._conductor.set_daemon_port(actual_port)
         logger.info("Internal API listening on 127.0.0.1:%d", actual_port)
+
+        if self._config.integrations.slack.enabled:
+            try:
+                await self._slack.start()
+            except Exception:
+                logger.exception(
+                    "Failed to start Slack adapter (continuing without Slack)"
+                )
 
         # 3. Write PID and port files to .maestro/ (fixed location)
         maestro_dir = self._base_path / ".maestro"
@@ -273,6 +288,12 @@ class Daemon:
                     *self._running_procs.values(), return_exceptions=True
                 )
             self._running_procs.clear()
+
+            if self._slack.available:
+                try:
+                    await self._slack.stop()
+                except Exception:
+                    logger.debug("Error stopping Slack adapter", exc_info=True)
 
             # Remove PID file
             if pid_file.exists():

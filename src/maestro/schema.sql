@@ -242,3 +242,15 @@ CREATE TABLE IF NOT EXISTS reminders (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_reminders_trigger ON reminders(trigger_at) WHERE delivered = FALSE;
+
+-- Slack thread ↔ Conductor conversation mapping
+CREATE TABLE IF NOT EXISTS slack_thread_map (
+    slack_channel_id TEXT NOT NULL,
+    slack_thread_ts TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    slack_user_id TEXT NOT NULL,
+    progress_msg_ts TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (slack_channel_id, slack_thread_ts)
+);
+CREATE INDEX IF NOT EXISTS idx_slack_thread_conversation ON slack_thread_map(conversation_id);

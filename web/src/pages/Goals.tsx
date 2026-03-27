@@ -344,11 +344,11 @@ export function Goals() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="overflow-hidden">
                         {goalTargets.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 min-w-0">
                             {goalTargets.map((t, i) => (
-                              <span key={i} className="text-[12px] bg-[#f7f6f3] text-[#787774] border border-[#e8e5df] rounded px-1.5 py-0.5">
+                              <span key={i} className="text-[12px] bg-[#f7f6f3] text-[#787774] border border-[#e8e5df] rounded px-1.5 py-0.5 truncate max-w-full">
                                 {t}
                               </span>
                             ))}

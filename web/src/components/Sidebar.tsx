@@ -6,6 +6,7 @@ import {
   Clock,
   GitBranch,
   Target,
+  Settings,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -19,6 +20,7 @@ const navItems = [
   { icon: Clock, label: "Schedules", to: "/schedules" },
   { icon: GitBranch, label: "Rules", to: "/rules" },
   { icon: Target, label: "Goals", to: "/goals" },
+  { icon: Settings, label: "Settings", to: "/settings" },
 ]
 
 interface SidebarProps {

@@ -174,13 +174,6 @@ async def approval_submit_handler(request: web.Request) -> web.Response:
     draft_json = json.dumps(body.get("draft_json", {}))
     approval_id = await mgr.submit_draft(task_id, draft_json)
 
-    # Send Slack notification if configured
-    slack = request.app.get("slack")
-    if slack and slack.available:
-        task = await store.get_task(task_id)
-        title = task.title if task else task_id
-        await slack.send_approval_request(task_id, title, draft_json[:500])
-
     return web.json_response({"ok": True, "approval_id": approval_id})
 
 
@@ -1198,26 +1191,176 @@ async def webhook_linear_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Slack setup handlers
+# ---------------------------------------------------------------------------
+
+
+async def slack_status_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/slack/status — return Slack integration status."""
+    slack = request.app.get("slack_adapter")
+    if not slack:
+        return web.json_response(
+            {"enabled": False, "connected": False, "channel": None}
+        )
+    return web.json_response(
+        {
+            "enabled": slack._config.enabled,
+            "connected": slack.available and slack._socket_handler is not None,
+            "channel": slack._config.channel,
+        }
+    )
+
+
+async def slack_manifest_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/slack/manifest — return Slack App Manifest JSON."""
+    base_path = request.app.get("base_path")
+    project_name = base_path.name if base_path else "maestro"
+
+    manifest = {
+        "display_information": {
+            "name": f"Maestro ({project_name})",
+            "description": "Maestro AI task orchestrator",
+            "background_color": "#1a1a2e",
+        },
+        "features": {
+            "app_home": {
+                "home_tab_enabled": False,
+                "messages_tab_enabled": True,
+                "messages_tab_read_only_enabled": False,
+            },
+            "bot_user": {
+                "display_name": f"Maestro ({project_name})",
+                "always_online": True,
+            },
+            "slash_commands": [],
+        },
+        "oauth_config": {
+            "scopes": {
+                "bot": [
+                    "app_mentions:read",
+                    "chat:write",
+                    "im:history",
+                    "im:read",
+                    "im:write",
+                    "reactions:read",
+                    "reactions:write",
+                    "channels:history",
+                    "groups:history",
+                    "users:read",
+                ]
+            }
+        },
+        "settings": {
+            "event_subscriptions": {
+                "bot_events": [
+                    "app_mention",
+                    "message.im",
+                ]
+            },
+            "interactivity": {
+                "is_enabled": True,
+            },
+            "org_deploy_enabled": False,
+            "socket_mode_enabled": True,
+            "token_rotation_enabled": False,
+        },
+    }
+    return web.json_response(manifest)
+
+
+async def slack_setup_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/slack/setup — save Slack tokens and channel."""
+    import yaml
+
+    base_path = request.app.get("base_path")
+    if base_path is None:
+        raise web.HTTPServiceUnavailable(reason="base_path not available")
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    bot_token = body.get("bot_token")
+    app_token = body.get("app_token")
+    channel = body.get("channel")
+
+    if not bot_token or not app_token:
+        raise web.HTTPBadRequest(reason="'bot_token' and 'app_token' are required")
+
+    maestro_dir = pathlib.Path(base_path) / ".maestro"
+    maestro_dir.mkdir(parents=True, exist_ok=True)
+    secrets_path = maestro_dir / "secrets.yaml"
+
+    # Read existing secrets and merge
+    existing: dict = {}
+    if secrets_path.exists():
+        try:
+            existing = yaml.safe_load(secrets_path.read_text()) or {}
+        except Exception:
+            existing = {}
+
+    existing.setdefault("slack", {})
+    existing["slack"]["bot_token"] = bot_token
+    existing["slack"]["app_token"] = app_token
+    if channel:
+        existing["slack"]["channel"] = channel
+
+    secrets_path.write_text(yaml.dump(existing, default_flow_style=False))
+
+    # Ensure .gitignore has .maestro/secrets.yaml
+    gitignore_path = pathlib.Path(base_path) / ".gitignore"
+    gitignore_entry = ".maestro/secrets.yaml"
+    if gitignore_path.exists():
+        content = gitignore_path.read_text()
+        if gitignore_entry not in content:
+            with gitignore_path.open("a") as f:
+                f.write(f"\n{gitignore_entry}\n")
+    else:
+        gitignore_path.write_text(f"{gitignore_entry}\n")
+
+    return web.json_response({"ok": True, "channel": channel})
+
+
+async def slack_test_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/slack/test — send a test message via Slack."""
+    slack = request.app.get("slack_adapter")
+    if not slack:
+        raise web.HTTPServiceUnavailable(reason="Slack adapter not available")
+
+    channel = slack._config.channel
+    if not channel:
+        raise web.HTTPBadRequest(reason="No Slack channel configured")
+
+    try:
+        await slack._app.client.chat_postMessage(
+            channel=channel,
+            text="Maestro test message — Slack integration is working!",
+        )
+    except Exception as exc:
+        logger.exception("Failed to send Slack test message")
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+    return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
 
 def create_api_app(
     store: Store,
-    slack: object | None = None,
     project_root: pathlib.Path | None = None,
 ) -> web.Application:
     """Create and configure the aiohttp Application.
 
     Args:
         store: The data store instance.
-        slack: Optional SlackNotifier instance for sending notifications.
         project_root: Retained for backwards compatibility; no longer used.
     """
     app = web.Application(middlewares=[spa_fallback_middleware])
     app["store"] = store
-    if slack is not None:
-        app["slack"] = slack
 
     # SPA static assets
     if _WEB_DIST.exists():
@@ -1317,6 +1460,12 @@ def create_api_app(
         "/api/internal/conductor/conversation",
         conductor_conversation_create_handler,
     )
+
+    # Slack setup
+    app.router.add_get("/api/internal/slack/status", slack_status_handler)
+    app.router.add_get("/api/internal/slack/manifest", slack_manifest_handler)
+    app.router.add_post("/api/internal/slack/setup", slack_setup_handler)
+    app.router.add_post("/api/internal/slack/test", slack_test_handler)
 
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)
