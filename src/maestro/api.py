@@ -12,9 +12,11 @@ Exposes lightweight endpoints for worker agents and internal tooling to:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import pathlib
+import uuid
 from datetime import datetime, timezone
 
 from aiohttp import web
@@ -220,8 +222,6 @@ async def history_record_handler(request: web.Request) -> web.Response:
     except (json.JSONDecodeError, ValueError) as exc:
         raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
 
-    import uuid
-
     action = {
         "id": body.get("id", uuid.uuid4().hex[:12]),
         "task_id": body.get("task_id", ""),
@@ -240,6 +240,20 @@ async def history_record_handler(request: web.Request) -> web.Response:
         logger.warning("Failed to record action: %s", exc)
 
     return web.json_response({"ok": True})
+
+
+async def history_search_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/history/search — FTS search over completed/failed tasks."""
+    store: Store = request.app["store"]
+    query = request.query.get("query", "")
+    try:
+        limit = int(request.query.get("limit", "10"))
+    except (ValueError, TypeError):
+        limit = 10
+    if not query.strip():
+        return web.json_response({"results": [], "query": query})
+    results = await store.search_tasks_fts(query, limit)
+    return web.json_response({"results": results, "query": query})
 
 
 # ---------------------------------------------------------------------------
@@ -534,7 +548,6 @@ async def task_create_handler(request: web.Request) -> web.Response:
     for field in ("title", "instruction"):
         if not body.get(field):
             raise web.HTTPBadRequest(reason=f"'{field}' is required")
-    import uuid
 
     # Parse priority/approval_level safely (frontend may send strings)
     try:
@@ -912,6 +925,230 @@ async def assets_cleanup_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Conductor internal handlers
+# ---------------------------------------------------------------------------
+
+
+async def task_cancel_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/task/{task_id}/cancel — cancel a task."""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+
+    task = await store.get_task(task_id)
+    if task is None:
+        raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
+
+    await store.update_task_status(task_id, TaskStatus.CANCELLED)
+    return web.json_response({"ok": True, "task_id": task_id})
+
+
+async def task_priority_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/task/{task_id}/priority — update task priority."""
+    store: Store = request.app["store"]
+    task_id = request.match_info["task_id"]
+
+    task = await store.get_task(task_id)
+    if task is None:
+        raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    priority = body.get("priority")
+    if (
+        priority is None
+        or not isinstance(priority, int)
+        or priority < 1
+        or priority > 5
+    ):
+        raise web.HTTPBadRequest(reason="'priority' must be an integer between 1 and 5")
+
+    await store.update_task_fields(task_id, priority=priority)
+    return web.json_response({"ok": True, "task_id": task_id, "priority": priority})
+
+
+async def budget_status_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/budget/status — return daily budget status."""
+
+    budget_mgr = request.app.get("budget_manager")
+    if budget_mgr is None:
+        # Fallback: return basic spend info from store
+        store: Store = request.app["store"]
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        spent = await store.get_daily_spend(today)
+        return web.json_response(
+            {
+                "daily_limit": None,
+                "spent_today": spent,
+                "remaining": None,
+                "can_spend": True,
+                "alert": False,
+                "date": today,
+            }
+        )
+
+    status = await budget_mgr.check_budget()
+    status["date"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return web.json_response(status)
+
+
+async def system_status_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/system/status — return system snapshot."""
+    store: Store = request.app["store"]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    running_count = await store.count_running()
+    pending_approvals = await store.list_approvals(status="pending")
+    daily_spend = await store.get_daily_spend(today)
+    goals = await store.list_goals(enabled_only=True)
+
+    # Recent completions (last 10)
+    completed_tasks = await store.list_tasks(status=TaskStatus.COMPLETED, limit=10)
+
+    return web.json_response(
+        {
+            "running_tasks": running_count,
+            "pending_approvals": len(pending_approvals),
+            "today_spend_usd": daily_spend,
+            "active_goals": len(goals),
+            "goals": [
+                {"id": g["id"], "description": g.get("description", "")} for g in goals
+            ],
+            "recent_completions": [
+                {
+                    "id": t.id,
+                    "task_number": t.task_number,
+                    "title": t.title,
+                    "completed_at": t.completed_at.isoformat()
+                    if t.completed_at
+                    else None,
+                }
+                for t in completed_tasks
+            ],
+            "date": today,
+        },
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def reminder_create_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/reminder — create a reminder."""
+    store: Store = request.app["store"]
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    message = body.get("message")
+    trigger_at = body.get("trigger_at")
+    if not message or not trigger_at:
+        raise web.HTTPBadRequest(reason="'message' and 'trigger_at' are required")
+
+    reminder_id = uuid.uuid4().hex[:12]
+    user_id = body.get("user_id", "default")
+    reminder = await store.create_reminder(
+        id=reminder_id,
+        user_id=user_id,
+        message=message,
+        trigger_at=trigger_at,
+    )
+    return web.json_response(
+        {"ok": True, "reminder": reminder},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Conductor chat handlers
+# ---------------------------------------------------------------------------
+
+
+async def conductor_message_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/conductor/message — send a message to conductor."""
+    store: Store = request.app["store"]
+    conductor = request.app["conductor"]
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise web.HTTPBadRequest(reason=f"Invalid JSON: {exc}") from exc
+
+    message = body.get("message")
+    if not message:
+        raise web.HTTPBadRequest(reason="'message' is required")
+
+    user_id = body.get("user_id") or "default"
+    conversation_id = body.get("conversation_id") or ""
+
+    if not conversation_id:
+        conv = await store.create_conversation(
+            id=uuid.uuid4().hex[:12], user_id=user_id
+        )
+        conversation_id = conv["id"]
+
+    message_id = uuid.uuid4().hex
+
+    # Fire and forget — response streams via WebSocket
+    asyncio.create_task(conductor.handle_message(conversation_id, message, user_id))
+
+    return web.json_response(
+        {"ok": True, "conversation_id": conversation_id, "message_id": message_id}
+    )
+
+
+async def conductor_conversations_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/conductor/conversations — list conversations."""
+    store: Store = request.app["store"]
+    user_id = request.query.get("user_id", "default")
+    conversations = await store.list_conversations(user_id=user_id)
+    return web.json_response(
+        {"conversations": conversations},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def conductor_conversation_get_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/conductor/conversation/{id} — get conversation + messages."""
+    store: Store = request.app["store"]
+    conv_id = request.match_info["id"]
+
+    conversation = await store.get_conversation(conv_id)
+    if conversation is None:
+        raise web.HTTPNotFound(reason=f"Conversation not found: {conv_id}")
+
+    messages = await store.get_conversation_messages(conv_id)
+    return web.json_response(
+        {"conversation": conversation, "messages": messages},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+async def conductor_conversation_create_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/conductor/conversation — create new conversation."""
+    store: Store = request.app["store"]
+
+    body = {}
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    user_id = body.get("user_id") or "default"
+    title = body.get("title") or ""
+
+    conv = await store.create_conversation(
+        id=uuid.uuid4().hex[:12], user_id=user_id, title=title
+    )
+    return web.json_response(
+        {"ok": True, "conversation": conv},
+        dumps=lambda obj: json.dumps(obj, default=str),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Webhook handlers
 # ---------------------------------------------------------------------------
 
@@ -931,8 +1168,6 @@ async def webhook_generic_handler(request: web.Request) -> web.Response:
 
     if not title or not instruction:
         raise web.HTTPBadRequest(reason="'title' and 'instruction' are required")
-
-    import uuid
 
     task = Task(
         id=uuid.uuid4().hex[:12],
@@ -1012,6 +1247,7 @@ def create_api_app(
 
     # History
     app.router.add_post("/api/internal/history/record", history_record_handler)
+    app.router.add_get("/api/internal/history/search", history_search_handler)
 
     # Assets
     app.router.add_post("/api/internal/asset/register", asset_register_handler)
@@ -1060,6 +1296,27 @@ def create_api_app(
     app.router.add_delete("/api/internal/asset/{asset_id}", asset_delete_handler)
     app.router.add_post("/api/internal/asset/{asset_id}/archive", asset_archive_handler)
     app.router.add_post("/api/internal/assets/cleanup", assets_cleanup_handler)
+
+    # Conductor internal endpoints
+    app.router.add_post("/api/internal/task/{task_id}/cancel", task_cancel_handler)
+    app.router.add_post("/api/internal/task/{task_id}/priority", task_priority_handler)
+    app.router.add_get("/api/internal/budget/status", budget_status_handler)
+    app.router.add_get("/api/internal/system/status", system_status_handler)
+    app.router.add_post("/api/internal/reminder", reminder_create_handler)
+
+    # Conductor chat
+    app.router.add_post("/api/internal/conductor/message", conductor_message_handler)
+    app.router.add_get(
+        "/api/internal/conductor/conversations", conductor_conversations_handler
+    )
+    app.router.add_get(
+        "/api/internal/conductor/conversation/{id}",
+        conductor_conversation_get_handler,
+    )
+    app.router.add_post(
+        "/api/internal/conductor/conversation",
+        conductor_conversation_create_handler,
+    )
 
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)

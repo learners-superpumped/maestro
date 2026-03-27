@@ -141,4 +141,21 @@ export const api = {
     pending: () => request<any>("/api/internal/approvals/pending"),
     get: (taskId: string) => request<any>(`/api/internal/approval/${taskId}`),
   },
+
+  conductor: {
+    sendMessage: (data: { conversation_id?: string; message: string; user_id?: string }) =>
+      request<{ ok: true; conversation_id: string; message_id: string }>(
+        "/api/internal/conductor/message",
+        { method: "POST", body: JSON.stringify(data) }
+      ),
+    conversations: (userId?: string) =>
+      request<any>(`/api/internal/conductor/conversations${userId ? `?user_id=${userId}` : ""}`),
+    conversation: (id: string) =>
+      request<any>(`/api/internal/conductor/conversation/${id}`),
+    createConversation: (data?: { user_id?: string; title?: string }) =>
+      request<any>("/api/internal/conductor/conversation", {
+        method: "POST",
+        body: JSON.stringify(data || {}),
+      }),
+  },
 }

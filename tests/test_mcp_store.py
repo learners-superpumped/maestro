@@ -67,15 +67,23 @@ class TestTaskUpdateStatus:
 
 
 class TestHistorySearch:
-    async def test_returns_empty_results(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setenv("MAESTRO_DB_PATH", str(tmp_path / "test.db"))
-        result = await maestro_history_search("post")
+    async def test_returns_empty_results(self) -> None:
+        with aioresponses() as m:
+            m.get(
+                f"{BASE}/api/internal/history/search?query=post&limit=10",
+                payload={"results": [], "query": "post"},
+            )
+            result = await maestro_history_search("post")
         assert result["results"] == []
         assert result["query"] == "post"
 
-    async def test_respects_limit(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setenv("MAESTRO_DB_PATH", str(tmp_path / "test.db"))
-        result = await maestro_history_search("q", limit=5)
+    async def test_respects_limit(self) -> None:
+        with aioresponses() as m:
+            m.get(
+                f"{BASE}/api/internal/history/search?query=q&limit=5",
+                payload={"results": [], "query": "q"},
+            )
+            result = await maestro_history_search("q", limit=5)
         assert result["results"] == []
         assert result["query"] == "q"
 

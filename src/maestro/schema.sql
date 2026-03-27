@@ -208,3 +208,37 @@ CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(
     result_summary,
     tokenize='unicode61'
 );
+
+-- Conductor conversations
+CREATE TABLE IF NOT EXISTS conductor_conversations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT 'default',
+    title TEXT NOT NULL DEFAULT '',
+    session_id TEXT,
+    message_count INTEGER DEFAULT 0,
+    total_cost_usd REAL DEFAULT 0.0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Conductor conversation messages
+CREATE TABLE IF NOT EXISTS conductor_messages (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conductor_conversations(id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    cost_usd REAL DEFAULT 0.0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_conductor_messages_conv ON conductor_messages(conversation_id);
+
+-- Reminders (one-shot only in v1)
+CREATE TABLE IF NOT EXISTS reminders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT 'default',
+    message TEXT NOT NULL,
+    trigger_at TEXT NOT NULL,
+    delivered BOOLEAN DEFAULT FALSE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_reminders_trigger ON reminders(trigger_at) WHERE delivered = FALSE;
