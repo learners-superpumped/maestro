@@ -47,8 +47,8 @@ export function SlackSetup() {
       // Error message format: "500: {json}"
       try {
         const jsonStr = err.message.replace(/^\d+:\s*/, "")
-        const body = JSON.parse(jsonStr)
-        setTestResult({ ok: false, error: body?.error })
+        const body = JSON.parse(jsonStr) as { error?: string }
+        setTestResult({ ok: false, error: body.error })
       } catch {
         setTestResult({ ok: false, error: err.message })
       }
