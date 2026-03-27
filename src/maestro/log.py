@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import pathlib
 import sys
 
@@ -37,7 +38,12 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
     # File handler — create parent directories if they don't exist.
     log_path = pathlib.Path(config.file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler = logging.handlers.TimedRotatingFileHandler(
+        log_path,
+        when="midnight",
+        backupCount=7,
+        encoding="utf-8",
+    )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
