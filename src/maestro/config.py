@@ -83,6 +83,7 @@ class SlackConfig:
     bot_token: str | None = None
     app_token: str | None = None
     channel: str = "#maestro-ops"
+    web_url: str = ""
 
 
 @dataclass
@@ -239,6 +240,7 @@ def _parse_integrations(data: dict[str, Any]) -> IntegrationsConfig:
         bot_token=slack_data.get("bot_token") or None,
         app_token=slack_data.get("app_token") or None,
         channel=str(slack_data.get("channel", "#maestro-ops")),
+        web_url=str(slack_data.get("web_url", "")).rstrip("/"),
     )
     linear = LinearConfig(
         api_key=linear_data.get("api_key") or None,

@@ -9,6 +9,7 @@ Uses slack-bolt (Socket Mode) for bidirectional communication:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -166,8 +167,15 @@ def _format_approval_done(
     ]
 
 
+def _task_link(task_id: str, web_url: str) -> str:
+    """Build a Slack mrkdwn link to the task detail page."""
+    if not web_url:
+        return f"`{task_id}`"
+    return f"<{web_url}/tasks/{task_id}|{task_id}>"
+
+
 def _format_task_created(
-    task_id: str, title: str, agent: str, task_type: str
+    task_id: str, title: str, agent: str, task_type: str, web_url: str = ""
 ) -> list[dict[str, Any]]:
     """Format blocks for a task.created notification."""
     # Extract first line as the heading; rest (if any) becomes the body
@@ -182,7 +190,7 @@ def _format_task_created(
             "text": (
                 f"\U0001f4cb *New Task Created*\n"
                 f"*Title:* {first_line}\n"
-                f"*ID:* `{task_id}`\n"
+                f"*ID:* {_task_link(task_id, web_url)}\n"
                 f"*Agent:* {agent} | *Type:* {task_type}"
             ),
         },
@@ -207,7 +215,9 @@ def _format_task_created(
     ]
 
 
-def _format_task_completed(task_id: str, title: str) -> list[dict[str, Any]]:
+def _format_task_completed(
+    task_id: str, title: str, web_url: str = ""
+) -> list[dict[str, Any]]:
     """Format blocks for a task.completed notification."""
     short_title = title.split("\n", 1)[0].strip()
     return [
@@ -215,14 +225,17 @@ def _format_task_completed(task_id: str, title: str) -> list[dict[str, Any]]:
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"\u2705 *Task Completed*\n*Title:* {short_title}\n*ID:* `{task_id}`",
+                "text": (
+                    f"\u2705 *Task Completed*\n*Title:* {short_title}\n"
+                    f"*ID:* {_task_link(task_id, web_url)}"
+                ),
             },
         }
     ]
 
 
 def _format_task_failed(
-    task_id: str, title: str, error: str | None
+    task_id: str, title: str, error: str | None, web_url: str = ""
 ) -> list[dict[str, Any]]:
     """Format blocks for a task.failed notification."""
     short_title = title.split("\n", 1)[0].strip()
@@ -234,20 +247,43 @@ def _format_task_failed(
                 "type": "mrkdwn",
                 "text": (
                     f"\u274c *Task Failed*\n*Title:* {short_title}\n"
-                    f"*ID:* `{task_id}`{err_text}"
+                    f"*ID:* {_task_link(task_id, web_url)}{err_text}"
                 ),
             },
         }
     ]
 
 
+def _extract_draft_summary(draft: str) -> str:
+    """Extract a human-readable summary from a draft_json string.
+
+    draft_json has no fixed schema (agents pass arbitrary data via MCP).
+    We parse the JSON and pretty-print it so the Slack message is readable.
+    """
+    if not draft:
+        return ""
+
+    try:
+        parsed = json.loads(draft)
+        if isinstance(parsed, str):
+            return parsed[:500]
+        return json.dumps(parsed, ensure_ascii=False, indent=2)[:500]
+    except (json.JSONDecodeError, TypeError):
+        return draft[:500]
+
+
 def _format_approval_request(
-    task_id: str, title: str, agent: str, draft: str
+    task_id: str,
+    title: str,
+    agent: str,
+    draft: str,
+    web_url: str = "",
 ) -> list[dict[str, Any]]:
     """Format blocks for an approval request with action buttons."""
     short_title = title.split("\n", 1)[0].strip()
-    draft_converted = _to_mrkdwn(draft[:500]) if draft else ""
-    draft_section = f"\n*Draft:*\n```{draft_converted}```" if draft_converted else ""
+    draft_summary = _extract_draft_summary(draft)
+    draft_converted = _to_mrkdwn(draft_summary) if draft_summary else ""
+    draft_section = f"\n*Draft:*\n{draft_converted}" if draft_converted else ""
     return [
         {
             "type": "section",
@@ -256,7 +292,8 @@ def _format_approval_request(
                 "text": (
                     f"\U0001f514 *Approval Required*\n"
                     f"*Task:* {short_title}\n"
-                    f"*ID:* `{task_id}` | *Agent:* {agent}"
+                    f"*ID:* {_task_link(task_id, web_url)}"
+                    f" | *Agent:* {agent}"
                     f"{draft_section}"
                 ),
             },
@@ -716,7 +753,9 @@ class SlackAdapter:
             title = payload.get("title", "")
             agent = payload.get("agent", "default")
             task_type = payload.get("type", "")
-            blocks = _format_task_created(task_id, title, agent, task_type)
+            blocks = _format_task_created(
+                task_id, title, agent, task_type, self._config.web_url
+            )
             try:
                 resp = await client.chat_postMessage(
                     channel=channel, blocks=blocks, text=f"New task: {title}"
@@ -730,7 +769,7 @@ class SlackAdapter:
         elif event_type == "task.completed":
             task = await self._store.get_task(task_id)
             title = task.title if task else task_id
-            blocks = _format_task_completed(task_id, title)
+            blocks = _format_task_completed(task_id, title, self._config.web_url)
             existing = await self._store.get_task_slack_notification(task_id)
             try:
                 if existing:
@@ -751,7 +790,7 @@ class SlackAdapter:
             task = await self._store.get_task(task_id)
             title = task.title if task else task_id
             error = payload.get("error")
-            blocks = _format_task_failed(task_id, title, error)
+            blocks = _format_task_failed(task_id, title, error, self._config.web_url)
             existing = await self._store.get_task_slack_notification(task_id)
             try:
                 if existing:
@@ -789,7 +828,9 @@ class SlackAdapter:
         agent = task.agent if task else "unknown"
         draft = (approval or {}).get("draft_json", "") or ""
 
-        blocks = _format_approval_request(task_id, title, agent, draft)
+        blocks = _format_approval_request(
+            task_id, title, agent, draft, self._config.web_url
+        )
         try:
             await client.chat_postMessage(
                 channel=self._config.channel,

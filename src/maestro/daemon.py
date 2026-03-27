@@ -278,6 +278,10 @@ class Daemon:
         logger.info("Internal API listening on http://127.0.0.1:%d", actual_port)
 
         if self._config.integrations.slack.enabled:
+            if not self._config.integrations.slack.web_url:
+                self._config.integrations.slack.web_url = (
+                    f"http://127.0.0.1:{actual_port}"
+                )
             try:
                 await self._slack.start()
             except Exception:
