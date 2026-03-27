@@ -1332,9 +1332,26 @@ async def slack_test_handler(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(reason="No Slack channel configured")
 
     try:
-        await slack._app.client.chat_postMessage(
+        from slack_sdk.web.async_client import AsyncWebClient
+
+        # Use standalone client — _app may not be started yet
+        token = slack._config.bot_token
+        if not token:
+            raise web.HTTPBadRequest(reason="No bot token configured")
+        client = AsyncWebClient(token=token)
+        await client.chat_postMessage(
             channel=channel,
             text="Maestro test message — Slack integration is working!",
+        )
+    except web.HTTPError:
+        raise
+    except ImportError:
+        return web.json_response(
+            {
+                "ok": False,
+                "error": "slack-sdk not installed. Run: pip install 'maestro[slack]'",
+            },
+            status=500,
         )
     except Exception as exc:
         logger.exception("Failed to send Slack test message")
