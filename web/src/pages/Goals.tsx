@@ -63,7 +63,9 @@ function parseTargets(raw: string): string[] {
       // New format: { targets: ["..."] }
       if (Array.isArray(obj.targets)) return obj.targets
       // Legacy format: { key: value, ... } → "key: value"
-      return Object.entries(obj).map(([k, v]) => `${k}: ${v}`)
+      return Object.entries(obj).map(([k, v]) =>
+        `${k}: ${typeof v === "object" && v !== null ? JSON.stringify(v) : v}`,
+      )
     }
   } catch { /* ignore */ }
   return []
