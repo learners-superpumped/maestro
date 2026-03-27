@@ -103,6 +103,7 @@ class Daemon:
             base_path=base_path,
         )
 
+        self._port: int = 0
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick: float = 0.0

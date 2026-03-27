@@ -196,10 +196,10 @@ class TestBuildExecuteArgs:
             "--output-format",
             "stream-json",
             "--verbose",
-            "--max-turns",
-            "20",
             "--max-budget-usd",
             str(sample_task.budget_usd),
+            "--max-turns",
+            "20",
             "--dangerously-skip-permissions",
         ]
 
