@@ -24,7 +24,8 @@ export function useWebSocket() {
       }
       ws.onmessage = (e) => {
         try {
-          const { type } = JSON.parse(e.data as string) as { type: string }
+          const parsed = JSON.parse(e.data as string) as { type: string; payload?: unknown }
+          const { type } = parsed
           if (type.startsWith("task.")) {
             queryClient.invalidateQueries({ queryKey: ["tasks"] })
             queryClient.invalidateQueries({ queryKey: ["root-tasks"] })
@@ -44,6 +45,13 @@ export function useWebSocket() {
             type.startsWith("approval.")
           ) {
             queryClient.invalidateQueries({ queryKey: ["stats"] })
+          }
+
+          // Broadcast conductor.stream events for the chat panel
+          if (type === "conductor.stream") {
+            window.dispatchEvent(
+              new CustomEvent("conductor-stream", { detail: parsed.payload })
+            )
           }
         } catch {
           // ignore parse errors
