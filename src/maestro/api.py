@@ -1232,7 +1232,6 @@ async def slack_manifest_handler(request: web.Request) -> web.Response:
                 "display_name": f"Maestro ({project_name})",
                 "always_online": True,
             },
-            "slash_commands": [],
         },
         "oauth_config": {
             "scopes": {
