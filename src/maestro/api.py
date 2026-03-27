@@ -18,6 +18,7 @@ import logging
 import pathlib
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from aiohttp import web
 
@@ -1485,7 +1486,7 @@ async def drive_callback_handler(request: web.Request) -> web.Response:
     secrets_path = pathlib.Path(base_path) / ".maestro" / "secrets.yaml"
     secrets_path.parent.mkdir(parents=True, exist_ok=True)
 
-    existing = {}
+    existing: dict[str, Any] = {}
     if secrets_path.exists():
         try:
             existing = yaml.safe_load(secrets_path.read_text()) or {}
@@ -1544,7 +1545,7 @@ async def drive_setup_handler(request: web.Request) -> web.Response:
 
     # Update secrets.yaml
     secrets_path = pathlib.Path(base_path) / ".maestro" / "secrets.yaml"
-    existing = {}
+    existing: dict[str, Any] = {}
     if secrets_path.exists():
         try:
             existing = yaml.safe_load(secrets_path.read_text()) or {}
@@ -1557,7 +1558,9 @@ async def drive_setup_handler(request: web.Request) -> web.Response:
     secrets_path.write_text(yaml.dump(existing, default_flow_style=False))
 
     # Hot-reload DriveProvider
-    config = request.app["config"]
+    config = request.app.get("config")
+    if config is None:
+        raise web.HTTPServiceUnavailable(reason="Config not available")
     config.drive.drive_id = drive_id
     config.drive.root_folder_id = root_folder_id
 

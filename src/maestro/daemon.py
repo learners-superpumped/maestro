@@ -250,7 +250,9 @@ class Daemon:
                   picks an ephemeral port.
         """
         # 1. Create the aiohttp app
-        app = create_api_app(self._store, project_root=self._base_path)
+        app = create_api_app(
+            self._store, project_root=self._base_path, config=self._config
+        )
         app["asset_manager"] = self._asset_manager
         app["drive_provider"] = self._drive_provider
         app["daemon"] = self
