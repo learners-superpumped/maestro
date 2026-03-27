@@ -144,10 +144,18 @@ class Planner:
             signals=signals_text,
         )
 
+        descriptions = [g["description"] for g in goals_info]
+        if len(descriptions) == 1:
+            title = f"Plan: {descriptions[0]}"
+        else:
+            joined = ", ".join(descriptions[:3])
+            suffix = f" +{len(descriptions) - 3} more" if len(descriptions) > 3 else ""
+            title = f"Plan ({len(descriptions)} goals): {joined}{suffix}"
+
         return {
             "agent": "planner",
             "type": "planning",
-            "title": f"Plan tasks for {len(signals)} signals",
+            "title": title,
             "instruction": instruction,
             "priority": 1,
             "approval_level": 0,
