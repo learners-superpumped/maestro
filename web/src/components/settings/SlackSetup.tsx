@@ -11,7 +11,7 @@ export function SlackSetup() {
   const [appToken, setAppToken] = useState("")
   const [channel, setChannel] = useState("")
   const [copied, setCopied] = useState(false)
-  const [testResult, setTestResult] = useState<{ ok: boolean } | null>(null)
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
   const [setupError, setSetupError] = useState<string | null>(null)
 
   const statusQuery = useQuery({
@@ -43,8 +43,15 @@ export function SlackSetup() {
     onSuccess: (data) => {
       setTestResult(data)
     },
-    onError: () => {
-      setTestResult({ ok: false })
+    onError: (err: Error) => {
+      // Error message format: "500: {json}"
+      try {
+        const jsonStr = err.message.replace(/^\d+:\s*/, "")
+        const body = JSON.parse(jsonStr)
+        setTestResult({ ok: false, error: body?.error })
+      } catch {
+        setTestResult({ ok: false, error: err.message })
+      }
     },
   })
 
@@ -92,7 +99,9 @@ export function SlackSetup() {
           <p
             className={`mt-3 text-[13px] ${testResult.ok ? "text-green-700" : "text-red-600"}`}
           >
-            {testResult.ok ? "Test message sent successfully." : "Test failed. Check your Slack configuration."}
+            {testResult.ok
+              ? "Test message sent successfully."
+              : testResult.error || "Test failed. Check your Slack configuration."}
           </p>
         )}
       </Card>
@@ -273,7 +282,7 @@ export function SlackSetup() {
             >
               {testResult.ok
                 ? "Test message sent successfully."
-                : "Test failed. Check your configuration and try again."}
+                : testResult.error || "Test failed. Check your configuration and try again."}
             </p>
           )}
           <div className="mt-4 pt-3 border-t border-[#e8e5df]">
