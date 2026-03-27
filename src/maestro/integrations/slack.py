@@ -406,13 +406,22 @@ class SlackAdapter:
         await self._handle_mention_or_dm(event, say, client)
 
     async def _on_direct_message(self, event: dict, say: Any, client: Any) -> None:
-        """Handle DMs to bot — ignore bot's own messages."""
+        """Handle DMs and thread replies to bot — ignore bot's own messages."""
         if event.get("bot_id") or event.get("subtype"):
             return
-        # Only handle DMs (channel type 'im')
-        if event.get("channel_type") != "im":
+
+        # DMs: always handle
+        if event.get("channel_type") == "im":
+            await self._handle_mention_or_dm(event, say, client)
             return
-        await self._handle_mention_or_dm(event, say, client)
+
+        # Channel thread replies: handle if thread is already mapped (ongoing conversation)
+        thread_ts = event.get("thread_ts")
+        if thread_ts:
+            channel_id = event["channel"]
+            key = (channel_id, thread_ts)
+            if key in self._thread_to_conv:
+                await self._handle_mention_or_dm(event, say, client)
 
     async def _handle_mention_or_dm(self, event: dict, say: Any, client: Any) -> None:
         """Unified handler for mentions and DMs.

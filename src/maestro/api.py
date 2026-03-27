@@ -1256,6 +1256,8 @@ async def slack_manifest_handler(request: web.Request) -> web.Response:
             "event_subscriptions": {
                 "bot_events": [
                     "app_mention",
+                    "message.channels",
+                    "message.groups",
                     "message.im",
                 ]
             },
