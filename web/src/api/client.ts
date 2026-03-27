@@ -158,4 +158,26 @@ export const api = {
         body: JSON.stringify(data || {}),
       }),
   },
+
+  slack: {
+    status: () => request<{
+      enabled: boolean;
+      connected: boolean;
+      channel: string | null;
+    }>("/api/internal/slack/status"),
+
+    manifest: () => request<Record<string, any>>("/api/internal/slack/manifest"),
+
+    setup: (data: { bot_token: string; app_token: string; channel: string }) =>
+      request<{ ok: boolean; channel: string }>("/api/internal/slack/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+
+    test: () =>
+      request<{ ok: boolean }>("/api/internal/slack/test", {
+        method: "POST",
+      }),
+  },
 }
