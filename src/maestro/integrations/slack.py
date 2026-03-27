@@ -8,6 +8,7 @@ Uses slack-bolt (Socket Mode) for bidirectional communication:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -274,7 +275,7 @@ class SlackAdapter:
 
         # Start socket mode
         self._socket_handler = AsyncSocketModeHandler(self._app, self._config.app_token)
-        await self._socket_handler.start_async()
+        self._socket_task = asyncio.create_task(self._socket_handler.start_async())
         logger.info("SlackAdapter started in Socket Mode")
 
     async def stop(self) -> None:
@@ -282,6 +283,13 @@ class SlackAdapter:
         if self._socket_handler is not None:
             await self._socket_handler.close_async()
             self._socket_handler = None
+        if (
+            hasattr(self, "_socket_task")
+            and self._socket_task
+            and not self._socket_task.done()
+        ):
+            self._socket_task.cancel()
+            self._socket_task = None
 
         self._bus.off("task.*", self._on_task_event)
         self._bus.off("approval.*", self._on_approval_event)
