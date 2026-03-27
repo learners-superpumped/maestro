@@ -1,60 +1,694 @@
 """
-Slack integration for Maestro — send notifications via incoming webhook.
+Slack integration adapter for Maestro — inbound events + outbound notifications.
+
+Uses slack-bolt (Socket Mode) for bidirectional communication:
+- Inbound: @mentions, DMs, approval button actions
+- Outbound: task notifications, approval requests, conductor progress
 """
 
 from __future__ import annotations
 
 import logging
-import os
+import re
+import time
+import uuid
+from typing import Any
 
-import aiohttp
+try:
+    from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+    from slack_bolt.async_app import AsyncApp
+except ImportError:
+    AsyncApp = None  # type: ignore[assignment,misc]
+    AsyncSocketModeHandler = None  # type: ignore[assignment,misc]
+
+from maestro.config import SlackConfig
 
 logger = logging.getLogger(__name__)
 
+# Progress text throttle interval (seconds)
+_PROGRESS_THROTTLE_SECS = 4.0
 
-class SlackNotifier:
-    """Send notifications to Slack via webhook."""
 
-    def __init__(self, webhook_url: str | None = None) -> None:
-        self._webhook_url = webhook_url or os.environ.get("MAESTRO_SLACK_WEBHOOK")
+# ---------------------------------------------------------------------------
+# Block Kit formatting helpers (module-level)
+# ---------------------------------------------------------------------------
+
+
+def _build_reject_modal(task_id: str) -> dict[str, Any]:
+    """Build a Slack modal view for rejection with a reason input."""
+    return {
+        "type": "modal",
+        "callback_id": "maestro_reject_submit",
+        "private_metadata": task_id,
+        "title": {"type": "plain_text", "text": "Reject Task"},
+        "submit": {"type": "plain_text", "text": "Reject"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "reason_block",
+                "label": {"type": "plain_text", "text": "Rejection reason"},
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "reason_input",
+                    "multiline": True,
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Why is this being rejected?",
+                    },
+                },
+            }
+        ],
+    }
+
+
+def _build_revise_modal(task_id: str) -> dict[str, Any]:
+    """Build a Slack modal view for revision with notes input."""
+    return {
+        "type": "modal",
+        "callback_id": "maestro_revise_submit",
+        "private_metadata": task_id,
+        "title": {"type": "plain_text", "text": "Request Revision"},
+        "submit": {"type": "plain_text", "text": "Submit"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "notes_block",
+                "label": {"type": "plain_text", "text": "Revision notes"},
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "notes_input",
+                    "multiline": True,
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "What changes are needed?",
+                    },
+                },
+            }
+        ],
+    }
+
+
+def _format_approval_done(
+    task_id: str, user_name: str, action: str
+) -> list[dict[str, Any]]:
+    """Format blocks for a completed approval action."""
+    emoji = {"approved": "\u2705", "rejected": "\u274c", "revised": "\u270f\ufe0f"}.get(
+        action, "\u2754"
+    )
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{emoji} *{action.title()}* by {user_name}\nTask: `{task_id}`",
+            },
+        }
+    ]
+
+
+def _format_task_created(
+    task_id: str, title: str, agent: str, task_type: str
+) -> list[dict[str, Any]]:
+    """Format blocks for a task.created notification."""
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"\U0001f4cb *New Task Created*\n"
+                    f"*Title:* {title}\n"
+                    f"*ID:* `{task_id}`\n"
+                    f"*Agent:* {agent} | *Type:* {task_type}"
+                ),
+            },
+        }
+    ]
+
+
+def _format_task_completed(task_id: str, title: str) -> list[dict[str, Any]]:
+    """Format blocks for a task.completed notification."""
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"\u2705 *Task Completed*\n*Title:* {title}\n*ID:* `{task_id}`",
+            },
+        }
+    ]
+
+
+def _format_task_failed(
+    task_id: str, title: str, error: str | None
+) -> list[dict[str, Any]]:
+    """Format blocks for a task.failed notification."""
+    err_text = f"\n*Error:* ```{error}```" if error else ""
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"\u274c *Task Failed*\n*Title:* {title}\n*ID:* `{task_id}`{err_text}",
+            },
+        }
+    ]
+
+
+def _format_approval_request(
+    task_id: str, title: str, agent: str, draft: str
+) -> list[dict[str, Any]]:
+    """Format blocks for an approval request with action buttons."""
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"\U0001f514 *Approval Required*\n"
+                    f"*Task:* {title}\n"
+                    f"*ID:* `{task_id}` | *Agent:* {agent}\n"
+                    f"*Draft:*\n```{draft[:500]}```"
+                ),
+            },
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "\u2705 Approve"},
+                    "style": "primary",
+                    "action_id": "maestro_approve",
+                    "value": task_id,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "\u274c Reject"},
+                    "style": "danger",
+                    "action_id": "maestro_reject",
+                    "value": task_id,
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "\u270f\ufe0f Revise"},
+                    "action_id": "maestro_revise",
+                    "value": task_id,
+                },
+            ],
+        },
+    ]
+
+
+# ---------------------------------------------------------------------------
+# SlackAdapter
+# ---------------------------------------------------------------------------
+
+
+class SlackAdapter:
+    """Slack integration adapter — inbound events + outbound notifications."""
+
+    def __init__(
+        self,
+        store: Any,
+        bus: Any,
+        conductor: Any,
+        approval_manager: Any,
+        config: SlackConfig,
+    ) -> None:
+        self._store = store
+        self._bus = bus
+        self._conductor = conductor
+        self._approval = approval_manager
+        self._config = config
+
+        # In-memory caches: thread <-> conversation mapping
+        # (channel_id, thread_ts) -> conversation_id
+        self._thread_to_conv: dict[tuple[str, str], str] = {}
+        # conversation_id -> (channel_id, thread_ts)
+        self._conv_to_thread: dict[str, tuple[str, str]] = {}
+
+        # Progress throttle state: conversation_id -> last_update_monotonic
+        self._progress_last_update: dict[str, float] = {}
+        # Progress message ts: conversation_id -> progress_msg_ts
+        self._progress_msg_ts: dict[str, str] = {}
+
+        # Slack-bolt app & socket handler (created on start)
+        self._app: Any | None = None
+        self._socket_handler: Any | None = None
 
     @property
     def available(self) -> bool:
-        """Return True if a webhook URL is configured."""
-        return self._webhook_url is not None
+        """True if both bot_token and app_token are set."""
+        return bool(self._config.bot_token and self._config.app_token)
 
-    async def send(self, message: str, channel: str | None = None) -> bool:
-        """Send a message to Slack. Returns True if sent successfully."""
+    # ------------------------------------------------------------------
+    # LIFECYCLE
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Start slack-bolt app in Socket Mode."""
         if not self.available:
-            return False
+            logger.warning("SlackAdapter: missing bot_token or app_token, not starting")
+            return
 
-        payload: dict[str, str] = {"text": message}
-        if channel:
-            payload["channel"] = channel
+        if AsyncApp is None:
+            logger.warning("SlackAdapter: slack-bolt not installed, not starting")
+            return
+
+        self._app = AsyncApp(token=self._config.bot_token)
+        self._register_handlers()
+
+        # Register EventBus listeners
+        self._bus.on("task.*", self._on_task_event)
+        self._bus.on("approval.*", self._on_approval_event)
+        self._bus.on("conductor.stream", self._on_conductor_stream)
+
+        # Restore thread mappings from DB
+        await self._restore_mappings()
+
+        # Start socket mode
+        self._socket_handler = AsyncSocketModeHandler(self._app, self._config.app_token)
+        await self._socket_handler.start_async()
+        logger.info("SlackAdapter started in Socket Mode")
+
+    async def stop(self) -> None:
+        """Stop socket handler and unregister EventBus listeners."""
+        if self._socket_handler is not None:
+            await self._socket_handler.close_async()
+            self._socket_handler = None
+
+        self._bus.off("task.*", self._on_task_event)
+        self._bus.off("approval.*", self._on_approval_event)
+        self._bus.off("conductor.stream", self._on_conductor_stream)
+        logger.info("SlackAdapter stopped")
+
+    # ------------------------------------------------------------------
+    # MAPPING
+    # ------------------------------------------------------------------
+
+    async def _restore_mappings(self) -> None:
+        """Restore thread <-> conversation mappings from DB."""
+        threads = await self._store.list_slack_threads()
+        for t in threads:
+            key = (t["slack_channel_id"], t["slack_thread_ts"])
+            conv_id = t["conversation_id"]
+            self._thread_to_conv[key] = conv_id
+            self._conv_to_thread[conv_id] = key
+            if t.get("progress_msg_ts"):
+                self._progress_msg_ts[conv_id] = t["progress_msg_ts"]
+
+    async def _create_mapping(
+        self,
+        channel_id: str,
+        thread_ts: str,
+        conversation_id: str,
+        user_id: str,
+    ) -> None:
+        """Create new mapping in DB + memory."""
+        await self._store.create_slack_thread(
+            channel_id, thread_ts, conversation_id, user_id
+        )
+        key = (channel_id, thread_ts)
+        self._thread_to_conv[key] = conversation_id
+        self._conv_to_thread[conversation_id] = key
+
+    # ------------------------------------------------------------------
+    # INBOUND HANDLERS
+    # ------------------------------------------------------------------
+
+    def _register_handlers(self) -> None:
+        """Register all slack event/action handlers on bolt app."""
+        if self._app is None:
+            return
+
+        self._app.event("app_mention")(self._on_app_mention)
+        self._app.event("message")(self._on_direct_message)
+
+        # Approval actions
+        self._app.action("maestro_approve")(self._handle_approve_action)
+        self._app.action("maestro_reject")(self._handle_reject_action)
+        self._app.action("maestro_revise")(self._handle_revise_action)
+
+        # Modal submissions
+        self._app.view("maestro_reject_submit")(self._handle_reject_submit)
+        self._app.view("maestro_revise_submit")(self._handle_revise_submit)
+
+    async def _on_app_mention(self, event: dict, say: Any, client: Any) -> None:
+        """Handle @maestro mentions."""
+        await self._handle_mention_or_dm(event, say, client)
+
+    async def _on_direct_message(self, event: dict, say: Any, client: Any) -> None:
+        """Handle DMs to bot — ignore bot's own messages."""
+        if event.get("bot_id") or event.get("subtype"):
+            return
+        # Only handle DMs (channel type 'im')
+        if event.get("channel_type") != "im":
+            return
+        await self._handle_mention_or_dm(event, say, client)
+
+    async def _handle_mention_or_dm(self, event: dict, say: Any, client: Any) -> None:
+        """Unified handler for mentions and DMs.
+
+        1. Clean bot mention from text
+        2. Look up or create conversation mapping
+        3. Add reaction + send progress message
+        4. Call conductor.handle_message
+        5. Update reaction on completion/error
+        """
+        text = event.get("text", "")
+        # Strip bot mention tags
+        text = re.sub(r"<@[A-Z0-9]+>\s*", "", text).strip()
+        if not text:
+            return
+
+        channel_id = event["channel"]
+        # Use thread_ts if in a thread, otherwise the message's own ts
+        thread_ts = event.get("thread_ts") or event["ts"]
+        user_id = event.get("user", "unknown")
+        msg_ts = event["ts"]
+
+        # Look up existing mapping
+        key = (channel_id, thread_ts)
+        conversation_id = self._thread_to_conv.get(key)
+
+        if conversation_id is None:
+            # Create new conversation
+            conversation_id = uuid.uuid4().hex[:16]
+            await self._create_mapping(channel_id, thread_ts, conversation_id, user_id)
+
+        # Add hourglass reaction
+        try:
+            await client.reactions_add(
+                channel=channel_id, timestamp=msg_ts, name="hourglass_flowing_sand"
+            )
+        except Exception:
+            logger.debug("Failed to add reaction", exc_info=True)
+
+        # Send progress message in thread
+        try:
+            progress_resp = await client.chat_postMessage(
+                channel=channel_id,
+                thread_ts=thread_ts,
+                text="\u23f3 \ucc98\ub9ac \uc911...",
+            )
+            progress_msg_ts = progress_resp["ts"]
+            self._progress_msg_ts[conversation_id] = progress_msg_ts
+            await self._store.update_slack_thread_progress(
+                channel_id, thread_ts, progress_msg_ts
+            )
+        except Exception:
+            logger.debug("Failed to send progress message", exc_info=True)
+            progress_msg_ts = None
+
+        # Call conductor
+        try:
+            await self._conductor.handle_message(conversation_id, text, user_id=user_id)
+            # Success: replace reaction with checkmark
+            try:
+                await client.reactions_remove(
+                    channel=channel_id,
+                    timestamp=msg_ts,
+                    name="hourglass_flowing_sand",
+                )
+                await client.reactions_add(
+                    channel=channel_id, timestamp=msg_ts, name="white_check_mark"
+                )
+            except Exception:
+                logger.debug("Failed to update reaction", exc_info=True)
+        except Exception as exc:
+            logger.exception("Conductor handle_message failed")
+            # Error: replace reaction with X
+            try:
+                await client.reactions_remove(
+                    channel=channel_id,
+                    timestamp=msg_ts,
+                    name="hourglass_flowing_sand",
+                )
+                await client.reactions_add(
+                    channel=channel_id, timestamp=msg_ts, name="x"
+                )
+            except Exception:
+                logger.debug("Failed to update reaction", exc_info=True)
+
+            # Send error message in thread
+            try:
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    thread_ts=thread_ts,
+                    text=f"\u274c Error: {exc}",
+                )
+            except Exception:
+                logger.debug("Failed to send error message", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # APPROVAL ACTIONS
+    # ------------------------------------------------------------------
+
+    async def _handle_approve_action(self, ack: Any, body: dict, client: Any) -> None:
+        """Approve button pressed."""
+        await ack()
+        action = body["actions"][0]
+        task_id = action["value"]
+        user_name = body.get("user", {}).get("name", "unknown")
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self._webhook_url, json=payload) as resp:  # type: ignore[arg-type]
-                    ok = resp.status == 200
-                    if not ok:
-                        logger.warning("Slack webhook returned status %d", resp.status)
-                    return ok
+            await self._approval.approve(task_id)
+            blocks = _format_approval_done(task_id, user_name, "approved")
+            await client.chat_update(
+                channel=body["channel"]["id"],
+                ts=body["message"]["ts"],
+                blocks=blocks,
+                text=f"Approved by {user_name}",
+            )
         except Exception:
-            logger.exception("Failed to send Slack notification")
-            return False
+            logger.exception("Failed to handle approve action for %s", task_id)
 
-    async def send_approval_request(self, task_id: str, title: str, draft: str) -> bool:
-        """Send a formatted approval request."""
-        message = (
-            "\U0001f514 *Approval Required*\n"
-            f"*Task:* {title}\n"
-            f"*ID:* `{task_id}`\n"
-            f"*Draft:*\n```{draft[:500]}```\n"
-            f"Approve via: `maestro approve {task_id}`"
-        )
-        return await self.send(message)
+    async def _handle_reject_action(self, ack: Any, body: dict, client: Any) -> None:
+        """Reject button pressed — open modal for reason."""
+        await ack()
+        action = body["actions"][0]
+        task_id = action["value"]
 
-    async def send_completion(self, task_id: str, title: str) -> bool:
-        """Send task completion notification."""
-        message = f"\u2705 *Task Completed*\n*Task:* {title}\n*ID:* `{task_id}`"
-        return await self.send(message)
+        try:
+            await client.views_open(
+                trigger_id=body["trigger_id"],
+                view=_build_reject_modal(task_id),
+            )
+        except Exception:
+            logger.exception("Failed to open reject modal for %s", task_id)
+
+    async def _handle_revise_action(self, ack: Any, body: dict, client: Any) -> None:
+        """Revise button pressed — open modal for notes."""
+        await ack()
+        action = body["actions"][0]
+        task_id = action["value"]
+
+        try:
+            await client.views_open(
+                trigger_id=body["trigger_id"],
+                view=_build_revise_modal(task_id),
+            )
+        except Exception:
+            logger.exception("Failed to open revise modal for %s", task_id)
+
+    async def _handle_reject_submit(
+        self, ack: Any, body: dict, client: Any, view: dict
+    ) -> None:
+        """Modal submit for rejection."""
+        await ack()
+        task_id = view["private_metadata"]
+        note = view["state"]["values"]["reason_block"]["reason_input"]["value"] or ""
+        user_name = body.get("user", {}).get("name", "unknown")
+
+        try:
+            await self._approval.reject(task_id, note=note)
+            logger.info("Task %s rejected by %s: %s", task_id, user_name, note)
+        except Exception:
+            logger.exception("Failed to reject task %s", task_id)
+
+    async def _handle_revise_submit(
+        self, ack: Any, body: dict, client: Any, view: dict
+    ) -> None:
+        """Modal submit for revision."""
+        await ack()
+        task_id = view["private_metadata"]
+        note = view["state"]["values"]["notes_block"]["notes_input"]["value"] or ""
+        user_name = body.get("user", {}).get("name", "unknown")
+
+        try:
+            await self._approval.revise(task_id, note=note)
+            logger.info(
+                "Task %s revision requested by %s: %s", task_id, user_name, note
+            )
+        except Exception:
+            logger.exception("Failed to revise task %s", task_id)
+
+    # ------------------------------------------------------------------
+    # OUTBOUND: TASK EVENTS
+    # ------------------------------------------------------------------
+
+    async def _on_task_event(self, event_type: str, payload: dict) -> None:
+        """EventBus handler for task.* events."""
+        client = self._get_client()
+        if client is None:
+            return
+
+        channel = self._config.channel
+        task_id = payload.get("task_id", "")
+
+        if event_type == "task.created":
+            title = payload.get("title", "")
+            agent = payload.get("agent", "default")
+            task_type = payload.get("type", "")
+            blocks = _format_task_created(task_id, title, agent, task_type)
+            try:
+                await client.chat_postMessage(
+                    channel=channel, blocks=blocks, text=f"New task: {title}"
+                )
+            except Exception:
+                logger.exception("Failed to send task.created notification")
+
+        elif event_type == "task.completed":
+            task = await self._store.get_task(task_id)
+            title = task.title if task else task_id
+            blocks = _format_task_completed(task_id, title)
+            try:
+                await client.chat_postMessage(
+                    channel=channel, blocks=blocks, text=f"Task completed: {title}"
+                )
+            except Exception:
+                logger.exception("Failed to send task.completed notification")
+
+        elif event_type == "task.failed":
+            task = await self._store.get_task(task_id)
+            title = task.title if task else task_id
+            error = payload.get("error")
+            blocks = _format_task_failed(task_id, title, error)
+            try:
+                await client.chat_postMessage(
+                    channel=channel, blocks=blocks, text=f"Task failed: {title}"
+                )
+            except Exception:
+                logger.exception("Failed to send task.failed notification")
+
+    # ------------------------------------------------------------------
+    # OUTBOUND: APPROVAL EVENTS
+    # ------------------------------------------------------------------
+
+    async def _on_approval_event(self, event_type: str, payload: dict) -> None:
+        """EventBus handler for approval.* events."""
+        if event_type != "approval.submitted":
+            return
+
+        client = self._get_client()
+        if client is None:
+            return
+
+        task_id = payload.get("task_id", "")
+        task = await self._store.get_task(task_id)
+        approval = await self._store.get_approval_by_task(task_id)
+
+        title = task.title if task else task_id
+        agent = task.agent if task else "unknown"
+        draft = (approval or {}).get("draft_json", "") or ""
+
+        blocks = _format_approval_request(task_id, title, agent, draft)
+        try:
+            await client.chat_postMessage(
+                channel=self._config.channel,
+                blocks=blocks,
+                text=f"Approval required: {title}",
+            )
+        except Exception:
+            logger.exception("Failed to send approval.submitted notification")
+
+    # ------------------------------------------------------------------
+    # OUTBOUND: CONDUCTOR PROGRESS (throttled)
+    # ------------------------------------------------------------------
+
+    async def _on_conductor_stream(self, event_type: str, payload: dict) -> None:
+        """EventBus handler for conductor.stream events.
+
+        - Only for Slack-originated conversations
+        - tool_use: immediate update with tool summary
+        - text: throttled update (4 second interval)
+        - done: replace progress message with final answer
+        """
+        conversation_id = payload.get("conversation_id")
+        if not conversation_id:
+            return
+
+        # Only handle conversations that originated from Slack
+        thread_info = self._conv_to_thread.get(conversation_id)
+        if thread_info is None:
+            return
+
+        channel_id, thread_ts = thread_info
+        client = self._get_client()
+        if client is None:
+            return
+
+        progress_msg_ts = self._progress_msg_ts.get(conversation_id)
+        if not progress_msg_ts:
+            return
+
+        stream_type = payload.get("type", "")
+
+        if stream_type == "tool_use":
+            # Immediate update with tool summary
+            tool_name = payload.get("tool_name", "tool")
+            text = f"\U0001f527 Using {tool_name}..."
+            try:
+                await client.chat_update(
+                    channel=channel_id,
+                    ts=progress_msg_ts,
+                    text=text,
+                )
+            except Exception:
+                logger.debug("Failed to update progress (tool_use)", exc_info=True)
+
+        elif stream_type == "text":
+            # Throttled update
+            now = time.monotonic()
+            last = self._progress_last_update.get(conversation_id, 0.0)
+            if now - last < _PROGRESS_THROTTLE_SECS:
+                return
+
+            self._progress_last_update[conversation_id] = now
+            text = payload.get("text", "\u23f3 \ucc98\ub9ac \uc911...")
+            try:
+                await client.chat_update(
+                    channel=channel_id,
+                    ts=progress_msg_ts,
+                    text=text,
+                )
+            except Exception:
+                logger.debug("Failed to update progress (text)", exc_info=True)
+
+        elif stream_type == "done":
+            # Replace progress message with final answer
+            final_text = payload.get("text", "\u2705 Done")
+            try:
+                await client.chat_update(
+                    channel=channel_id,
+                    ts=progress_msg_ts,
+                    text=final_text,
+                )
+            except Exception:
+                logger.debug("Failed to update progress (done)", exc_info=True)
+
+            # Cleanup throttle state
+            self._progress_last_update.pop(conversation_id, None)
+
+    # ------------------------------------------------------------------
+    # HELPERS
+    # ------------------------------------------------------------------
+
+    def _get_client(self) -> Any | None:
+        """Get Slack WebClient from bolt app."""
+        if self._app is None:
+            return None
+        return self._app.client
