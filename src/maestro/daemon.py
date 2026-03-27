@@ -1114,6 +1114,11 @@ class Daemon:
         ):
             return
 
+        # 이미 승인된 태스크 → 재리뷰 스킵
+        approval = await self._store.get_approval_by_task(task.id)
+        if approval and approval["status"] == "approved":
+            return
+
         # Level 0은 리뷰 없이 완료
         if task.approval_level == 0:
             return
