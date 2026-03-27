@@ -1392,6 +1392,188 @@ async def slack_test_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Drive setup handlers
+# ---------------------------------------------------------------------------
+
+
+async def drive_status_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/drive/status — Drive 연결 상태."""
+    drive = request.app.get("drive_provider")
+    config = request.app.get("config")
+    drive_cfg = getattr(config, "drive", None)
+    raw_drive_id = getattr(drive_cfg, "drive_id", "")
+    raw_root_folder_id = getattr(drive_cfg, "root_folder_id", "")
+    drive_id = raw_drive_id if isinstance(raw_drive_id, str) else ""
+    root_folder_id = raw_root_folder_id if isinstance(raw_root_folder_id, str) else ""
+    return web.json_response(
+        {
+            "connected": drive is not None and bool(drive.available),
+            "drive_id": drive_id,
+            "root_folder_id": root_folder_id,
+        }
+    )
+
+
+async def drive_auth_url_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/drive/auth-url — OAuth 인증 URL 생성."""
+    from google_auth_oauthlib.flow import Flow
+
+    body = await request.json() if request.can_read_body else {}
+    client_id = body.get("client_id", "")
+    client_secret = body.get("client_secret", "")
+    if not client_id or not client_secret:
+        raise web.HTTPBadRequest(reason="client_id and client_secret required")
+
+    # Determine redirect URI based on request host
+    host = request.headers.get("Host", "localhost:7777")
+    scheme = request.headers.get("X-Forwarded-Proto", "http")
+    redirect_uri = f"{scheme}://{host}/api/internal/drive/callback"
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=["https://www.googleapis.com/auth/drive"],
+        redirect_uri=redirect_uri,
+    )
+    auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
+    # Store flow state temporarily
+    request.app["_drive_oauth_state"] = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "state": state,
+    }
+    return web.json_response({"auth_url": auth_url, "state": state})
+
+
+async def drive_callback_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/drive/callback — OAuth callback, 토큰 저장."""
+    import yaml
+    from google_auth_oauthlib.flow import Flow
+
+    code = request.query.get("code")
+    if not code:
+        raise web.HTTPBadRequest(reason="Missing 'code' parameter")
+
+    oauth_state = request.app.get("_drive_oauth_state")
+    if not oauth_state:
+        raise web.HTTPBadRequest(reason="No pending OAuth flow")
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": oauth_state["client_id"],
+                "client_secret": oauth_state["client_secret"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=["https://www.googleapis.com/auth/drive"],
+        redirect_uri=oauth_state["redirect_uri"],
+    )
+    flow.fetch_token(code=code)
+    creds = flow.credentials
+
+    # Save to secrets.yaml
+    base_path = request.app.get("base_path", ".")
+    secrets_path = pathlib.Path(base_path) / ".maestro" / "secrets.yaml"
+    secrets_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing = {}
+    if secrets_path.exists():
+        try:
+            existing = yaml.safe_load(secrets_path.read_text()) or {}
+        except Exception:
+            existing = {}
+
+    existing.setdefault("drive", {})
+    existing["drive"]["client_id"] = oauth_state["client_id"]
+    existing["drive"]["client_secret"] = oauth_state["client_secret"]
+    existing["drive"]["refresh_token"] = creds.refresh_token
+    secrets_path.write_text(yaml.dump(existing, default_flow_style=False))
+
+    # Clean up state
+    request.app.pop("_drive_oauth_state", None)
+
+    # Redirect to settings page with success
+    return web.HTTPFound("/settings?drive=connected")
+
+
+async def drive_drives_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/drive/drives — 드라이브 목록."""
+    drive = request.app.get("drive_provider")
+    if not drive:
+        raise web.HTTPServiceUnavailable(reason="Drive not connected")
+
+    shared = await drive.list_shared_drives()
+    drives = [{"id": "", "name": "내 드라이브"}] + [
+        {"id": d["id"], "name": d["name"]} for d in shared
+    ]
+    return web.json_response({"drives": drives})
+
+
+async def drive_folders_handler(request: web.Request) -> web.Response:
+    """GET /api/internal/drive/folders — 폴더 브라우저."""
+    drive = request.app.get("drive_provider")
+    if not drive:
+        raise web.HTTPServiceUnavailable(reason="Drive not connected")
+
+    drive_id = request.query.get("drive_id", "")
+    parent_id = request.query.get("parent_id", "")
+    folders = await drive.list_folders(drive_id=drive_id, parent_id=parent_id)
+    return web.json_response({"folders": folders})
+
+
+async def drive_setup_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/drive/setup — 드라이브/폴더 선택 저장."""
+    import yaml
+
+    base_path = request.app.get("base_path")
+    if not base_path:
+        raise web.HTTPServiceUnavailable(reason="base_path not available")
+
+    body = await request.json()
+    drive_id = body.get("drive_id", "")
+    root_folder_id = body.get("root_folder_id", "")
+
+    # Update secrets.yaml
+    secrets_path = pathlib.Path(base_path) / ".maestro" / "secrets.yaml"
+    existing = {}
+    if secrets_path.exists():
+        try:
+            existing = yaml.safe_load(secrets_path.read_text()) or {}
+        except Exception:
+            existing = {}
+
+    existing.setdefault("drive", {})
+    existing["drive"]["drive_id"] = drive_id
+    existing["drive"]["root_folder_id"] = root_folder_id
+    secrets_path.write_text(yaml.dump(existing, default_flow_style=False))
+
+    # Hot-reload DriveProvider
+    config = request.app["config"]
+    config.drive.drive_id = drive_id
+    config.drive.root_folder_id = root_folder_id
+
+    drive = request.app.get("drive_provider")
+    if drive:
+        drive._drive_id = drive_id
+        drive._root_folder_id = root_folder_id
+        drive._folder_cache.clear()
+        logger.info("Drive provider hot-reloaded with new settings")
+
+    return web.json_response(
+        {"ok": True, "drive_id": drive_id, "root_folder_id": root_folder_id}
+    )
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
@@ -1399,15 +1581,19 @@ async def slack_test_handler(request: web.Request) -> web.Response:
 def create_api_app(
     store: Store,
     project_root: pathlib.Path | None = None,
+    config: object | None = None,
 ) -> web.Application:
     """Create and configure the aiohttp Application.
 
     Args:
         store: The data store instance.
         project_root: Retained for backwards compatibility; no longer used.
+        config: Optional application config object, stored as app["config"].
     """
     app = web.Application(middlewares=[spa_fallback_middleware])
     app["store"] = store
+    if config is not None:
+        app["config"] = config
 
     # SPA static assets
     if _WEB_DIST.exists():
@@ -1513,6 +1699,14 @@ def create_api_app(
     app.router.add_get("/api/internal/slack/manifest", slack_manifest_handler)
     app.router.add_post("/api/internal/slack/setup", slack_setup_handler)
     app.router.add_post("/api/internal/slack/test", slack_test_handler)
+
+    # Drive setup
+    app.router.add_get("/api/internal/drive/status", drive_status_handler)
+    app.router.add_post("/api/internal/drive/auth-url", drive_auth_url_handler)
+    app.router.add_get("/api/internal/drive/callback", drive_callback_handler)
+    app.router.add_get("/api/internal/drive/drives", drive_drives_handler)
+    app.router.add_get("/api/internal/drive/folders", drive_folders_handler)
+    app.router.add_post("/api/internal/drive/setup", drive_setup_handler)
 
     # Webhooks
     app.router.add_post("/api/webhooks/generic", webhook_generic_handler)
