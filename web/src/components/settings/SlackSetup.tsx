@@ -130,18 +130,23 @@ export function SlackSetup() {
       {step === 1 && (
         <div>
           <p className="text-[13px] text-[#37352f] font-medium mb-2">Create a Slack App</p>
-          <p className="text-[13px] text-[#787774] mb-3">
-            Go to{" "}
-            <a
-              href="https://api.slack.com/apps"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              api.slack.com/apps
-            </a>{" "}
-            and create a new app using the manifest below.
-          </p>
+          <ol className="text-[12px] text-[#787774] mb-3 space-y-1 list-decimal list-inside">
+            <li>
+              Go to{" "}
+              <a
+                href="https://api.slack.com/apps"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                api.slack.com/apps
+              </a>
+              {" "}and click <strong>"Create New App"</strong>
+            </li>
+            <li>Select <strong>"From a manifest"</strong> and choose your workspace</li>
+            <li>Copy the JSON below and paste it into the manifest field</li>
+            <li>Click <strong>"Create"</strong> to finish</li>
+          </ol>
           <div className="relative mb-3">
             <pre className="bg-[#f7f6f3] border border-[#e8e5df] rounded p-3 text-[12px] text-[#37352f] overflow-auto max-h-64 font-mono whitespace-pre-wrap">
               {manifestQuery.isLoading
@@ -175,7 +180,10 @@ export function SlackSetup() {
       {/* Step 2: Token inputs */}
       {step === 2 && (
         <div>
-          <p className="text-[13px] text-[#37352f] font-medium mb-3">Enter your tokens</p>
+          <p className="text-[13px] text-[#37352f] font-medium mb-1">Enter your tokens</p>
+          <p className="text-[11px] text-[#9b9a97] mb-3">
+            Copy these tokens from the Slack App you just created.
+          </p>
           <div className="space-y-3 mb-4">
             <div>
               <label className="block text-[12px] text-[#787774] mb-1">Bot Token</label>
@@ -185,6 +193,9 @@ export function SlackSetup() {
                 onChange={(e) => setBotToken(e.target.value)}
                 className="text-[13px] border-[#e8e5df] focus:border-[#37352f] h-8"
               />
+              <p className="text-[11px] text-[#9b9a97] mt-1">
+                OAuth & Permissions → Install to Workspace → Bot User OAuth Token
+              </p>
             </div>
             <div>
               <label className="block text-[12px] text-[#787774] mb-1">App-Level Token</label>
@@ -194,6 +205,9 @@ export function SlackSetup() {
                 onChange={(e) => setAppToken(e.target.value)}
                 className="text-[13px] border-[#e8e5df] focus:border-[#37352f] h-8"
               />
+              <p className="text-[11px] text-[#9b9a97] mt-1">
+                Basic Information → App-Level Tokens → Generate Token (scope: connections:write)
+              </p>
             </div>
             <div>
               <label className="block text-[12px] text-[#787774] mb-1">Default Channel</label>
@@ -203,6 +217,9 @@ export function SlackSetup() {
                 onChange={(e) => setChannel(e.target.value)}
                 className="text-[13px] border-[#e8e5df] focus:border-[#37352f] h-8"
               />
+              <p className="text-[11px] text-[#9b9a97] mt-1">
+                The channel to receive notifications (the bot must be invited to this channel)
+              </p>
             </div>
           </div>
           {setupError && (
@@ -259,6 +276,14 @@ export function SlackSetup() {
                 : "Test failed. Check your configuration and try again."}
             </p>
           )}
+          <div className="mt-4 pt-3 border-t border-[#e8e5df]">
+            <p className="text-[12px] text-[#787774] font-medium mb-1">Next steps</p>
+            <ul className="text-[11px] text-[#9b9a97] space-y-0.5 list-disc list-inside">
+              <li>Restart the daemon to activate Slack integration</li>
+              <li>Mention <strong>@YourBot</strong> in a channel or send a DM to start chatting</li>
+              <li>Task notifications and approval requests will appear in your configured channel</li>
+            </ul>
+          </div>
         </div>
       )}
     </Card>
