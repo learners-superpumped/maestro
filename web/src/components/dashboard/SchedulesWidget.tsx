@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
-import { Calendar } from "lucide-react"
+import { Calendar, ChevronRight } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface Schedule {
@@ -46,10 +46,19 @@ export function SchedulesWidget({ schedules, loading }: Props) {
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
-          Upcoming Schedules
-        </span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
+            Upcoming Schedules
+          </span>
+        </div>
+        <button
+          onClick={() => navigate({ to: "/schedules" })}
+          className="flex items-center gap-0.5 text-[12px] text-[#2383e2] hover:underline"
+        >
+          View all
+          <ChevronRight className="h-3 w-3" />
+        </button>
       </div>
 
       <div className="space-y-px">

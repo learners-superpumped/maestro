@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Target, ChevronRight } from "lucide-react"
 
 interface Goal {
   id: string
@@ -22,16 +23,26 @@ export function GoalsWidget({ goals, tasksByGoalId, loading }: Props) {
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
-          Goals
-        </span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Target className="h-3.5 w-3.5 text-[#9b9a97]" />
+          <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
+            Goals
+          </span>
+        </div>
+        <button
+          onClick={() => navigate({ to: "/goals" })}
+          className="flex items-center gap-0.5 text-[12px] text-[#2383e2] hover:underline"
+        >
+          View all
+          <ChevronRight className="h-3 w-3" />
+        </button>
       </div>
 
       <div className="space-y-2">
         {loading &&
           [1, 2].map((i) => (
-            <div key={i} className="space-y-1 px-1">
+            <div key={i} className="space-y-1.5 px-1">
               <Skeleton className="h-3.5 w-3/4 bg-[#f7f6f3]" />
               <Skeleton className="h-[3px] w-full bg-[#f7f6f3]" />
             </div>
@@ -50,19 +61,20 @@ export function GoalsWidget({ goals, tasksByGoalId, loading }: Props) {
               <button
                 key={goal.id}
                 onClick={() => navigate({ to: "/goals" })}
-                className="w-full px-1 py-1 rounded hover:bg-[#f9f9f8] transition-colors text-left space-y-1"
+                className="w-full px-1 py-1 rounded hover:bg-[#f9f9f8] transition-colors text-left"
               >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[12px] text-[#37352f] truncate">{goal.description}</span>
+                <span className="text-[12px] text-[#37352f] truncate block mb-1">{goal.description}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-[#9b9a97] w-7 shrink-0">{pct}%</span>
+                  <div className="h-[3px] flex-1 bg-[#f4f2ef] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${pct}%`, backgroundColor: color }}
+                    />
+                  </div>
                   <span className="text-[11px] text-[#9b9a97] shrink-0">
-                    {pct}% · {stats.done}/{stats.total}
+                    {stats.done} / {stats.total} tasks
                   </span>
-                </div>
-                <div className="h-[3px] w-full bg-[#f4f2ef] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{ width: `${pct}%`, backgroundColor: color }}
-                  />
                 </div>
               </button>
             )

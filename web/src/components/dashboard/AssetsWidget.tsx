@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
-import { File, Image, BarChart2, FileText } from "lucide-react"
+import { File, Image, BarChart2, FileText, ChevronRight } from "lucide-react"
 
 interface Asset {
   id: string
@@ -29,13 +29,20 @@ export function AssetsWidget({ assets, driveConnected, loading }: Props) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
+      <div className="mb-2">
+        <div className="flex items-center justify-between">
           <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
             Recent Assets
           </span>
+          <button
+            onClick={() => navigate({ to: "/assets" })}
+            className="flex items-center gap-0.5 text-[12px] text-[#2383e2] hover:underline"
+          >
+            View all
+            <ChevronRight className="h-3 w-3" />
+          </button>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 mt-0.5">
           <span
             className="h-1.5 w-1.5 rounded-full"
             style={{ backgroundColor: driveConnected ? "#4dab9a" : "#9b9a97" }}

@@ -1,3 +1,5 @@
+import { DollarSign } from "lucide-react"
+
 interface Props {
   weekSpend: number[]
   todaySpend: number
@@ -11,6 +13,7 @@ export function SpendChart({ weekSpend, todaySpend }: Props) {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
+        <DollarSign className="h-3.5 w-3.5 text-[#9b9a97]" />
         <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
           Spend This Week
         </span>
