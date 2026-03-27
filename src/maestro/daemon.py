@@ -88,8 +88,30 @@ class Daemon:
                 embedding_client = EmbeddingClient(self._config.assets.gemini_api_key)
             except Exception:
                 pass
+        # Drive provider (optional)
+        drive_provider = None
+        if self._config.drive.enabled and self._config.drive.refresh_token:
+            try:
+                from maestro.drive import DriveProvider
+
+                drive_provider = DriveProvider(
+                    client_id=self._config.drive.client_id,
+                    client_secret=self._config.drive.client_secret,
+                    refresh_token=self._config.drive.refresh_token,
+                    drive_id=self._config.drive.drive_id,
+                    root_folder_id=self._config.drive.root_folder_id,
+                )
+                logger.info("Google Drive provider initialized")
+            except Exception:
+                logger.warning("Failed to initialize Drive provider", exc_info=True)
+        self._drive_provider = drive_provider
+
         self._asset_manager = AssetManager(
-            self._store, embedding_client, self._config, self._base_path
+            self._store,
+            embedding_client,
+            self._config,
+            self._base_path,
+            drive=drive_provider,
         )
 
         self._worktree_mgr = WorktreeManager(base_path)
@@ -230,6 +252,7 @@ class Daemon:
         # 1. Create the aiohttp app
         app = create_api_app(self._store, project_root=self._base_path)
         app["asset_manager"] = self._asset_manager
+        app["drive_provider"] = self._drive_provider
         app["daemon"] = self
         app["conductor"] = self._conductor
         app["base_path"] = self._base_path
@@ -1081,14 +1104,22 @@ class Daemon:
                         "Asset auto-extract failed for task %s: %s", task.id, e
                     )
 
-        # 일반 태스크: approve 후 resume 완료 → 리뷰 재진입 방지
-        approval = await self._store.get_approval_by_task(task.id)
-        if approval and approval["status"] == "approved":
-            return  # 최종 완료, 리뷰 스킵
+        # Resume 완료 → 리뷰 재진입 방지
+        # task.session_id == result.session_id 이면 동일 세션을 이어받은 것이므로
+        # 이미 리뷰 사이클이 완료된 상태. 재리뷰 하지 않음.
+        if (
+            task.session_id
+            and result.session_id
+            and task.session_id == result.session_id
+        ):
+            return
 
-        # 첫 실행 완료 — 리뷰 필요 여부 확인
-        if task.approval_level >= 1:
-            await self._create_review_task(task, result)
+        # Level 0은 리뷰 없이 완료
+        if task.approval_level == 0:
+            return
+
+        # Level 1, 2: 실행 완료 후 reviewer 검증
+        await self._create_review_task(task, result)
 
     def _effective_no_worktree(self, task: Task) -> bool:
         """Check if a task effectively runs in base_path (no worktree)."""
