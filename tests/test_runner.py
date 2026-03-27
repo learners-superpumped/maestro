@@ -3,7 +3,8 @@ TDD tests for maestro.runner
 
 Tests cover:
 - parse_stream_event: valid JSON, invalid JSON, empty line
-- AgentRunner._build_execute_args: correct flags including --max-turns and --max-budget-usd
+- AgentRunner._build_execute_args: correct flags
+  including --max-turns and --max-budget-usd
 - AgentRunner._build_resume_args: with session_id
 """
 
@@ -56,7 +57,10 @@ class TestParseStreamEvent:
         assert result["message"]["content"] == "Hello"
 
     def test_valid_json_result_event(self):
-        line = '{"type": "result", "total_cost_usd": 0.0042, "is_error": false, "session_id": "abc"}'
+        line = (
+            '{"type": "result", "total_cost_usd": 0.0042,'
+            ' "is_error": false, "session_id": "abc"}'
+        )
         result = parse_stream_event(line)
         assert result is not None
         assert result["type"] == "result"
@@ -183,7 +187,7 @@ class TestBuildExecuteArgs:
         assert args[idx + 1] == ""
 
     def test_full_args_structure_bypass(self, runner: AgentRunner, sample_task: Task):
-        """Integration check: verify the complete expected argument list (bypass mode)."""
+        """Verify complete expected argument list (bypass mode)."""
         args = runner._build_execute_args(
             sample_task,
             allowed_tools=["Read", "Write"],
@@ -248,7 +252,7 @@ class TestBuildExecuteArgs:
     def test_system_prompt_provided_adds_flag(
         self, runner: AgentRunner, sample_task: Task
     ):
-        """When system_prompt is given, --append-system-prompt and its value are appended."""
+        """--append-system-prompt and its value are appended."""
         prompt = "You are a helpful coding assistant."
         args = runner._build_execute_args(
             sample_task,

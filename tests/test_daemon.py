@@ -464,7 +464,7 @@ def test_extract_json_invalid():
 def test_resolve_cwd_not_git_repo(tmp_path: pathlib.Path) -> None:
     """When not in a git repo, should return base_path."""
     config = _make_config()
-    store = MagicMock()
+    MagicMock()
     daemon = Daemon.__new__(Daemon)
     daemon._config = config
     daemon._base_path = tmp_path
@@ -866,7 +866,7 @@ async def test_review_event_emitted(
 async def test_revision_event_emitted(
     db_path: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """revision 태스크 완료 시 원본 태스크에 revision_submitted 이벤트가 기록되어야 함."""
+    """revision 완료 시 원본에 revision_submitted 이벤트 기록."""
     store = Store(db_path)
     config = _make_config()
     daemon = Daemon(config, store, tmp_path)

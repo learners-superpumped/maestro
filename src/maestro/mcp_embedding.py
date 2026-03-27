@@ -166,7 +166,10 @@ TOOLS: dict[str, dict[str, Any]] = {
             "properties": {
                 "asset_type": {
                     "type": "string",
-                    "description": "Asset type (post, image, video, audio, document, research, engage)",
+                    "description": (
+                        "Asset type (post, image, video,"
+                        " audio, document, research, engage)"
+                    ),
                 },
                 "title": {"type": "string", "description": "Human-readable title"},
                 "content_json": {

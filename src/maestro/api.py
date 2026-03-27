@@ -458,10 +458,9 @@ async def task_approve_handler(request: web.Request) -> web.Response:
     if task is None:
         raise web.HTTPNotFound(reason=f"Task not found: {task_id}")
 
-    note = None
     try:
         body = await request.json()
-        note = body.get("note")
+        body.get("note")
     except (json.JSONDecodeError, ValueError):
         pass
 

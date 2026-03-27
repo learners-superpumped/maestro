@@ -313,7 +313,7 @@ def test_goals_not_in_config(tmp_path: pathlib.Path) -> None:
 
 
 def test_resources_parsed(tmp_path: pathlib.Path) -> None:
-    """resources should be parsed into dict[resource_type, dict[profile_name, ResourceProfile]]."""
+    """resources: dict[resource_type, dict[name, ResourceProfile]]."""
     cfg_file = tmp_path / "maestro.yaml"
     cfg_file.write_text(FULL_CONFIG)
     cfg = load_config(cfg_file)
@@ -477,7 +477,10 @@ def test_agent_definition_permission_mode_override(tmp_path: pathlib.Path) -> No
     """Agent with explicit permission_mode is parsed."""
     cfg_file = tmp_path / "maestro.yaml"
     cfg_file.write_text(
-        "project:\n  name: test\nagents:\n  sandbox:\n    permission_mode: restricted\n    tools: [Read]\n"
+        "project:\n  name: test\n"
+        "agents:\n  sandbox:\n"
+        "    permission_mode: restricted\n"
+        "    tools: [Read]\n"
     )
     cfg = load_config(cfg_file)
     assert cfg.agents["sandbox"].permission_mode == "restricted"

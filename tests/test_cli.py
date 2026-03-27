@@ -63,7 +63,8 @@ class TestInit:
         with runner.isolated_filesystem():
             # Write an example config
             Path("maestro.yaml.example").write_text(
-                'project:\n  name: "from-example"\n  store_path: .maestro/store/maestro.db\n',
+                'project:\n  name: "from-example"\n'
+                "  store_path: .maestro/store/maestro.db\n",
                 encoding="utf-8",
             )
             result = runner.invoke(main, ["init"])
@@ -76,7 +77,8 @@ class TestInit:
         runner = CliRunner()
         with runner.isolated_filesystem():
             Path("maestro.yaml").write_text(
-                'project:\n  name: "existing"\n  store_path: .maestro/store/maestro.db\n',
+                'project:\n  name: "existing"\n'
+                "  store_path: .maestro/store/maestro.db\n",
                 encoding="utf-8",
             )
             result = runner.invoke(main, ["init"])

@@ -238,7 +238,8 @@ class AgentRunner:
 
                     elif event_type == "assistant":
                         # Capture last assistant text as fallback
-                        # Structure: {"message": {"content": [{"type": "text", "text": "..."}]}}
+                        # Structure: {"message": {"content":
+                        #   [{"type": "text", "text": "..."}]}}
                         msg = event.get("message", {})
                         if isinstance(msg, dict):
                             parts = msg.get("content", [])

@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from maestro.integrations.linear import LinearClient
-
 
 # ---------------------------------------------------------------------------
 # Availability
@@ -60,32 +57,34 @@ async def test_fetch_issues_success(aiohttp_server) -> None:
     from aiohttp import web
 
     async def handler(request: web.Request) -> web.Response:
-        return web.json_response({
-            "data": {
-                "project": {
-                    "issues": {
-                        "nodes": [
-                            {
-                                "id": "issue-1",
-                                "identifier": "PRJ-1",
-                                "title": "Fix bug",
-                                "description": "There is a bug",
-                                "state": {"name": "Todo"},
-                                "priority": 1,
-                            },
-                            {
-                                "id": "issue-2",
-                                "identifier": "PRJ-2",
-                                "title": "Add feature",
-                                "description": None,
-                                "state": {"name": "In Progress"},
-                                "priority": 2,
-                            },
-                        ]
+        return web.json_response(
+            {
+                "data": {
+                    "project": {
+                        "issues": {
+                            "nodes": [
+                                {
+                                    "id": "issue-1",
+                                    "identifier": "PRJ-1",
+                                    "title": "Fix bug",
+                                    "description": "There is a bug",
+                                    "state": {"name": "Todo"},
+                                    "priority": 1,
+                                },
+                                {
+                                    "id": "issue-2",
+                                    "identifier": "PRJ-2",
+                                    "title": "Add feature",
+                                    "description": None,
+                                    "state": {"name": "In Progress"},
+                                    "priority": 2,
+                                },
+                            ]
+                        }
                     }
                 }
             }
-        })
+        )
 
     app = web.Application()
     app.router.add_post("/graphql", handler)

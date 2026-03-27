@@ -1,6 +1,9 @@
 """Tests for Gemini Embedding 2 Preview client."""
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from maestro.embedding import EmbeddingClient, _guess_mime
 
 

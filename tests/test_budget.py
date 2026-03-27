@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import pathlib
-from unittest.mock import patch
 
 import pytest
 
 from maestro.budget import BudgetManager
 from maestro.config import BudgetConfig
 from maestro.store import Store
-
 
 # ---------------------------------------------------------------------------
 # Helpers

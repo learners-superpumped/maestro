@@ -202,7 +202,9 @@ class ConductorAgent:
             # Use a direct update for title
             async with self._store._conn() as db:
                 await db.execute(
-                    "UPDATE conductor_conversations SET title = ? WHERE id = ? AND title = ''",
+                    "UPDATE conductor_conversations"
+                    " SET title = ? WHERE id = ?"
+                    " AND title = ''",
                     (title, conversation_id),
                 )
                 await db.commit()
@@ -299,7 +301,10 @@ class ConductorAgent:
     # ------------------------------------------------------------------
 
     async def _build_system_prompt(self, user_id: str) -> str:
-        """Build system prompt using 2-tier hierarchy (project override -> package builtin)."""
+        """Build system prompt using 2-tier hierarchy.
+
+        Hierarchy: project override -> package builtin.
+        """
         prompt_parts: list[str] = []
 
         # Tier 2: project override (.maestro/prompts/conductor.md)

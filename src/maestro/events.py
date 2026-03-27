@@ -74,7 +74,8 @@ class EventEmittingStore(Store):
     async def update_task_status(self, task_id, status, **kwargs):
         old = await self.get_task(task_id)
         old_status = old.status.value if old else None
-        # Extract actor before passing kwargs to parent (parent doesn't know about actor)
+        # Extract actor before passing kwargs to parent
+        # (parent doesn't know about actor)
         actor = kwargs.pop("actor", None)
         await super().update_task_status(task_id, status, **kwargs)
 

@@ -487,7 +487,7 @@ def task_list(filter_status, filter_agent, flat, limit):
             display_roots = roots[:limit]
 
             def _effective_status(task):
-                """부모가 completed이지만 자식 중 활성 태스크가 있으면 running으로 표시."""
+                """Return running if parent completed but children active."""
                 if task.status.value == "completed":
                     kids = children_map.get(task.id, [])
                     terminal = {"completed", "failed", "cancelled"}
@@ -511,7 +511,9 @@ def task_list(filter_status, filter_agent, flat, limit):
             if total_roots > limit:
                 status_label = f" {filter_status}" if filter_status else ""
                 click.echo(
-                    f"\nShowing {limit} of {total_roots}{status_label} root tasks. Use --limit to show more."
+                    f"\nShowing {limit} of {total_roots}"
+                    f"{status_label} root tasks."
+                    " Use --limit to show more."
                 )
         else:
             # Flat mode: slice already-fetched data
@@ -1317,7 +1319,9 @@ def schedule_list():
             trigger = s["cron"] or f"every {s['interval_ms']}ms"
             enabled = "✓" if s["enabled"] else "✗"
             click.echo(
-                f"{s['name']:<25} {s['task_type']:<15} {s.get('agent', 'default'):<15} {trigger:<20} {enabled}"
+                f"{s['name']:<25} {s['task_type']:<15} "
+                f"{s.get('agent', 'default'):<15} "
+                f"{trigger:<20} {enabled}"
             )
 
     asyncio.run(_run())
@@ -1618,7 +1622,8 @@ def rule_list():
         click.echo("-" * 50)
         for r in rules:
             click.echo(
-                f"{r['task_type']:<15} {r['asset_type']:<10} {r.get('title_field') or '':<20}"
+                f"{r['task_type']:<15} {r['asset_type']:<10} "
+                f"{r.get('title_field') or '':<20}"
             )
 
     asyncio.run(_run())
@@ -1697,7 +1702,8 @@ def slack_setup() -> None:
     click.echo(json.dumps(manifest, indent=2, ensure_ascii=False))
     click.echo("")
     click.echo(
-        "1. Go to https://api.slack.com/apps and create a new app 'From an app manifest'."
+        "1. Go to https://api.slack.com/apps and create"
+        " a new app 'From an app manifest'."
     )
     click.echo("2. Paste the manifest above, then install the app to your workspace.")
     click.echo("")

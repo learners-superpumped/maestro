@@ -208,7 +208,7 @@ async def maestro_goal_update(
 
 
 async def maestro_goal_trigger(goal_id: str) -> dict[str, Any]:
-    """Trigger a goal — runs the planner for this goal immediately, bypassing cooldown."""
+    """Trigger a goal -- runs the planner immediately."""
     return await _daemon_post(f"/api/internal/goal/{goal_id}/trigger", {})
 
 

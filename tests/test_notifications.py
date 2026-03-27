@@ -7,7 +7,6 @@ import pathlib
 from maestro.notifications import NotificationManager
 from maestro.store import Store
 
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------

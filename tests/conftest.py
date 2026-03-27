@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pathlib
 
-import pytest
 import aiosqlite
+import pytest
 
 
 @pytest.fixture
@@ -51,7 +51,12 @@ async def db_path(tmp_path: pathlib.Path) -> pathlib.Path:
     placeholder schema is used so that early tests can still run.
     """
     db_file = tmp_path / "maestro.db"
-    schema_file = pathlib.Path(__file__).resolve().parent.parent / "src" / "maestro" / "schema.sql"
+    schema_file = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "src"
+        / "maestro"
+        / "schema.sql"
+    )
 
     if schema_file.exists():
         schema_sql = schema_file.read_text()

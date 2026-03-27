@@ -185,7 +185,10 @@ class Daemon:
         return self._worktree_mgr.ensure_worktree(f"task-{task.id}")
 
     def _load_prompt(self, agent_name: str) -> str | None:
-        """Load agent prompt using 3-tier hierarchy: project override -> package builtin -> None."""
+        """Load agent prompt using 3-tier hierarchy.
+
+        Hierarchy: project override -> package builtin -> None.
+        """
         agent_def = self._config.agents.get(agent_name)
         if not agent_def:
             return None
@@ -411,7 +414,7 @@ class Daemon:
 
         # Collect signals to know which goals to update
         signals = await self._planner.collector.collect_signals()
-        goal_ids_with_signals = {s["goal_id"] for s in signals}
+        {s["goal_id"] for s in signals}
 
         for spec in task_specs:
             task = Task(
@@ -606,12 +609,14 @@ class Daemon:
         task_context = (
             "## Execution Environment\n"
             "You are a HEADLESS autonomous agent in the Maestro orchestration system.\n"
-            "There is NO human operator reading your output. No one can answer questions.\n\n"
+            "There is NO human operator reading your output. "
+            "No one can answer questions.\n\n"
             "RULES:\n"
             "1. NEVER ask questions, present choices, or wait for input. "
             "Always make the best judgment call yourself and keep going.\n"
             "2. If you lack critical information, state your assumptions and proceed.\n"
-            "3. Your final output is stored as the task result. Make it complete and actionable.\n\n"
+            "3. Your final output is stored as the task result. "
+            "Make it complete and actionable.\n\n"
             f"## Maestro Task Context\n"
             f"- Task ID: {task.id}\n"
             f"- Task Type: {task.type}\n"
@@ -664,12 +669,14 @@ class Daemon:
         task_context = (
             "## Execution Environment\n"
             "You are a HEADLESS autonomous agent in the Maestro orchestration system.\n"
-            "There is NO human operator reading your output. No one can answer questions.\n\n"
+            "There is NO human operator reading your output. "
+            "No one can answer questions.\n\n"
             "RULES:\n"
             "1. NEVER ask questions, present choices, or wait for input. "
             "Always make the best judgment call yourself and keep going.\n"
             "2. If you lack critical information, state your assumptions and proceed.\n"
-            "3. Your final output is stored as the task result. Make it complete and actionable.\n\n"
+            "3. Your final output is stored as the task result. "
+            "Make it complete and actionable.\n\n"
             f"## Maestro Task Context\n"
             f"- Task ID: {task.id}\n"
             f"- Task Type: {task.type}\n"
@@ -1144,7 +1151,10 @@ class Daemon:
                         actor=f"agent:{review_task.id}",
                         detail_json={
                             "verdict": "error",
-                            "summary": "Review failed: response was not valid JSON. Will retry.",
+                            "summary": (
+                                "Review failed: response was"
+                                " not valid JSON. Will retry."
+                            ),
                             "issues": [],
                             "review_task_id": review_task.id,
                         },
@@ -1186,7 +1196,10 @@ class Daemon:
                 json.dumps(
                     {
                         "result": result.result,
-                        "review_summary": f"자동 검증 {original_task.review_count}회 실패. 수동 검토 필요.",
+                        "review_summary": (
+                            f"자동 검증 {original_task.review_count}"
+                            "회 실패. 수동 검토 필요."
+                        ),
                         "issues": review_data.get("issues", []),
                     }
                 ),
@@ -1199,13 +1212,16 @@ class Daemon:
                 id=str(uuid.uuid4())[:8],
                 type=original_task.type,
                 agent=original_task.agent,
-                title=f"Revision #{original_task.review_count + 1}: {original_task.title}",
+                title=(
+                    f"Revision #{original_task.review_count + 1}: {original_task.title}"
+                ),
                 instruction=(
                     f"# 리뷰어 피드백 (반드시 해결할 것)\n{feedback}\n\n"
                     f"# 원본 지시\n{original_task.instruction}\n\n"
                     f"중요: 이전 시도에서 위 피드백의 문제가 발견되었습니다. "
                     f"반드시 Edit/Write 도구를 사용하여 파일을 직접 수정하고, "
-                    f"수정 후 파일을 다시 읽어 변경사항이 실제로 적용되었는지 확인하세요. "
+                    "수정 후 파일을 다시 읽어 "
+                    "변경사항이 실제로 적용되었는지 확인하세요. "
                     f"도구를 사용하지 않고 결과만 보고하는 것은 허용되지 않습니다."
                 ),
                 approval_level=original_task.approval_level,

@@ -203,7 +203,7 @@ async def test_concurrency_limit_blocks_dispatch(
 
 @pytest.mark.asyncio
 async def test_retry_flow_on_timeout(db_path: pathlib.Path) -> None:
-    """A RUNNING task with timeout_at in the past becomes RETRY_QUEUED with attempt+1."""
+    """RUNNING task past timeout becomes RETRY_QUEUED with attempt+1."""
     store = Store(db_path)
     reconciler = Reconciler(store=store, stall_timeout_ms=30_000)
 

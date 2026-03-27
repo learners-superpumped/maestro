@@ -148,7 +148,7 @@ class TestWorktreeManager:
     # ------------------------------------------------------------------
 
     def test_branch_reuse_after_remove(self) -> None:
-        """After removing a worktree but keeping the branch, ensure_worktree reuses it."""
+        """After removing a worktree, ensure_worktree reuses branch."""
         path = self.mgr.ensure_worktree("reuse-me")
         # Write a file and commit so the branch has unique content
         (path / "marker.txt").write_text("exists")

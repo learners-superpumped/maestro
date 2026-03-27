@@ -48,7 +48,8 @@ async def test_schema_applies_cleanly(db_path: pathlib.Path) -> None:
     }
     async with aiosqlite.connect(str(db_path)) as db:
         cursor = await db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            "SELECT name FROM sqlite_master"
+            " WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
         rows = await cursor.fetchall()
     found = {row[0] for row in rows}
@@ -225,7 +226,6 @@ async def test_list_dispatchable_excludes_future_scheduled(
     """Tasks with a future scheduled_at must not be dispatched."""
     store = Store(db_path)
 
-    future_ts = "2099-01-01T00:00:00+00:00"
     future_task = _task(
         status=TaskStatus.APPROVED,
         scheduled_at=datetime(2099, 1, 1, tzinfo=timezone.utc),

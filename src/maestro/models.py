@@ -100,7 +100,8 @@ class Task:
     Optional fields (all default to None unless noted)
     ---------------------------------------------------
     agent           : Agent definition name from maestro.yaml (default "default")
-    no_worktree     : When True, run at project root instead of a git worktree (default False)
+    no_worktree     : When True, run at project root instead
+                      of a git worktree (default False)
     goal_id         : Parent goal identifier
     parent_task_id  : ID of a parent task (for sub-tasks)
     status          : Current state (default: PENDING)

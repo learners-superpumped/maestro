@@ -213,7 +213,8 @@ class Store:
         try:
             async with self._conn() as db:
                 await db.execute(
-                    "ALTER TABLE tasks ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0"
+                    "ALTER TABLE tasks ADD COLUMN"
+                    " review_count INTEGER NOT NULL DEFAULT 0"
                 )
                 await db.commit()
         except Exception:
@@ -223,7 +224,8 @@ class Store:
         try:
             async with self._conn() as db:
                 await db.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id)"
+                    "CREATE INDEX IF NOT EXISTS"
+                    " idx_tasks_parent ON tasks(parent_task_id)"
                 )
                 await db.commit()
         except Exception:
@@ -339,18 +341,23 @@ class Store:
                         session_id TEXT,
                         message_count INTEGER DEFAULT 0,
                         total_cost_usd REAL DEFAULT 0.0,
-                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                        created_at TEXT NOT NULL DEFAULT
+                            (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                        updated_at TEXT NOT NULL DEFAULT
+                            (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
                     )
                 """)
                 await db.execute("""
                     CREATE TABLE IF NOT EXISTS conductor_messages (
                         id TEXT PRIMARY KEY,
-                        conversation_id TEXT NOT NULL REFERENCES conductor_conversations(id) ON DELETE CASCADE,
+                        conversation_id TEXT NOT NULL
+                            REFERENCES conductor_conversations(id)
+                            ON DELETE CASCADE,
                         role TEXT NOT NULL,
                         content TEXT NOT NULL,
                         cost_usd REAL DEFAULT 0.0,
-                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                        created_at TEXT NOT NULL DEFAULT
+                            (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
                     )
                 """)
                 await db.execute("""
@@ -364,7 +371,8 @@ class Store:
                         message TEXT NOT NULL,
                         trigger_at TEXT NOT NULL,
                         delivered BOOLEAN DEFAULT FALSE,
-                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                        created_at TEXT NOT NULL DEFAULT
+                            (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
                     )
                 """)
                 await db.execute("""
@@ -392,19 +400,28 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO tasks (
-                    id, task_number, type, status, agent, no_worktree, title, instruction,
-                    goal_id, parent_task_id, depends_on, priority, approval_level,
-                    schedule, deadline, session_id, attempt, max_retries,
-                    budget_usd, result, error, cost_usd, review_count,
-                    created_at, scheduled_at, started_at, completed_at,
-                    timeout_at, updated_at
+                    id, task_number, type, status, agent,
+                    no_worktree, title, instruction,
+                    goal_id, parent_task_id, depends_on,
+                    priority, approval_level,
+                    schedule, deadline, session_id,
+                    attempt, max_retries,
+                    budget_usd, result, error, cost_usd,
+                    review_count,
+                    created_at, scheduled_at, started_at,
+                    completed_at, timeout_at, updated_at
                 ) VALUES (
-                    :id, :task_number, :type, :status, :agent, :no_worktree, :title, :instruction,
-                    :goal_id, :parent_task_id, :depends_on, :priority, :approval_level,
-                    :schedule, :deadline, :session_id, :attempt, :max_retries,
-                    :budget_usd, :result, :error, :cost_usd, :review_count,
-                    :created_at, :scheduled_at, :started_at, :completed_at,
-                    :timeout_at, :updated_at
+                    :id, :task_number, :type, :status,
+                    :agent, :no_worktree, :title,
+                    :instruction,
+                    :goal_id, :parent_task_id, :depends_on,
+                    :priority, :approval_level,
+                    :schedule, :deadline, :session_id,
+                    :attempt, :max_retries,
+                    :budget_usd, :result, :error, :cost_usd,
+                    :review_count,
+                    :created_at, :scheduled_at, :started_at,
+                    :completed_at, :timeout_at, :updated_at
                 )
                 """,
                 {
@@ -456,7 +473,10 @@ class Store:
         """Return the number of children that are not in a terminal state."""
         async with self._conn() as db:
             cursor = await db.execute(
-                "SELECT COUNT(*) FROM tasks WHERE parent_task_id = ? AND status NOT IN ('completed', 'failed', 'cancelled')",
+                "SELECT COUNT(*) FROM tasks"
+                " WHERE parent_task_id = ?"
+                " AND status NOT IN"
+                " ('completed', 'failed', 'cancelled')",
                 (task_id,),
             )
             row = await cursor.fetchone()
@@ -584,9 +604,18 @@ class Store:
         if root_only:
             sql = f"""
                 SELECT t.*,
-                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id) as children_total,
-                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.status = 'completed') as children_completed,
-                    (SELECT COUNT(*) FROM tasks c WHERE c.parent_task_id = t.id AND c.status NOT IN ('completed', 'failed', 'cancelled')) as children_active
+                    (SELECT COUNT(*) FROM tasks c
+                        WHERE c.parent_task_id = t.id)
+                        as children_total,
+                    (SELECT COUNT(*) FROM tasks c
+                        WHERE c.parent_task_id = t.id
+                        AND c.status = 'completed')
+                        as children_completed,
+                    (SELECT COUNT(*) FROM tasks c
+                        WHERE c.parent_task_id = t.id
+                        AND c.status NOT IN (
+                            'completed', 'failed', 'cancelled'
+                        )) as children_active
                 FROM tasks t {where}
                 ORDER BY t.created_at DESC
             """
@@ -727,7 +756,9 @@ class Store:
             SELECT t.id, t.task_number, t.title, t.status,
                    substr(t.result, 1, 500) AS result_summary,
                    t.created_at,
-                   bm25(tasks_fts) * (1.0 / (1.0 + (julianday('now') - julianday(t.created_at)) / 30.0))
+                   bm25(tasks_fts) * (1.0 / (1.0 + (
+                       julianday('now')
+                       - julianday(t.created_at)) / 30.0))
                      AS score
             FROM tasks_fts f
             JOIN tasks t ON t.id = f.task_id
@@ -1390,7 +1421,10 @@ class Store:
             sid = str(uuid.uuid4())[:8]
             await db.execute(
                 """INSERT INTO schedules
-                   (id, name, agent, no_worktree, task_type, cron, interval_ms, approval_level, enabled, created_at, updated_at)
+                   (id, name, agent, no_worktree,
+                    task_type, cron, interval_ms,
+                    approval_level, enabled,
+                    created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
                 (
                     sid,
@@ -1566,7 +1600,8 @@ class Store:
         async with self._conn() as db:
             await db.execute(
                 """INSERT INTO auto_extract_rules
-                   (id, task_type, asset_type, title_field, iterate, tags_from, created_at, updated_at)
+                   (id, task_type, asset_type, title_field,
+                    iterate, tags_from, created_at, updated_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(task_type) DO UPDATE SET
                      asset_type=excluded.asset_type, title_field=excluded.title_field,
@@ -1637,8 +1672,12 @@ class Store:
         async with self._conn() as db:
             await db.execute(
                 """
-                INSERT INTO task_events (id, task_id, event_type, actor, detail_json, created_at)
-                VALUES (:id, :task_id, :event_type, :actor, :detail_json, :created_at)
+                INSERT INTO task_events
+                    (id, task_id, event_type, actor,
+                     detail_json, created_at)
+                VALUES
+                    (:id, :task_id, :event_type, :actor,
+                     :detail_json, :created_at)
                 """,
                 {
                     "id": event_id,
@@ -1655,7 +1694,10 @@ class Store:
     async def get_task_events(
         self, task_id: str, include_children: bool = True
     ) -> list[dict[str, Any]]:
-        """Return events for a task (and optionally its children), ordered by created_at ASC."""
+        """Return events for a task and optionally children.
+
+        Ordered by created_at ASC.
+        """
         if include_children:
             sql = """
                 SELECT e.* FROM task_events e
@@ -1695,7 +1737,10 @@ class Store:
         content: Optional[str] = None,
         tool_name: Optional[str] = None,
     ) -> int:
-        """Insert a task log row with auto-incrementing seq and return the new log_id (INTEGER)."""
+        """Insert a task log row with auto-incrementing seq.
+
+        Returns the new log_id (INTEGER).
+        """
         now = _now_iso()
         async with self._conn() as db:
             cursor = await db.execute(
@@ -1706,8 +1751,12 @@ class Store:
             seq = row[0] if row else 1
             cursor = await db.execute(
                 """
-                INSERT INTO task_logs (task_id, seq, log_type, tool_name, summary, content, created_at)
-                VALUES (:task_id, :seq, :log_type, :tool_name, :summary, :content, :created_at)
+                INSERT INTO task_logs
+                    (task_id, seq, log_type, tool_name,
+                     summary, content, created_at)
+                VALUES
+                    (:task_id, :seq, :log_type, :tool_name,
+                     :summary, :content, :created_at)
                 """,
                 {
                     "task_id": task_id,
@@ -1724,7 +1773,10 @@ class Store:
         return log_id
 
     async def get_task_logs(self, task_id: str) -> list[dict[str, Any]]:
-        """Return all logs for a task (summary only, with has_content boolean), ordered by seq ASC."""
+        """Return all logs for a task, ordered by seq ASC.
+
+        Includes summary only, with a has_content boolean.
+        """
         async with self._conn() as db:
             cursor = await db.execute(
                 """
@@ -1750,7 +1802,10 @@ class Store:
         return dict(row)
 
     async def cleanup_logs(self, older_than_days: int) -> int:
-        """Delete task logs older than *older_than_days* days and return the count deleted."""
+        """Delete task logs older than given days.
+
+        Returns the count of deleted rows.
+        """
         from datetime import timedelta
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
@@ -1782,7 +1837,8 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO conductor_conversations
-                    (id, user_id, title, message_count, total_cost_usd, created_at, updated_at)
+                    (id, user_id, title, message_count,
+                     total_cost_usd, created_at, updated_at)
                 VALUES (:id, :user_id, :title, 0, 0.0, :now, :now)
                 """,
                 {"id": id, "user_id": user_id, "title": title, "now": now},
@@ -1816,7 +1872,9 @@ class Store:
         """Return conversations for a user, ordered by updated_at DESC."""
         async with self._conn() as db:
             cursor = await db.execute(
-                "SELECT * FROM conductor_conversations WHERE user_id = ? ORDER BY updated_at DESC",
+                "SELECT * FROM conductor_conversations"
+                " WHERE user_id = ?"
+                " ORDER BY updated_at DESC",
                 (user_id,),
             )
             rows = await cursor.fetchall()
@@ -1828,7 +1886,9 @@ class Store:
         """Return messages for a conversation, ordered by created_at ASC."""
         async with self._conn() as db:
             cursor = await db.execute(
-                "SELECT * FROM conductor_messages WHERE conversation_id = ? ORDER BY created_at ASC",
+                "SELECT * FROM conductor_messages"
+                " WHERE conversation_id = ?"
+                " ORDER BY created_at ASC",
                 (conversation_id,),
             )
             rows = await cursor.fetchall()
@@ -1928,7 +1988,9 @@ class Store:
         async with self._conn() as db:
             await db.execute(
                 """
-                INSERT INTO reminders (id, user_id, message, trigger_at, delivered, created_at)
+                INSERT INTO reminders
+                    (id, user_id, message, trigger_at,
+                     delivered, created_at)
                 VALUES (:id, :user_id, :message, :trigger_at, FALSE, :now)
                 """,
                 {
@@ -1990,7 +2052,9 @@ class Store:
             await db.execute(
                 """
                 INSERT INTO slack_thread_map
-                    (slack_channel_id, slack_thread_ts, conversation_id, slack_user_id, created_at)
+                    (slack_channel_id, slack_thread_ts,
+                     conversation_id, slack_user_id,
+                     created_at)
                 VALUES (:channel_id, :thread_ts, :conversation_id, :user_id, :now)
                 """,
                 {
@@ -2017,7 +2081,9 @@ class Store:
         """Return a slack_thread_map entry by (channel_id, thread_ts), or None."""
         async with self._conn() as db:
             cursor = await db.execute(
-                "SELECT * FROM slack_thread_map WHERE slack_channel_id = ? AND slack_thread_ts = ?",
+                "SELECT * FROM slack_thread_map"
+                " WHERE slack_channel_id = ?"
+                " AND slack_thread_ts = ?",
                 (channel_id, thread_ts),
             )
             row = await cursor.fetchone()

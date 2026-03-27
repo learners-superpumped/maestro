@@ -55,7 +55,7 @@ def _dispatcher(
 
 
 async def test_dispatch_eligible_task(db_path: pathlib.Path) -> None:
-    """A single approved task with no running agents and budget headroom is dispatched."""
+    """Approved task with no running agents and budget is dispatched."""
     store = Store(db_path)
     task = _task()
     await store.create_task(task)
@@ -262,7 +262,7 @@ async def test_respects_daily_budget_exact_fit(db_path: pathlib.Path) -> None:
 async def test_budget_accumulates_across_dispatch_decisions(
     db_path: pathlib.Path,
 ) -> None:
-    """Budget consumed by earlier decisions within a single call reduces slots for later ones."""
+    """Budget consumed by earlier decisions reduces slots for later."""
     store = Store(db_path)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -291,7 +291,7 @@ async def test_budget_accumulates_across_dispatch_decisions(
 
 
 async def test_priority_ordering(db_path: pathlib.Path) -> None:
-    """Higher-priority tasks (lower numeric value) are dispatched first when slots are limited."""
+    """Higher-priority tasks are dispatched first when limited."""
     store = Store(db_path)
 
     low = _task(priority=5)
@@ -384,7 +384,7 @@ async def test_retry_queued_dispatched_after_backoff(db_path: pathlib.Path) -> N
     store = Store(db_path)
     now = datetime.now(timezone.utc)
 
-    # attempt=1 → retry_backoff_ms() = 10_000 ms (10s); updated_at 30s ago → elapsed > backoff
+    # attempt=1 → backoff=10s; updated_at 30s ago → elapsed > backoff
     task = _task(
         status=TaskStatus.RETRY_QUEUED,
         attempt=1,
@@ -404,7 +404,7 @@ async def test_retry_queued_skipped_during_backoff(db_path: pathlib.Path) -> Non
     store = Store(db_path)
     now = datetime.now(timezone.utc)
 
-    # attempt=1 → retry_backoff_ms() = 10_000 ms (10s); updated_at=now → elapsed ≈ 0 < 10s
+    # attempt=1 → backoff=10s; updated_at=now → elapsed ≈ 0 < 10s
     task = _task(
         status=TaskStatus.RETRY_QUEUED,
         attempt=1,

@@ -26,12 +26,17 @@ try:
     from markdown_to_mrkdwn import SlackMarkdownConverter
 
     _md_converter = SlackMarkdownConverter()
-except ImportError:
+    _md_import_error: Exception | None = None
+except Exception as _exc:
     _md_converter = None  # type: ignore[assignment]
+    _md_import_error = _exc
 
 from maestro.config import SlackConfig
 
 logger = logging.getLogger(__name__)
+
+if _md_import_error is not None:
+    logger.warning("markdown-to-mrkdwn import failed: %s", _md_import_error)
 
 # Progress text throttle interval (seconds)
 _PROGRESS_THROTTLE_SECS = 4.0
@@ -43,7 +48,16 @@ _SLACK_MSG_LIMIT = 3500
 def _to_mrkdwn(text: str) -> str:
     """Convert standard Markdown to Slack mrkdwn format."""
     if _md_converter is not None:
-        return _md_converter.convert(text)
+        result = _md_converter.convert(text)
+        logger.info(
+            "mrkdwn conversion: input_len=%d output_len=%d changed=%s first100=%s",
+            len(text),
+            len(result),
+            text != result,
+            repr(result[:100]),
+        )
+        return result
+    logger.info("mrkdwn converter is None — skipping conversion")
     return text
 
 
@@ -415,7 +429,8 @@ class SlackAdapter:
             await self._handle_mention_or_dm(event, say, client)
             return
 
-        # Channel thread replies: handle if thread is already mapped (ongoing conversation)
+        # Channel thread replies: handle if thread is already
+        # mapped (ongoing conversation)
         thread_ts = event.get("thread_ts")
         if thread_ts:
             channel_id = event["channel"]
@@ -692,12 +707,23 @@ class SlackAdapter:
         - done: replace progress message with final answer
         """
         conversation_id = payload.get("conversation_id")
+        chunk_type_dbg = payload.get("chunk_type", "?")
+        logger.info(
+            "conductor.stream received: conv=%s chunk=%s",
+            conversation_id,
+            chunk_type_dbg,
+        )
         if not conversation_id:
             return
 
         # Only handle conversations that originated from Slack
         thread_info = self._conv_to_thread.get(conversation_id)
         if thread_info is None:
+            logger.info(
+                "conductor.stream ignored: conv=%s not in thread map (keys=%s)",
+                conversation_id,
+                list(self._conv_to_thread.keys()),
+            )
             return
 
         channel_id, thread_ts = thread_info
