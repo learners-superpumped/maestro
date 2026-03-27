@@ -170,30 +170,52 @@ def _format_task_created(
     task_id: str, title: str, agent: str, task_type: str
 ) -> list[dict[str, Any]]:
     """Format blocks for a task.created notification."""
+    # Extract first line as the heading; rest (if any) becomes the body
+    first_line, _, body = title.partition("\n")
+    first_line = first_line.strip()
+    body = body.strip()
+
+    header_block: dict[str, Any] = {
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": (
+                f"\U0001f4cb *New Task Created*\n"
+                f"*Title:* {first_line}\n"
+                f"*ID:* `{task_id}`\n"
+                f"*Agent:* {agent} | *Type:* {task_type}"
+            ),
+        },
+    }
+
+    if not body:
+        return [header_block]
+
+    # Convert markdown body to Slack mrkdwn and truncate
+    converted = _to_mrkdwn(body)
+    # Slack section text limit is 3000 chars
+    if len(converted) > 2800:
+        converted = converted[:2800] + "\n\n_…truncated_"
+
     return [
+        header_block,
+        {"type": "divider"},
         {
             "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": (
-                    f"\U0001f4cb *New Task Created*\n"
-                    f"*Title:* {title}\n"
-                    f"*ID:* `{task_id}`\n"
-                    f"*Agent:* {agent} | *Type:* {task_type}"
-                ),
-            },
-        }
+            "text": {"type": "mrkdwn", "text": converted},
+        },
     ]
 
 
 def _format_task_completed(task_id: str, title: str) -> list[dict[str, Any]]:
     """Format blocks for a task.completed notification."""
+    short_title = title.split("\n", 1)[0].strip()
     return [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"\u2705 *Task Completed*\n*Title:* {title}\n*ID:* `{task_id}`",
+                "text": f"\u2705 *Task Completed*\n*Title:* {short_title}\n*ID:* `{task_id}`",
             },
         }
     ]
@@ -203,6 +225,7 @@ def _format_task_failed(
     task_id: str, title: str, error: str | None
 ) -> list[dict[str, Any]]:
     """Format blocks for a task.failed notification."""
+    short_title = title.split("\n", 1)[0].strip()
     err_text = f"\n*Error:* ```{error}```" if error else ""
     return [
         {
@@ -210,7 +233,7 @@ def _format_task_failed(
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f"\u274c *Task Failed*\n*Title:* {title}\n"
+                    f"\u274c *Task Failed*\n*Title:* {short_title}\n"
                     f"*ID:* `{task_id}`{err_text}"
                 ),
             },
@@ -222,6 +245,9 @@ def _format_approval_request(
     task_id: str, title: str, agent: str, draft: str
 ) -> list[dict[str, Any]]:
     """Format blocks for an approval request with action buttons."""
+    short_title = title.split("\n", 1)[0].strip()
+    draft_converted = _to_mrkdwn(draft[:500]) if draft else ""
+    draft_section = f"\n*Draft:*\n```{draft_converted}```" if draft_converted else ""
     return [
         {
             "type": "section",
@@ -229,9 +255,9 @@ def _format_approval_request(
                 "type": "mrkdwn",
                 "text": (
                     f"\U0001f514 *Approval Required*\n"
-                    f"*Task:* {title}\n"
-                    f"*ID:* `{task_id}` | *Agent:* {agent}\n"
-                    f"*Draft:*\n```{draft[:500]}```"
+                    f"*Task:* {short_title}\n"
+                    f"*ID:* `{task_id}` | *Agent:* {agent}"
+                    f"{draft_section}"
                 ),
             },
         },

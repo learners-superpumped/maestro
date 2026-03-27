@@ -1598,11 +1598,35 @@ async def drive_callback_handler(request: web.Request) -> web.Response:
     existing["drive"]["refresh_token"] = creds.refresh_token
     secrets_path.write_text(yaml.dump(existing, default_flow_style=False))
 
+    # Initialize DriveProvider on the running app so endpoints work immediately
+    try:
+        from maestro.drive import DriveProvider
+
+        drive_provider = DriveProvider(
+            client_id=oauth_state["client_id"],
+            client_secret=oauth_state["client_secret"],
+            refresh_token=creds.refresh_token,
+        )
+        request.app["drive_provider"] = drive_provider
+    except Exception:
+        logger.warning("DriveProvider init after OAuth failed", exc_info=True)
+
     # Clean up state
     request.app.pop("_drive_oauth_state", None)
 
-    # Redirect to settings page with success
-    return web.HTTPFound("/settings?drive=connected")
+    # Return HTML that notifies the opener window and closes the popup
+    html = """<!DOCTYPE html>
+<html><head><title>Drive Connected</title></head>
+<body>
+<p>Google Drive connected. This window will close automatically.</p>
+<script>
+if (window.opener) {
+    window.opener.postMessage({ type: "drive-oauth-complete" }, "*");
+}
+window.close();
+</script>
+</body></html>"""
+    return web.Response(text=html, content_type="text/html")
 
 
 async def drive_drives_handler(request: web.Request) -> web.Response:
@@ -1612,7 +1636,7 @@ async def drive_drives_handler(request: web.Request) -> web.Response:
         raise web.HTTPServiceUnavailable(reason="Drive not connected")
 
     shared = await drive.list_shared_drives()
-    drives = [{"id": "", "name": "내 드라이브"}] + [
+    drives = [{"id": "", "name": "My Drive"}] + [
         {"id": d["id"], "name": d["name"]} for d in shared
     ]
     return web.json_response({"drives": drives})

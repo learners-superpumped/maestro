@@ -5,10 +5,12 @@ import { SchedulesWidget } from "./SchedulesWidget"
 import { AssetsWidget } from "./AssetsWidget"
 import { useApprovals } from "@/hooks/queries/use-approvals"
 import { useStats } from "@/hooks/queries/use-stats"
+import { useDriveStatus } from "@/hooks/queries/use-drive"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/api/client"
 
 export function DashboardSidebar() {
+  const { data: driveStatus } = useDriveStatus()
   const { data: approvalsData, isLoading: approvalsLoading } = useApprovals()
   const { data: goalsData, isLoading: goalsLoading } = useQuery({
     queryKey: ["goals"],
@@ -50,8 +52,7 @@ export function DashboardSidebar() {
   const weekSpend: number[] = statsData?.week_spend_by_day ?? [0, 0, 0, 0, 0, 0, 0]
   const todaySpend: number = statsData?.today_spend_usd ?? 0
 
-  // Check if Drive is connected (any asset present implies connection)
-  const driveConnected = assets.length > 0
+  const driveConnected = driveStatus?.connected ?? false
 
   return (
     <div className="w-[256px] shrink-0 border-l border-[#e8e5df] pl-5 space-y-5 overflow-y-auto">
