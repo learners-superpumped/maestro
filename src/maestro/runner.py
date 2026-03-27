@@ -167,6 +167,7 @@ class AgentRunner:
         success: bool = False
         error: Optional[str] = None
         result_text: Optional[object] = None
+        result_from_event: bool = False  # True when result event had a result field
         last_assistant_text: Optional[str] = None
         subtype: Optional[str] = None
 
@@ -243,6 +244,8 @@ class AgentRunner:
                         if is_error:
                             error = event.get("result", "CLI error")
                         result_text = event.get("result")
+                        if result_text is not None:
+                            result_from_event = True
                         if not session_id and "session_id" in event:
                             session_id = event["session_id"]
 
@@ -266,6 +269,8 @@ class AgentRunner:
                         if is_error:
                             error = event.get("result", "CLI error")
                         result_text = event.get("result")
+                        if result_text is not None:
+                            result_from_event = True
                         if not session_id and "session_id" in event:
                             session_id = event["session_id"]
 
@@ -285,10 +290,15 @@ class AgentRunner:
             error = str(exc)
             success = False
 
-        # Treat empty/whitespace-only results as None; fallback to last assistant text
+        # Treat empty/whitespace-only results as None
         if isinstance(result_text, str) and not result_text.strip():
             result_text = None
-        if result_text is None and last_assistant_text:
+        # Fallback to last assistant text ONLY when the result event didn't
+        # provide a result field at all.  When result_from_event is True the
+        # CLI explicitly sent a (possibly empty) result — background agent
+        # messages may have overwritten last_assistant_text, so using the
+        # fallback would store the wrong value.
+        if result_text is None and not result_from_event and last_assistant_text:
             result_text = last_assistant_text
 
         # If result event came but result was empty, treat as failure
