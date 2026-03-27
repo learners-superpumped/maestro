@@ -3,10 +3,25 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "maestro"
+name = "maestrod"
 version = "0.1.0"
 description = "General-purpose task orchestration daemon"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
+authors = [
+    { name = "Learners Superpumped" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+keywords = ["orchestration", "daemon", "tasks", "ai-agents"]
 dependencies = [
     "click>=8.1",
     "pyyaml>=6.0",
@@ -35,10 +50,22 @@ dev = [
 ]
 
 [project.scripts]
+maestrod = "maestro.cli:main"
 maestro = "maestro.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/learners-superpumped/maestro"
+Repository = "https://github.com/learners-superpumped/maestro"
+Issues = "https://github.com/learners-superpumped/maestro/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/maestro"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/maestro/_static" = "maestro/_static"
+
+[tool.hatch.build.targets.sdist.force-include]
+"src/maestro/_static" = "maestro/_static"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
