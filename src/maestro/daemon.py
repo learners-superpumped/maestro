@@ -24,6 +24,7 @@ from maestro.api import create_api_app
 from maestro.approval import ApprovalManager
 from maestro.assets import AssetManager
 from maestro.budget import BudgetManager
+from maestro.conductor import ConductorAgent
 from maestro.config import MaestroConfig
 from maestro.dispatcher import AgentLogProcessor, Dispatcher
 from maestro.events import EventBus, EventEmittingStore
@@ -94,12 +95,21 @@ class Daemon:
 
         self._worktree_mgr = WorktreeManager(base_path)
 
+        # Conductor agent
+        self._conductor = ConductorAgent(
+            store=self._store,
+            bus=self._bus,
+            config=config,
+            base_path=base_path,
+        )
+
         self._running_procs: dict[str, asyncio.Task[None]] = {}
         self._shutdown = asyncio.Event()
         self._last_planner_tick: float = 0.0
         self._last_reconcile: float = 0.0
         self._last_scheduler_tick: float = 0.0
         self._last_cleanup_tick: float = 0.0
+        self._last_reminder_tick: float = 0.0
 
     # ------------------------------------------------------------------
     # Seed helpers
@@ -206,6 +216,7 @@ class Daemon:
         )
         app["asset_manager"] = self._asset_manager
         app["daemon"] = self
+        app["conductor"] = self._conductor
         app.router.add_get("/ws", self._ws_manager.handle)
 
         # 2. Start TCP site on loopback
@@ -220,6 +231,7 @@ class Daemon:
             actual_port = site._server.sockets[0].getsockname()[1]  # type: ignore[attr-defined]
 
         self._port = actual_port
+        self._conductor.set_daemon_port(actual_port)
         logger.info("Internal API listening on 127.0.0.1:%d", actual_port)
 
         # 3. Write PID and port files to .maestro/ (fixed location)
@@ -284,14 +296,16 @@ class Daemon:
         planner_interval_s = self._config.daemon.planner_interval_ms / 1_000.0
         scheduler_interval_s = self._config.daemon.scheduler_interval_ms / 1_000.0
         cleanup_interval_s = self._config.assets.cleanup_interval_ms / 1_000.0
+        reminder_interval_s = 10.0  # 10-second reminder check interval
 
         logger.info(
             "Main loop started (dispatch every %.1fs, reconcile every %.1fs,"
-            " planner every %.1fs, scheduler every %.1fs)",
+            " planner every %.1fs, scheduler every %.1fs, reminder every %.1fs)",
             interval_s,
             reconcile_interval_s,
             planner_interval_s,
             scheduler_interval_s,
+            reminder_interval_s,
         )
 
         loop = asyncio.get_event_loop()
@@ -299,6 +313,7 @@ class Daemon:
         self._last_planner_tick = loop.time()
         self._last_scheduler_tick = loop.time()
         self._last_cleanup_tick = loop.time()
+        self._last_reminder_tick = loop.time()
 
         while not self._shutdown.is_set():
             try:
@@ -326,6 +341,11 @@ class Daemon:
                 if (now_mono - self._last_cleanup_tick) >= cleanup_interval_s:
                     await self._cleanup_tick()
                     self._last_cleanup_tick = now_mono
+
+                # Reminder check on schedule
+                if (now_mono - self._last_reminder_tick) >= reminder_interval_s:
+                    await self._reminder_tick()
+                    self._last_reminder_tick = now_mono
 
             except Exception:
                 logger.exception("Error in main loop tick")
@@ -854,6 +874,33 @@ class Daemon:
                 logger.info("Purged %d archived assets", purged)
         except Exception as e:
             logger.warning("Asset cleanup failed: %s", e)
+
+    # ------------------------------------------------------------------
+    # Reminders
+    # ------------------------------------------------------------------
+
+    async def _reminder_tick(self) -> None:
+        """Check for due reminders and emit events (10-second interval)."""
+        try:
+            due = await self._store.get_due_reminders()
+            for reminder in due:
+                await self._bus.emit(
+                    "reminder.triggered",
+                    {
+                        "id": reminder["id"],
+                        "user_id": reminder["user_id"],
+                        "message": reminder["message"],
+                        "trigger_at": reminder["trigger_at"],
+                    },
+                )
+                await self._store.mark_reminder_delivered(reminder["id"])
+                logger.info(
+                    "Reminder triggered: %s (user=%s)",
+                    reminder["id"],
+                    reminder["user_id"],
+                )
+        except Exception as e:
+            logger.warning("Reminder tick failed: %s", e)
 
     # ------------------------------------------------------------------
     # Post-completion processing

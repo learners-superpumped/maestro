@@ -328,6 +328,53 @@ class Store:
         except Exception:
             pass
 
+        # Conductor tables (created via schema.sql, migration ensures they exist)
+        try:
+            async with self._conn() as db:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS conductor_conversations (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL DEFAULT 'default',
+                        title TEXT NOT NULL DEFAULT '',
+                        session_id TEXT,
+                        message_count INTEGER DEFAULT 0,
+                        total_cost_usd REAL DEFAULT 0.0,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                    )
+                """)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS conductor_messages (
+                        id TEXT PRIMARY KEY,
+                        conversation_id TEXT NOT NULL REFERENCES conductor_conversations(id) ON DELETE CASCADE,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        cost_usd REAL DEFAULT 0.0,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_conductor_messages_conv
+                    ON conductor_messages(conversation_id)
+                """)
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS reminders (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL DEFAULT 'default',
+                        message TEXT NOT NULL,
+                        trigger_at TEXT NOT NULL,
+                        delivered BOOLEAN DEFAULT FALSE,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                    )
+                """)
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_reminders_trigger
+                    ON reminders(trigger_at) WHERE delivered = FALSE
+                """)
+                await db.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Task CRUD
     # ------------------------------------------------------------------
@@ -1721,3 +1768,207 @@ class Store:
             )
             await db.commit()
         return count
+
+    # ------------------------------------------------------------------
+    # Conductor Conversations
+    # ------------------------------------------------------------------
+
+    async def create_conversation(
+        self, id: str, user_id: str = "default", title: str = ""
+    ) -> dict[str, Any]:
+        """Create a new conductor conversation and return it as a dict."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO conductor_conversations
+                    (id, user_id, title, message_count, total_cost_usd, created_at, updated_at)
+                VALUES (:id, :user_id, :title, 0, 0.0, :now, :now)
+                """,
+                {"id": id, "user_id": user_id, "title": title, "now": now},
+            )
+            await db.commit()
+        return {
+            "id": id,
+            "user_id": user_id,
+            "title": title,
+            "session_id": None,
+            "message_count": 0,
+            "total_cost_usd": 0.0,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+    async def get_conversation(self, id: str) -> Optional[dict[str, Any]]:
+        """Return a conversation dict by id, or None."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM conductor_conversations WHERE id = ?", (id,)
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    async def list_conversations(
+        self, user_id: str = "default"
+    ) -> list[dict[str, Any]]:
+        """Return conversations for a user, ordered by updated_at DESC."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM conductor_conversations WHERE user_id = ? ORDER BY updated_at DESC",
+                (user_id,),
+            )
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_conversation_messages(
+        self, conversation_id: str
+    ) -> list[dict[str, Any]]:
+        """Return messages for a conversation, ordered by created_at ASC."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM conductor_messages WHERE conversation_id = ? ORDER BY created_at ASC",
+                (conversation_id,),
+            )
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def add_message(
+        self,
+        id: str,
+        conversation_id: str,
+        role: str,
+        content: str,
+        cost_usd: float = 0.0,
+    ) -> dict[str, Any]:
+        """Insert a message, increment message_count, and update updated_at."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO conductor_messages
+                    (id, conversation_id, role, content, cost_usd, created_at)
+                VALUES (:id, :conversation_id, :role, :content, :cost_usd, :now)
+                """,
+                {
+                    "id": id,
+                    "conversation_id": conversation_id,
+                    "role": role,
+                    "content": content,
+                    "cost_usd": cost_usd,
+                    "now": now,
+                },
+            )
+            await db.execute(
+                """
+                UPDATE conductor_conversations
+                SET message_count = message_count + 1,
+                    updated_at = :now
+                WHERE id = :cid
+                """,
+                {"now": now, "cid": conversation_id},
+            )
+            await db.commit()
+        return {
+            "id": id,
+            "conversation_id": conversation_id,
+            "role": role,
+            "content": content,
+            "cost_usd": cost_usd,
+            "created_at": now,
+        }
+
+    async def update_conversation_session(
+        self, conversation_id: str, session_id: str
+    ) -> None:
+        """Update the session_id for a conversation."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                UPDATE conductor_conversations
+                SET session_id = :session_id, updated_at = :now
+                WHERE id = :cid
+                """,
+                {"session_id": session_id, "now": now, "cid": conversation_id},
+            )
+            await db.commit()
+
+    async def update_conversation_cost(
+        self, conversation_id: str, cost_usd: float
+    ) -> None:
+        """Add cost to the conversation's total_cost_usd."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                UPDATE conductor_conversations
+                SET total_cost_usd = total_cost_usd + :cost,
+                    updated_at = :now
+                WHERE id = :cid
+                """,
+                {"cost": cost_usd, "now": now, "cid": conversation_id},
+            )
+            await db.commit()
+
+    # ------------------------------------------------------------------
+    # Reminders
+    # ------------------------------------------------------------------
+
+    async def create_reminder(
+        self,
+        id: str,
+        user_id: str,
+        message: str,
+        trigger_at: str,
+    ) -> dict[str, Any]:
+        """Create a one-shot reminder."""
+        now = _now_iso()
+        async with self._conn() as db:
+            await db.execute(
+                """
+                INSERT INTO reminders (id, user_id, message, trigger_at, delivered, created_at)
+                VALUES (:id, :user_id, :message, :trigger_at, FALSE, :now)
+                """,
+                {
+                    "id": id,
+                    "user_id": user_id,
+                    "message": message,
+                    "trigger_at": trigger_at,
+                    "now": now,
+                },
+            )
+            await db.commit()
+        return {
+            "id": id,
+            "user_id": user_id,
+            "message": message,
+            "trigger_at": trigger_at,
+            "delivered": False,
+            "created_at": now,
+        }
+
+    async def get_due_reminders(self) -> list[dict[str, Any]]:
+        """Return undelivered reminders where trigger_at <= now."""
+        now = _now_iso()
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """
+                SELECT * FROM reminders
+                WHERE delivered = FALSE AND trigger_at <= ?
+                ORDER BY trigger_at ASC
+                """,
+                (now,),
+            )
+            rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def mark_reminder_delivered(self, id: str) -> None:
+        """Mark a reminder as delivered."""
+        async with self._conn() as db:
+            await db.execute(
+                "UPDATE reminders SET delivered = TRUE WHERE id = ?",
+                (id,),
+            )
+            await db.commit()
