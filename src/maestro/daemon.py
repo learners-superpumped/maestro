@@ -246,7 +246,7 @@ class Daemon:
 
         self._port = actual_port
         self._conductor.set_daemon_port(actual_port)
-        logger.info("Internal API listening on 127.0.0.1:%d", actual_port)
+        logger.info("Internal API listening on http://127.0.0.1:%d", actual_port)
 
         if self._config.integrations.slack.enabled:
             try:
