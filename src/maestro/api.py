@@ -1370,7 +1370,19 @@ async def slack_test_handler(request: web.Request) -> web.Response:
         )
     except Exception as exc:
         logger.exception("Failed to send Slack test message")
-        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+        error_msg = str(exc)
+        # Translate common Slack API errors
+        if "not_in_channel" in error_msg:
+            error_msg = (
+                f"Bot is not in '{channel}'. Invite the bot first: /invite @YourBot"
+            )
+        elif "channel_not_found" in error_msg:
+            error_msg = f"Channel '{channel}' not found. Check the channel name."
+        elif "invalid_auth" in error_msg:
+            error_msg = "Invalid Bot Token. Check your token and try again."
+        elif "token_revoked" in error_msg:
+            error_msg = "Bot Token has been revoked. Generate a new one."
+        return web.json_response({"ok": False, "error": error_msg}, status=500)
 
     return web.json_response({"ok": True})
 

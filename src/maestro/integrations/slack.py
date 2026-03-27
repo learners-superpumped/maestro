@@ -29,6 +29,44 @@ logger = logging.getLogger(__name__)
 # Progress text throttle interval (seconds)
 _PROGRESS_THROTTLE_SECS = 4.0
 
+# Slack message character limit (official limit is 40k, use 3500 for readability)
+_SLACK_MSG_LIMIT = 3500
+
+
+def _split_message(text: str, limit: int = _SLACK_MSG_LIMIT) -> list[str]:
+    """Split long text into multiple Slack-friendly chunks.
+
+    Splits on paragraph boundaries (double newline) first, then single
+    newlines, to keep messages readable.
+    """
+    if len(text) <= limit:
+        return [text]
+
+    chunks: list[str] = []
+    remaining = text
+
+    while remaining:
+        if len(remaining) <= limit:
+            chunks.append(remaining)
+            break
+
+        # Try to split at paragraph boundary
+        split_at = remaining.rfind("\n\n", 0, limit)
+        if split_at == -1:
+            # Fall back to single newline
+            split_at = remaining.rfind("\n", 0, limit)
+        if split_at == -1:
+            # Fall back to space
+            split_at = remaining.rfind(" ", 0, limit)
+        if split_at == -1:
+            # Hard split
+            split_at = limit
+
+        chunks.append(remaining[:split_at].rstrip())
+        remaining = remaining[split_at:].lstrip()
+
+    return chunks or [text]
+
 
 # ---------------------------------------------------------------------------
 # Block Kit formatting helpers (module-level)
@@ -238,6 +276,8 @@ class SlackAdapter:
         self._progress_last_update: dict[str, float] = {}
         # Progress message ts: conversation_id -> progress_msg_ts
         self._progress_msg_ts: dict[str, str] = {}
+        # Accumulated text for final message: conversation_id -> text
+        self._accumulated_text: dict[str, str] = {}
 
         # Slack-bolt app & socket handler (created on start)
         self._app: Any | None = None
@@ -646,9 +686,9 @@ class SlackAdapter:
         if not progress_msg_ts:
             return
 
-        stream_type = payload.get("type", "")
+        chunk_type = payload.get("chunk_type", "")
 
-        if stream_type == "tool_use":
+        if chunk_type == "tool_use":
             # Immediate update with tool summary
             tool_name = payload.get("tool_name", "tool")
             text = f"\U0001f527 Using {tool_name}..."
@@ -661,35 +701,56 @@ class SlackAdapter:
             except Exception:
                 logger.debug("Failed to update progress (tool_use)", exc_info=True)
 
-        elif stream_type == "text":
-            # Throttled update
+        elif chunk_type == "text":
+            # Accumulate text for final message
+            content = payload.get("content", "")
+            self._accumulated_text[conversation_id] = content
+
+            # Throttled update — show preview while processing
             now = time.monotonic()
             last = self._progress_last_update.get(conversation_id, 0.0)
             if now - last < _PROGRESS_THROTTLE_SECS:
                 return
 
             self._progress_last_update[conversation_id] = now
-            text = payload.get("text", "\u23f3 \ucc98\ub9ac \uc911...")
+            # Show first portion as preview during processing
+            preview = content[:3000] + ("\n\n_typing…_" if len(content) > 3000 else "")
             try:
                 await client.chat_update(
                     channel=channel_id,
                     ts=progress_msg_ts,
-                    text=text,
+                    text=preview or "\u23f3 Processing...",
                 )
             except Exception:
                 logger.debug("Failed to update progress (text)", exc_info=True)
 
-        elif stream_type == "done":
-            # Replace progress message with final answer
-            final_text = payload.get("text", "\u2705 Done")
+        elif chunk_type == "done":
+            # Send final response — split into multiple messages if needed
+            final_text = (
+                self._accumulated_text.pop(conversation_id, None) or "\u2705 Done"
+            )
+            chunks = _split_message(final_text)
+
+            # First chunk: update the progress message in-place
             try:
                 await client.chat_update(
                     channel=channel_id,
                     ts=progress_msg_ts,
-                    text=final_text,
+                    text=chunks[0],
                 )
             except Exception:
                 logger.debug("Failed to update progress (done)", exc_info=True)
+
+            # Remaining chunks: post as new messages in thread
+            for chunk in chunks[1:]:
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id,
+                        thread_ts=thread_ts,
+                        text=chunk,
+                    )
+                except Exception:
+                    logger.debug("Failed to send continuation message", exc_info=True)
 
             # Cleanup throttle state
             self._progress_last_update.pop(conversation_id, None)
