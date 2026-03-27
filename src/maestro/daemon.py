@@ -75,7 +75,7 @@ class Daemon:
         self._dispatcher = Dispatcher(store, config.concurrency, config.budget)
         self._reconciler = Reconciler(store, config.agent.stall_timeout_ms)
         self._notifier = NotificationManager(store)
-        self._slack = SlackNotifier(webhook_url=config.integrations.slack.webhook_url)
+        self._slack = SlackNotifier()
         self._budget_mgr = BudgetManager(store, config.budget)
         self._planner = Planner(store, config)
         self._approval_manager = ApprovalManager(store)
