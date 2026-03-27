@@ -26,7 +26,10 @@ from maestro.store import Store
 
 logger = logging.getLogger(__name__)
 
-_WEB_DIST = pathlib.Path(__file__).resolve().parent.parent.parent / "web" / "dist"
+# Packaged static files (inside wheel) take priority over dev source tree
+_PKG_STATIC = pathlib.Path(__file__).resolve().parent / "_static"
+_DEV_DIST = pathlib.Path(__file__).resolve().parent.parent.parent / "web" / "dist"
+_WEB_DIST = _PKG_STATIC if (_PKG_STATIC / "index.html").exists() else _DEV_DIST
 
 
 @web.middleware
