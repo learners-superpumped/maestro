@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import pathlib
 import uuid
 from datetime import datetime, timezone
@@ -423,7 +424,8 @@ async def stats_handler(request: web.Request) -> web.Response:
     """GET /api/internal/stats — summary statistics for the dashboard."""
     store: Store = request.app["store"]
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_dt = datetime.now(timezone.utc)
+    today = today_dt.strftime("%Y-%m-%d")
 
     running_count = await store.count_running()
     pending_approvals = await store.list_approvals(status="pending")
@@ -435,6 +437,14 @@ async def stats_handler(request: web.Request) -> web.Response:
     for t in all_tasks:
         status_counts[t.status.value] = status_counts.get(t.status.value, 0) + 1
 
+    # 7-day spend (Mon through today, oldest first)
+    from datetime import timedelta
+
+    week_spend: list[float] = []
+    for i in range(6, -1, -1):
+        day = (today_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+        week_spend.append(await store.get_daily_spend(day))
+
     return web.json_response(
         {
             "running": running_count,
@@ -443,6 +453,7 @@ async def stats_handler(request: web.Request) -> web.Response:
             "total_tasks": len(all_tasks),
             "status_counts": status_counts,
             "date": today,
+            "week_spend_by_day": week_spend,
         }
     )
 
@@ -926,7 +937,9 @@ async def asset_download_handler(request: web.Request) -> web.Response:
     asset_id = body.get("asset_id")
     if not asset_id:
         raise web.HTTPBadRequest(reason="asset_id required")
-    am = request.app["asset_manager"]
+    am = request.app.get("asset_manager")
+    if am is None:
+        raise web.HTTPServiceUnavailable(reason="Asset manager not available")
     local_path = await am.download_asset(asset_id)
     if not local_path:
         raise web.HTTPNotFound(reason="Asset not found or no file")
@@ -939,7 +952,9 @@ async def asset_share_handler(request: web.Request) -> web.Response:
     asset_id = body.get("asset_id")
     if not asset_id:
         raise web.HTTPBadRequest(reason="asset_id required")
-    am = request.app["asset_manager"]
+    am = request.app.get("asset_manager")
+    if am is None:
+        raise web.HTTPServiceUnavailable(reason="Asset manager not available")
     url = await am.share_asset(asset_id)
     if not url:
         raise web.HTTPNotFound(reason="Asset not found or Drive not available")
@@ -955,7 +970,9 @@ async def asset_send_handler(request: web.Request) -> web.Response:
     if not asset_id or not channel:
         raise web.HTTPBadRequest(reason="asset_id and channel required")
 
-    am = request.app["asset_manager"]
+    am = request.app.get("asset_manager")
+    if am is None:
+        raise web.HTTPServiceUnavailable(reason="Asset manager not available")
     send_info = await am.send_asset(asset_id)
     if not send_info:
         raise web.HTTPNotFound(reason="Asset not found")
@@ -976,8 +993,6 @@ async def asset_send_handler(request: web.Request) -> web.Response:
     # Upload file if small enough (< 10MB) and available locally
     file_uploaded = False
     if local_path:
-        import os
-
         size = os.path.getsize(local_path)
         if size < 10 * 1024 * 1024:  # 10MB
             try:
