@@ -246,7 +246,8 @@ def start(port: int) -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    click.echo(f"Starting Maestro daemon (port={port})...")
+    port_label = str(port) if port else "auto"
+    click.echo(f"Starting Maestro daemon (port={port_label})...")
 
     async def _run() -> None:
         await store.init_db()
