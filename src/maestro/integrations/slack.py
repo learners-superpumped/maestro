@@ -273,12 +273,14 @@ class SlackAdapter:
         conductor: Any,
         approval_manager: Any,
         config: SlackConfig,
+        asset_manager: Any = None,
     ) -> None:
         self._store = store
         self._bus = bus
         self._conductor = conductor
         self._approval = approval_manager
         self._config = config
+        self._asset_manager = asset_manager
 
         # In-memory caches: thread <-> conversation mapping
         # (channel_id, thread_ts) -> conversation_id
@@ -401,6 +403,60 @@ class SlackAdapter:
         self._app.view("maestro_reject_submit")(self._handle_reject_submit)
         self._app.view("maestro_revise_submit")(self._handle_revise_submit)
 
+    async def _process_files(
+        self, files: list[dict], task_id: str | None = None
+    ) -> list[dict]:
+        """Download files from Slack and register as assets."""
+        if not files:
+            return []
+
+        am = self._asset_manager
+        if not am:
+            return []
+
+        registered = []
+        for f in files:
+            url = f.get("url_private_download") or f.get("url_private")
+            if not url:
+                continue
+            name = f.get("name", "untitled")
+            mime = f.get("mimetype", "")
+
+            # Download from Slack
+            import tempfile
+
+            import aiohttp
+
+            async with aiohttp.ClientSession() as session:
+                headers = {"Authorization": f"Bearer {self._config.bot_token}"}
+                async with session.get(url, headers=headers) as resp:
+                    if resp.status != 200:
+                        continue
+                    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{name}")
+                    tmp.write(await resp.read())
+                    tmp_path = tmp.name
+                    tmp.close()
+
+            # Register as asset
+            from maestro.assets import detect_asset_type
+
+            asset_type = detect_asset_type(name)
+            try:
+                asset = await am.register_asset(
+                    asset_type=asset_type,
+                    title=name,
+                    file_path=tmp_path,
+                    task_id=task_id,
+                    created_by="human",
+                    source="slack",
+                    media_type=mime,
+                )
+                registered.append(asset)
+            except Exception:
+                logger.warning(f"Failed to register Slack file: {name}", exc_info=True)
+
+        return registered
+
     async def _on_app_mention(self, event: dict, say: Any, client: Any) -> None:
         """Handle @maestro mentions."""
         await self._handle_mention_or_dm(event, say, client)
@@ -436,7 +492,7 @@ class SlackAdapter:
         text = event.get("text", "")
         # Strip bot mention tags
         text = re.sub(r"<@[A-Z0-9]+>\s*", "", text).strip()
-        if not text:
+        if not text and not event.get("files"):
             return
 
         channel_id = event["channel"]
@@ -477,6 +533,16 @@ class SlackAdapter:
         except Exception:
             logger.debug("Failed to send progress message", exc_info=True)
             progress_msg_ts = None
+
+        # Process attached files
+        files = event.get("files", [])
+        if files:
+            registered_assets = await self._process_files(files)
+            if registered_assets:
+                asset_refs = ", ".join(
+                    f"[{a['title']}](asset:{a['id']})" for a in registered_assets
+                )
+                text += f"\n\n첨부 파일: {asset_refs}"
 
         # Call conductor
         try:

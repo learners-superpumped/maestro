@@ -130,6 +130,7 @@ class Daemon:
             conductor=self._conductor,
             approval_manager=self._approval_manager,
             config=config.integrations.slack,
+            asset_manager=self._asset_manager,
         )
 
         self._port: int = 0
