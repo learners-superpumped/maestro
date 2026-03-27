@@ -627,6 +627,9 @@ class Daemon:
         else:
             system_prompt = task_context
 
+        if not task.session_id:
+            return
+
         try:
             result = await self._runner.resume(
                 task,
@@ -809,8 +812,7 @@ class Daemon:
                     f"Task completed: {task.title}",
                     task.id,
                 )
-                if self._slack.available:
-                    await self._slack.send_completion(task.id, task.title)
+                pass  # Slack task completion is handled via event bus
 
             # Post-completion processing (planning results, review pipeline)
             if result.success:
@@ -1164,6 +1166,8 @@ class Daemon:
         instruction_data = self._extract_json(review_task.instruction)
         original_task_id = instruction_data["original_task_id"]
         original_task = await self._store.get_task(original_task_id)
+        if original_task is None:
+            return
 
         # Emit review event on the original task
         await self._store.record_task_event(
@@ -1218,11 +1222,16 @@ class Daemon:
                 instruction=(
                     f"# 리뷰어 피드백 (반드시 해결할 것)\n{feedback}\n\n"
                     f"# 원본 지시\n{original_task.instruction}\n\n"
-                    f"중요: 이전 시도에서 위 피드백의 문제가 발견되었습니다. "
-                    f"반드시 Edit/Write 도구를 사용하여 파일을 직접 수정하고, "
+                    + (
+                        f"# 이전 작업 결과\n{original_task.result}\n\n"
+                        if original_task.result
+                        else ""
+                    )
+                    + "중요: 이전 시도에서 위 피드백의 문제가 발견되었습니다. "
+                    "반드시 Edit/Write 도구를 사용하여 파일을 직접 수정하고, "
                     "수정 후 파일을 다시 읽어 "
                     "변경사항이 실제로 적용되었는지 확인하세요. "
-                    f"도구를 사용하지 않고 결과만 보고하는 것은 허용되지 않습니다."
+                    "도구를 사용하지 않고 결과만 보고하는 것은 허용되지 않습니다."
                 ),
                 approval_level=original_task.approval_level,
                 priority=original_task.priority,

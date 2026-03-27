@@ -43,7 +43,7 @@ _SLACK_MSG_LIMIT = 3500
 def _to_mrkdwn(text: str) -> str:
     """Convert standard Markdown to Slack mrkdwn format."""
     if _md_converter is not None:
-        return _md_converter.convert(text)
+        return str(_md_converter.convert(text))
     return text
 
 
@@ -343,7 +343,7 @@ class SlackAdapter:
             and not self._socket_task.done()
         ):
             self._socket_task.cancel()
-            self._socket_task = None
+            self._socket_task = None  # type: ignore[assignment]
 
         self._bus.off("task.*", self._on_task_event)
         self._bus.off("approval.*", self._on_approval_event)
@@ -710,7 +710,7 @@ class SlackAdapter:
         if not progress_msg_ts:
             return
 
-        chunk_type = payload.get("chunk_type", "")
+        chunk_type = payload.get("type", payload.get("chunk_type", ""))
 
         if chunk_type == "tool_use":
             # Immediate update with tool summary
@@ -754,8 +754,11 @@ class SlackAdapter:
         elif chunk_type == "done":
             # Send final response — split into multiple messages if needed
             raw_text = (
-                self._accumulated_text.pop(conversation_id, None) or "\u2705 Done"
+                payload.get("text")
+                or self._accumulated_text.pop(conversation_id, None)
+                or "\u2705 Done"
             )
+            self._accumulated_text.pop(conversation_id, None)
             final_text = _to_mrkdwn(raw_text)
             chunks = _split_message(final_text)
 

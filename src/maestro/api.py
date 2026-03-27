@@ -624,7 +624,7 @@ async def task_log_detail_handler(request: web.Request) -> web.Response:
     """GET /api/internal/task/{task_id}/logs/{log_id}"""
     store: Store = request.app["store"]
     task_id = request.match_info["task_id"]
-    log_id = int(request.match_info["log_id"])
+    log_id = request.match_info["log_id"]
     log = await store.get_task_log(task_id, log_id)
     if not log:
         raise web.HTTPNotFound(reason="Log not found")
@@ -635,7 +635,7 @@ async def task_logs_delete_handler(request: web.Request) -> web.Response:
     """DELETE /api/internal/task/{task_id}/logs"""
     store: Store = request.app["store"]
     task_id = request.match_info["task_id"]
-    async with store._db() as db:
+    async with store._conn() as db:
         cursor = await db.execute(
             "DELETE FROM task_logs WHERE task_id = :tid", {"tid": task_id}
         )
@@ -1412,7 +1412,7 @@ def create_api_app(
     # SPA static assets
     if _WEB_DIST.exists():
         app.router.add_static("/assets", _WEB_DIST / "assets", follow_symlinks=True)
-        app.router.add_get("/", lambda r: web.FileResponse(_WEB_DIST / "index.html"))
+        app.router.add_get("/", lambda r: web.FileResponse(_WEB_DIST / "index.html"))  # type: ignore[arg-type, return-value]
 
     # Health
     app.router.add_get("/api/internal/health", health_handler)

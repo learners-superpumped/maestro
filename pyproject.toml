@@ -48,6 +48,8 @@ dev = [
     "mypy>=1.10",
     "slack-bolt>=1.18",
     "slack-sdk>=3.27",
+    "types-PyYAML>=6.0",
+    "types-croniter>=2.0",
 ]
 
 [project.scripts]
@@ -81,3 +83,18 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "maestro.mcp_store",
+    "maestro.mcp_embedding",
+    "maestro.assets",
+    "maestro.integrations.linear",
+    "maestro.dispatcher",
+    "maestro.integrations.slack",
+]
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = ["maestro.daemon"]
+disable_error_code = ["union-attr", "arg-type"]

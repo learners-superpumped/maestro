@@ -63,7 +63,7 @@ def _safe_json_loads(s: Optional[str]) -> object:
         return s  # Return raw string if not valid JSON
 
 
-def _row_to_task(row: aiosqlite.Row) -> Task:
+def _row_to_task(row: aiosqlite.Row | dict[str, Any]) -> Task:
     """Convert a sqlite3.Row (from tasks table) into a Task dataclass."""
     d: dict[str, Any] = dict(row)
     return Task(
@@ -71,7 +71,7 @@ def _row_to_task(row: aiosqlite.Row) -> Task:
         type=d["type"],
         title=d["title"],
         instruction=d["instruction"],
-        task_number=d.get("task_number"),
+        task_number=d.get("task_number") or 0,
         status=TaskStatus(d["status"]),
         agent=d.get("agent", "default"),
         no_worktree=bool(d.get("no_worktree", 0)),
@@ -170,12 +170,16 @@ class Store:
     @asynccontextmanager
     async def _conn(self) -> AsyncIterator[aiosqlite.Connection]:
         """Async context manager that yields a WAL-mode connection."""
-        db = await aiosqlite.connect(self._db_path)
+        db = await aiosqlite.connect(self._db_path, check_same_thread=False)
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA foreign_keys=ON")
         # Load sqlite-vec on every connection (if available)
-        if _HAS_SQLITE_VEC and hasattr(db._connection, "enable_load_extension"):
+        if (
+            _HAS_SQLITE_VEC
+            and db._connection is not None
+            and hasattr(db._connection, "enable_load_extension")
+        ):
             db._connection.enable_load_extension(True)
             sqlite_vec.load(db._connection)
             db._connection.enable_load_extension(False)
@@ -321,7 +325,7 @@ class Store:
         try:
             async with self._conn() as db:
                 cursor = await db.execute("PRAGMA table_info(tasks)")
-                columns = [row[1] for row in await cursor.fetchall()]
+                columns = {row[1] for row in await cursor.fetchall()}
                 if "result_json" in columns and "result" not in columns:
                     await db.execute(
                         "ALTER TABLE tasks RENAME COLUMN result_json TO result"
@@ -570,7 +574,7 @@ class Store:
         agent: Optional[str] = None,
         limit: int | None = None,
         root_only: bool = False,
-    ) -> list[Task] | list[dict]:
+    ) -> list[Any]:
         """Return tasks optionally filtered by status, goal_id, and/or agent.
 
         *status* accepts a single TaskStatus or a list of TaskStatus values.
@@ -791,12 +795,14 @@ class Store:
         """Index all completed/failed tasks not yet in FTS."""
         async with self._conn() as db:
             cursor = await db.execute("SELECT COUNT(*) FROM tasks_fts")
-            fts_count = (await cursor.fetchone())[0]
+            fts_row = await cursor.fetchone()
+            fts_count = fts_row[0] if fts_row else 0
 
             cursor = await db.execute(
                 "SELECT COUNT(*) FROM tasks WHERE status IN ('completed', 'failed')"
             )
-            task_count = (await cursor.fetchone())[0]
+            task_row = await cursor.fetchone()
+            task_count = task_row[0] if task_row else 0
 
             if fts_count >= task_count:
                 return  # Already up to date
@@ -1451,7 +1457,7 @@ class Store:
         cron: str | None = None,
         interval_ms: int | None = None,
         approval_level: int = 0,
-    ) -> dict:
+    ) -> Optional[dict[str, Any]]:
         sid = str(uuid.uuid4())[:8]
         now = datetime.now(timezone.utc).isoformat()
         async with self._conn() as db:
@@ -1593,7 +1599,7 @@ class Store:
         title_field: str | None = None,
         iterate: str | None = None,
         tags_from: list[str] | None = None,
-    ) -> dict:
+    ) -> Optional[dict[str, Any]]:
         rid = str(uuid.uuid4())[:8]
         now = datetime.now(timezone.utc).isoformat()
         tags_json = json.dumps(tags_from) if tags_from else None
@@ -1736,7 +1742,7 @@ class Store:
         summary: str,
         content: Optional[str] = None,
         tool_name: Optional[str] = None,
-    ) -> int:
+    ) -> Optional[int]:
         """Insert a task log row with auto-incrementing seq.
 
         Returns the new log_id (INTEGER).

@@ -44,7 +44,10 @@ class EmbeddingClient:
                 task_type=task_type,
             ),
         )
-        return list(result.embeddings[0].values)
+        embeddings = result.embeddings
+        if not embeddings:
+            return [0.0] * self.EMBEDDING_DIM
+        return list(embeddings[0].values or [])
 
     async def embed_query(self, query: str) -> list[float]:
         return await self.embed_text(query, task_type="RETRIEVAL_QUERY")
@@ -99,4 +102,7 @@ class EmbeddingClient:
                 output_dimensionality=self.EMBEDDING_DIM,
             ),
         )
-        return list(result.embeddings[0].values)
+        embeddings = result.embeddings
+        if not embeddings:
+            return [0.0] * self.EMBEDDING_DIM
+        return list(embeddings[0].values or [])

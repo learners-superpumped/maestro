@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from maestro.models import Task, TaskResult
 
@@ -160,7 +160,7 @@ class AgentRunner:
         self,
         args: list[str],
         cwd: Path,
-        on_event: Optional[callable] = None,
+        on_event: Optional[Callable[..., Any]] = None,
         env: Optional[dict[str, str]] = None,
     ) -> TaskResult:
         """Spawn a subprocess, stream its stdout, and collect results.
@@ -344,7 +344,7 @@ class AgentRunner:
         cwd: Path,
         allowed_tools: Optional[list[str]] = None,
         max_turns: int = 20,
-        on_event: Optional[callable] = None,
+        on_event: Optional[Callable[..., Any]] = None,
         system_prompt: str | None = None,
         permission_mode: str = "bypass",
         env: Optional[dict[str, str]] = None,
@@ -389,7 +389,7 @@ class AgentRunner:
         session_id: str,
         instruction: str,
         cwd: Path,
-        on_event: Optional[callable] = None,
+        on_event: Optional[Callable[..., Any]] = None,
         env: Optional[dict[str, str]] = None,
         permission_mode: str = "bypass",
         system_prompt: str | None = None,
