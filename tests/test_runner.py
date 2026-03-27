@@ -297,7 +297,7 @@ class TestBuildResumeArgs:
         assert args[idx + 1] == "stream-json"
 
     def test_full_args_structure(self, runner: AgentRunner):
-        """Integration check: verify the complete expected argument list."""
+        """Integration check: verify the complete expected argument list (bypass)."""
         session_id = "my-session-id"
         instruction = "Resume the analysis"
         args = runner._build_resume_args(session_id, instruction)
@@ -310,7 +310,13 @@ class TestBuildResumeArgs:
             "--output-format",
             "stream-json",
             "--verbose",
+            "--dangerously-skip-permissions",
         ]
+
+    def test_resume_restricted_mode(self, runner: AgentRunner):
+        """Resume in restricted mode omits --dangerously-skip-permissions."""
+        args = runner._build_resume_args("sid", "test", permission_mode="restricted")
+        assert "--dangerously-skip-permissions" not in args
 
     def test_different_session_ids(self, runner: AgentRunner):
         for session_id in ["abc", "123-456-789", "uuid-style-id"]:

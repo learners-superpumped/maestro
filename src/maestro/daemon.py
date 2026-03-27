@@ -565,6 +565,15 @@ class Daemon:
             "MAESTRO_DB_PATH": self._store._db_path,
         }
 
+        # Resolve permission mode for resume
+        agent_def = self._config.agents.get(
+            task.agent, self._config.agents.get("default")
+        )
+        if agent_def and agent_def.permission_mode:
+            resume_perm = agent_def.permission_mode
+        else:
+            resume_perm = self._config.agent.permission_mode
+
         try:
             result = await self._runner.resume(
                 task,
@@ -572,6 +581,7 @@ class Daemon:
                 instruction,
                 cwd,
                 env=agent_env,
+                permission_mode=resume_perm,
             )
         except Exception as exc:
             logger.exception("Runner raised resuming task %s: %s", task.id, exc)

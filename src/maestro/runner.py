@@ -110,7 +110,12 @@ class AgentRunner:
             args += ["--append-system-prompt", system_prompt]
         return args
 
-    def _build_resume_args(self, session_id: str, instruction: str) -> list[str]:
+    def _build_resume_args(
+        self,
+        session_id: str,
+        instruction: str,
+        permission_mode: str = "bypass",
+    ) -> list[str]:
         """Build the argument list for resuming an existing Claude CLI session.
 
         Parameters
@@ -119,13 +124,16 @@ class AgentRunner:
             The UUID of the session to resume (captured from a previous run).
         instruction:
             The follow-up prompt to inject into the resumed session.
+        permission_mode:
+            Permission mode to apply (``"bypass"`` adds
+            ``--dangerously-skip-permissions``).
 
         Returns
         -------
         list[str]
             Complete argv suitable for ``asyncio.create_subprocess_exec``.
         """
-        return [
+        args = [
             "claude",
             "--resume",
             session_id,
@@ -135,6 +143,9 @@ class AgentRunner:
             "stream-json",
             "--verbose",
         ]
+        if permission_mode == "bypass":
+            args.append("--dangerously-skip-permissions")
+        return args
 
     # ------------------------------------------------------------------
     # Internal streaming helper
@@ -374,6 +385,7 @@ class AgentRunner:
         cwd: Path,
         on_event: Optional[callable] = None,
         env: Optional[dict[str, str]] = None,
+        permission_mode: str = "bypass",
     ) -> TaskResult:
         """Resume an existing Claude CLI session for a task.
 
@@ -387,12 +399,14 @@ class AgentRunner:
             The follow-up prompt to send.
         cwd:
             Working directory for the Claude subprocess.
+        permission_mode:
+            Permission mode (``"bypass"`` skips permission checks).
 
         Returns
         -------
         TaskResult
         """
-        args = self._build_resume_args(session_id, instruction)
+        args = self._build_resume_args(session_id, instruction, permission_mode)
         logger.info("Resuming task %s (session=%s): %s", task.id, session_id, args)
 
         result = await self._stream(args, cwd, on_event=on_event, env=env)

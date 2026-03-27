@@ -151,6 +151,7 @@ class ConductorAgent:
                 cwd,
                 on_event=on_event,
                 env=agent_env,
+                permission_mode="bypass",
             )
         else:
             result = await self._runner.execute(
