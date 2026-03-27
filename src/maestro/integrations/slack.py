@@ -151,7 +151,10 @@ def _format_task_failed(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"\u274c *Task Failed*\n*Title:* {title}\n*ID:* `{task_id}`{err_text}",
+                "text": (
+                    f"\u274c *Task Failed*\n*Title:* {title}\n"
+                    f"*ID:* `{task_id}`{err_text}"
+                ),
             },
         }
     ]
