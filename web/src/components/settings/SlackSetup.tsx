@@ -279,7 +279,7 @@ export function SlackSetup() {
           <div className="mt-4 pt-3 border-t border-[#e8e5df]">
             <p className="text-[12px] text-[#787774] font-medium mb-1">Next steps</p>
             <ul className="text-[11px] text-[#9b9a97] space-y-0.5 list-disc list-inside">
-              <li>Restart the daemon to activate Slack integration</li>
+              <li>Slack integration is now active (no restart needed)</li>
               <li>Mention <strong>@YourBot</strong> in a channel or send a DM to start chatting</li>
               <li>Task notifications and approval requests will appear in your configured channel</li>
             </ul>
