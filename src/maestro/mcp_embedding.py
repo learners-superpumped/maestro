@@ -268,7 +268,134 @@ TOOLS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "maestro_asset_download": {
+        "name": "maestro_asset_download",
+        "description": "Download an asset file to local path for processing. Returns the local file path.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {"type": "string", "description": "Asset ID to download"},
+            },
+            "required": ["asset_id"],
+        },
+    },
+    "maestro_asset_create": {
+        "name": "maestro_asset_create",
+        "description": "Register a local file as an asset (uploads to Drive + creates embedding).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "Local file path"},
+                "title": {"type": "string", "description": "Asset title"},
+                "description": {"type": "string", "description": "Asset description"},
+                "task_id": {"type": "string", "description": "Associated task ID"},
+                "asset_type": {
+                    "type": "string",
+                    "description": "Asset type (document, image, video, audio)",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags",
+                },
+            },
+            "required": ["file_path", "title"],
+        },
+    },
+    "maestro_asset_send": {
+        "name": "maestro_asset_send",
+        "description": "Send an asset to a Slack channel (file upload + Drive link).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {"type": "string", "description": "Asset ID to send"},
+                "channel": {
+                    "type": "string",
+                    "description": "Slack channel ID or name",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Optional message to include",
+                },
+            },
+            "required": ["asset_id", "channel"],
+        },
+    },
+    "maestro_asset_share": {
+        "name": "maestro_asset_share",
+        "description": "Generate a shareable Google Drive link for an asset.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "asset_id": {"type": "string", "description": "Asset ID"},
+            },
+            "required": ["asset_id"],
+        },
+    },
 }
+
+
+# ---------------------------------------------------------------------------
+# New asset tool handlers (Drive/Slack)
+# ---------------------------------------------------------------------------
+
+
+async def maestro_asset_download(args: dict) -> str:
+    """Download asset to local path."""
+    asset_id = args["asset_id"]
+    resp = await _post(
+        _daemon_port(), "/api/internal/asset/download", {"asset_id": asset_id}
+    )
+    if resp.get("error"):
+        return json.dumps({"error": resp["error"]})
+    return json.dumps({"local_path": resp.get("local_path"), "asset_id": asset_id})
+
+
+async def maestro_asset_create(args: dict) -> str:
+    """Register a file as an asset."""
+    file_path = args["file_path"]
+    from maestro.assets import detect_asset_type
+
+    asset_type = args.get("asset_type") or detect_asset_type(file_path)
+    resp = await _post(
+        _daemon_port(),
+        "/api/internal/asset/register",
+        {
+            "file_path": file_path,
+            "title": args["title"],
+            "description": args.get("description", ""),
+            "task_id": args.get("task_id"),
+            "asset_type": asset_type,
+            "tags": args.get("tags", []),
+            "created_by": "agent",
+            "source": "agent",
+        },
+    )
+    return json.dumps(resp)
+
+
+async def maestro_asset_send(args: dict) -> str:
+    """Send asset to Slack channel."""
+    resp = await _post(
+        _daemon_port(),
+        "/api/internal/asset/send",
+        {
+            "asset_id": args["asset_id"],
+            "channel": args["channel"],
+            "message": args.get("message", ""),
+        },
+    )
+    return json.dumps(resp)
+
+
+async def maestro_asset_share(args: dict) -> str:
+    """Get shareable Drive link."""
+    resp = await _post(
+        _daemon_port(),
+        "/api/internal/asset/share",
+        {"asset_id": args["asset_id"]},
+    )
+    return json.dumps(resp)
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +434,14 @@ async def dispatch_tool(name: str, arguments: dict[str, Any]) -> Any:
             asset_type=arguments.get("type"),
             unused_only=arguments.get("unused_only", False),
         )
+    elif name == "maestro_asset_download":
+        return await maestro_asset_download(arguments)
+    elif name == "maestro_asset_create":
+        return await maestro_asset_create(arguments)
+    elif name == "maestro_asset_send":
+        return await maestro_asset_send(arguments)
+    elif name == "maestro_asset_share":
+        return await maestro_asset_share(arguments)
     else:
         raise ValueError(f"Unknown tool: {name}")
 

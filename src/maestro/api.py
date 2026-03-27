@@ -920,6 +920,83 @@ async def assets_cleanup_handler(request: web.Request) -> web.Response:
     return web.json_response({"archived": archived, "purged": purged})
 
 
+async def asset_download_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/asset/download — 에셋 파일 다운로드."""
+    body = await request.json()
+    asset_id = body.get("asset_id")
+    if not asset_id:
+        raise web.HTTPBadRequest(reason="asset_id required")
+    am = request.app["asset_manager"]
+    local_path = await am.download_asset(asset_id)
+    if not local_path:
+        raise web.HTTPNotFound(reason="Asset not found or no file")
+    return web.json_response({"local_path": str(local_path), "asset_id": asset_id})
+
+
+async def asset_share_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/asset/share — Drive 공유 링크 생성."""
+    body = await request.json()
+    asset_id = body.get("asset_id")
+    if not asset_id:
+        raise web.HTTPBadRequest(reason="asset_id required")
+    am = request.app["asset_manager"]
+    url = await am.share_asset(asset_id)
+    if not url:
+        raise web.HTTPNotFound(reason="Asset not found or Drive not available")
+    return web.json_response({"drive_url": url, "asset_id": asset_id})
+
+
+async def asset_send_handler(request: web.Request) -> web.Response:
+    """POST /api/internal/asset/send — Slack으로 에셋 전송."""
+    body = await request.json()
+    asset_id = body.get("asset_id")
+    channel = body.get("channel")
+    message = body.get("message", "")
+    if not asset_id or not channel:
+        raise web.HTTPBadRequest(reason="asset_id and channel required")
+
+    am = request.app["asset_manager"]
+    send_info = await am.send_asset(asset_id)
+    if not send_info:
+        raise web.HTTPNotFound(reason="Asset not found")
+
+    slack = request.app.get("slack_adapter")
+    if not slack or not slack.available:
+        raise web.HTTPServiceUnavailable(reason="Slack not connected")
+
+    asset = send_info["asset"]
+    local_path = send_info.get("local_path")
+    drive_url = send_info.get("drive_url")
+
+    # Build message blocks
+    text = message or f"\U0001f4ce {asset['title']}"
+    if drive_url:
+        text += f"\n\U0001f4c2 <{drive_url}|Drive에서 보기>"
+
+    # Upload file if small enough (< 10MB) and available locally
+    file_uploaded = False
+    if local_path:
+        import os
+
+        size = os.path.getsize(local_path)
+        if size < 10 * 1024 * 1024:  # 10MB
+            try:
+                await slack._app.client.files_upload_v2(
+                    channel=channel,
+                    file=local_path,
+                    title=asset["title"],
+                    initial_comment=text,
+                )
+                file_uploaded = True
+            except Exception:
+                logger.warning("Slack file upload failed", exc_info=True)
+
+    if not file_uploaded:
+        await slack._app.client.chat_postMessage(channel=channel, text=text)
+
+    return web.json_response({"ok": True, "asset_id": asset_id, "drive_url": drive_url})
+
+
 # ---------------------------------------------------------------------------
 # Conductor internal handlers
 # ---------------------------------------------------------------------------
@@ -1675,6 +1752,11 @@ def create_api_app(
     app.router.add_delete("/api/internal/asset/{asset_id}", asset_delete_handler)
     app.router.add_post("/api/internal/asset/{asset_id}/archive", asset_archive_handler)
     app.router.add_post("/api/internal/assets/cleanup", assets_cleanup_handler)
+
+    # Asset Drive/Slack operations
+    app.router.add_post("/api/internal/asset/download", asset_download_handler)
+    app.router.add_post("/api/internal/asset/share", asset_share_handler)
+    app.router.add_post("/api/internal/asset/send", asset_send_handler)
 
     # Conductor internal endpoints
     app.router.add_post("/api/internal/task/{task_id}/cancel", task_cancel_handler)
