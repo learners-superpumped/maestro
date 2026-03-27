@@ -29,7 +29,7 @@ export function useDriveFolders(params: { drive_id?: string; parent_id?: string 
   return useQuery({
     queryKey: ["drive-folders", params],
     queryFn: () => api.drive.folders(params),
-    enabled: !!params.drive_id || params.drive_id === "",
+    enabled: params.drive_id !== undefined,
   })
 }
 

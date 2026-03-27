@@ -126,7 +126,7 @@ class DriveProvider:
         }
         media = MediaFileUpload(str(file_path), mimetype=mime, resumable=True)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
             partial(
@@ -159,7 +159,7 @@ class DriveProvider:
                 while not done:
                     _, done = downloader.next_chunk()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _do_download)
         return dest_path
 
@@ -196,7 +196,7 @@ class DriveProvider:
                 "includeItemsFromAllDrives": True,
             }
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             resp = await loop.run_in_executor(
                 None,
                 partial(self._service.files().list(**params).execute),
@@ -234,7 +234,7 @@ class DriveProvider:
 
     async def share(self, file_id: str, anyone_with_link: bool = True) -> str:
         """Share a file and return its ``webViewLink``."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         if anyone_with_link:
             perm = {"type": "anyone", "role": "reader"}
@@ -267,7 +267,7 @@ class DriveProvider:
 
     async def delete(self, file_id: str) -> None:
         """Trash a file (soft-delete)."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             partial(
@@ -283,7 +283,7 @@ class DriveProvider:
 
     async def get_metadata(self, file_id: str) -> DriveFile:
         """Return metadata for a single file."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         meta = await loop.run_in_executor(
             None,
             partial(
@@ -315,7 +315,7 @@ class DriveProvider:
             params["driveId"] = self._drive_id
             params["corpora"] = "drive"
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         resp = await loop.run_in_executor(
             None,
             partial(self._service.files().list(**params).execute),
@@ -324,7 +324,7 @@ class DriveProvider:
 
     async def list_shared_drives(self) -> list[dict[str, Any]]:
         """Return a list of shared drives accessible by the service account."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         resp = await loop.run_in_executor(
             None,
             partial(
@@ -355,7 +355,7 @@ class DriveProvider:
             params["driveId"] = drive_id
             params["corpora"] = "drive"
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         resp = await loop.run_in_executor(
             None,
             partial(self._service.files().list(**params).execute),

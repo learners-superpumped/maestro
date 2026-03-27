@@ -1535,7 +1535,9 @@ async def drive_auth_url_handler(request: web.Request) -> web.Response:
         redirect_uri=redirect_uri,
     )
     auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    # Store flow state temporarily
+    # NOTE: OAuth state is stored in-process. A server restart between auth URL
+    # generation and callback will require the user to restart the auth flow.
+    # This is acceptable for single-user local deployments.
     request.app["_drive_oauth_state"] = {
         "client_id": client_id,
         "client_secret": client_secret,

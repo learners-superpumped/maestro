@@ -453,7 +453,7 @@ class SlackAdapter:
                     registered.append(asset)
                 except Exception:
                     logger.warning(
-                        f"Failed to register Slack file: {name}", exc_info=True
+                        "Failed to register Slack file: %s", name, exc_info=True
                     )
                 finally:
                     try:
