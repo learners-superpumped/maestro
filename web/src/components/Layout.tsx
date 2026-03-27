@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { Outlet } from "@tanstack/react-router"
 import { Sidebar } from "./Sidebar"
 import { ConductorChatPanel } from "./ConductorChat"
@@ -7,6 +7,7 @@ import { Wifi, WifiOff, Loader2, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/api/client"
+import { ConductorPanelContext } from "@/contexts/conductor-panel-context"
 
 function WsIndicator() {
   const status = useWebSocket()
@@ -38,6 +39,12 @@ function WsIndicator() {
 export function Layout() {
   const [collapsed, setCollapsed] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [requestedConversationId, setRequestedConversationId] = useState<string | undefined>(undefined)
+
+  const openConversation = useCallback((conversationId?: string) => {
+    setRequestedConversationId(conversationId)
+    setChatOpen(true)
+  }, [])
 
   const { isError: healthError } = useQuery({
     queryKey: ["health"],
@@ -47,6 +54,7 @@ export function Layout() {
   })
 
   return (
+    <ConductorPanelContext.Provider value={{ openConversation }}>
     <div className="flex h-screen bg-white text-[#37352f] overflow-hidden">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
 
@@ -94,7 +102,13 @@ export function Layout() {
       </div>
 
       {/* Conductor Chat Panel */}
-      <ConductorChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+      <ConductorChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        requestedConversationId={requestedConversationId}
+        onConversationOpened={() => setRequestedConversationId(undefined)}
+      />
     </div>
+    </ConductorPanelContext.Provider>
   )
 }

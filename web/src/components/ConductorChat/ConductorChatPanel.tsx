@@ -84,11 +84,22 @@ function formatRelativeTime(iso: string): string {
 export function ConductorChatPanel({
   open,
   onClose,
+  requestedConversationId,
+  onConversationOpened,
 }: {
   open: boolean
   onClose: () => void
+  requestedConversationId?: string
+  onConversationOpened?: () => void
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (requestedConversationId && open) {
+      setConversationId(requestedConversationId)
+      onConversationOpened?.()
+    }
+  }, [requestedConversationId, open, onConversationOpened])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [pendingMessage, setPendingMessage] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
