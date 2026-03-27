@@ -45,7 +45,7 @@ Global defaults for all agents.
 | ----------------------- | ------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `permission_mode`       | string | `"bypass"`            | `"bypass"` = all tools, no prompts (`--dangerously-skip-permissions`). `"restricted"` = whitelist via `--allowedTools`. |
 | `default_allowed_tools` | list   | `[Read, Write, Bash]` | Tool whitelist when `permission_mode: restricted`. Ignored in bypass mode.                                              |
-| `default_max_turns`     | int    | `20`                  | Max agent turns before forced stop                                                                                      |
+| `default_max_turns`     | int    | `0`                   | Max agent turns before forced stop. `0` = unlimited (budget-only limit).                                                |
 | `stall_timeout_ms`      | int    | `300000`              | No-output timeout before agent is marked stalled (ms)                                                                   |
 | `turn_timeout_ms`       | int    | `3600000`             | Hard wall-clock time limit per agent turn (ms)                                                                          |
 | `max_review_rounds`     | int    | `3`                   | Max review iterations for review tasks                                                                                  |

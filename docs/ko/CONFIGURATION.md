@@ -45,7 +45,7 @@
 | ----------------------- | ------ | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `permission_mode`       | string | `"bypass"`            | `"bypass"` = 모든 도구 사용 가능, 프롬프트 없음 (`--dangerously-skip-permissions`). `"restricted"` = `--allowedTools` 화이트리스트. |
 | `default_allowed_tools` | list   | `[Read, Write, Bash]` | `permission_mode: restricted`일 때 도구 화이트리스트. bypass 모드에서는 무시됨.                                        |
-| `default_max_turns`     | int    | `20`                  | 강제 중지 전 최대 에이전트 턴 수                                                                                     |
+| `default_max_turns`     | int    | `0`                   | 강제 중지 전 최대 에이전트 턴 수. `0` = 무제한 (budget으로만 제한).                                                   |
 | `stall_timeout_ms`      | int    | `300000`              | 출력 없음 타임아웃 — 이 시간 동안 출력이 없으면 멈춘 것으로 판단 (ms)                                                |
 | `turn_timeout_ms`       | int    | `3600000`             | 에이전트 턴당 하드 시간 제한 (ms)                                                                                    |
 | `max_review_rounds`     | int    | `3`                   | 리뷰 태스크의 최대 반복 횟수                                                                                         |

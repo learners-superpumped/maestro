@@ -33,8 +33,8 @@ agent:
   #   bypass     — all tools available, no prompts (--dangerously-skip-permissions)
   #   restricted — only tools listed in agent definition (--allowedTools whitelist)
   permission_mode: bypass
-  # Maximum agent turns before the task is forcefully stopped.
-  default_max_turns: 20
+  # Maximum agent turns before the task is forcefully stopped. 0 = unlimited (budget-only limit).
+  # default_max_turns: 0
   # If an agent produces no output for this many ms, it is considered stalled.
   stall_timeout_ms: 300000
   # Hard wall-clock time limit for a single agent turn (ms).

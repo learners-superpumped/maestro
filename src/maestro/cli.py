@@ -35,21 +35,18 @@ project:
 
 agent:
   permission_mode: bypass
-  default_max_turns: 20
+  # default_max_turns: 0  # 0 = unlimited (budget-only limit)
 
 agents:
   planner:
     role: "Goal을 분석하여 실행 가능한 task로 분해하는 플래너"
     instructions: .maestro/prompts/planner.md
-    max_turns: 30
     no_worktree: true
   reviewer:
     role: "Task 결과를 검증하는 리뷰어"
     instructions: .maestro/prompts/reviewer.md
-    max_turns: 20
     no_worktree: true
-  default:
-    max_turns: 50
+  default: {}
 
 concurrency:
   max_total_agents: 2

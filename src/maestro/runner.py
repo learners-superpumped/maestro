@@ -97,11 +97,11 @@ class AgentRunner:
             "--output-format",
             "stream-json",
             "--verbose",
-            "--max-turns",
-            str(max_turns),
             "--max-budget-usd",
             str(task.budget_usd),
         ]
+        if max_turns > 0:
+            args += ["--max-turns", str(max_turns)]
         if permission_mode == "bypass":
             args.append("--dangerously-skip-permissions")
         else:

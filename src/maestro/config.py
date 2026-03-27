@@ -65,7 +65,7 @@ class AgentConfig:
     default_allowed_tools: list[str] = field(
         default_factory=lambda: ["Read", "Write", "Bash"]
     )
-    default_max_turns: int = 20
+    default_max_turns: int = 0  # 0 = unlimited (budget-only limit)
     stall_timeout_ms: int = 300_000
     turn_timeout_ms: int = 3_600_000
     max_review_rounds: int = 3
@@ -201,7 +201,7 @@ def _parse_agent(data: dict[str, Any]) -> AgentConfig:
         default_allowed_tools=list(
             data.get("default_allowed_tools", ["Read", "Write", "Bash"])
         ),
-        default_max_turns=int(data.get("default_max_turns", 20)),
+        default_max_turns=int(data.get("default_max_turns", 0)),
         stall_timeout_ms=int(data.get("stall_timeout_ms", 300_000)),
         turn_timeout_ms=int(data.get("turn_timeout_ms", 3_600_000)),
         max_review_rounds=int(data.get("max_review_rounds", 3)),

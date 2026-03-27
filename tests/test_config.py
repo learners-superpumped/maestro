@@ -146,7 +146,7 @@ def test_defaults_applied(tmp_path: pathlib.Path) -> None:
     assert cfg.budget.alert_threshold_pct == 80
 
     # agent defaults
-    assert cfg.agent.default_max_turns == 20
+    assert cfg.agent.default_max_turns == 0
     assert cfg.agent.stall_timeout_ms == 300_000
     assert cfg.agent.turn_timeout_ms == 3_600_000
 
