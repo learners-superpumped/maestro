@@ -49,7 +49,7 @@ export function GoalsWidget({ goals, tasksByGoalId, loading }: Props) {
           ))}
 
         {!loading && active.length === 0 && (
-          <div className="px-1 py-2 text-[12px] text-[#9b9a97]">활성 Goal 없음</div>
+          <div className="px-1 py-2 text-[12px] text-[#9b9a97]">No active goals</div>
         )}
 
         {!loading &&

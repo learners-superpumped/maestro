@@ -41,7 +41,7 @@ export function RecentTasksSection({ tasks, loading }: Props) {
           ))}
 
         {!loading && shown.length === 0 && (
-          <div className="px-2 py-3 text-[12px] text-[#9b9a97]">태스크 없음</div>
+          <div className="px-2 py-3 text-[12px] text-[#9b9a97]">No tasks</div>
         )}
 
         {!loading &&

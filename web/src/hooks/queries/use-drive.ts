@@ -40,7 +40,7 @@ export function useDriveSetup() {
       api.drive.setup(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["drive-status"] })
-      toast.success("Drive 설정이 저장되었습니다")
+      toast.success("Drive settings saved")
     },
     onError: (err: Error) => toast.error(err.message),
   })

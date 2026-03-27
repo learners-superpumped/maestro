@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
-import { AlertTriangle, Check, X } from "lucide-react"
+import { AlertTriangle, Check, X, Play } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useApproveTask, useRejectTask } from "@/hooks/queries/use-tasks"
 
@@ -10,29 +10,39 @@ interface Approval {
   type?: string
 }
 
+interface PendingTask {
+  id: string
+  title: string
+  status: string
+  approval_level: number
+}
+
 interface Props {
   approvals: Approval[]
+  pendingTasks: PendingTask[]
   loading: boolean
 }
 
-export function ApprovalsWidget({ approvals, loading }: Props) {
+export function ApprovalsWidget({ approvals, pendingTasks, loading }: Props) {
   const navigate = useNavigate()
   const approve = useApproveTask()
   const reject = useRejectTask()
+
+  const totalCount = approvals.length + pendingTasks.length
 
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
         <AlertTriangle className="h-3.5 w-3.5 text-[#cb912f]" />
         <span className="text-[11px] uppercase tracking-wide font-medium text-[#9b9a97]">
-          Pending Approvals
+          Action Required
         </span>
-        {!loading && approvals.length > 0 && (
+        {!loading && totalCount > 0 && (
           <span
             className="ml-auto text-[10px] px-1.5 py-0.5 rounded font-semibold"
             style={{ color: "#cb912f", backgroundColor: "#fff3e0" }}
           >
-            {approvals.length}
+            {totalCount}
           </span>
         )}
       </div>
@@ -47,10 +57,48 @@ export function ApprovalsWidget({ approvals, loading }: Props) {
             </div>
           ))}
 
-        {!loading && approvals.length === 0 && (
-          <div className="px-1 py-2 text-[12px] text-[#9b9a97]">승인 대기 없음</div>
+        {!loading && totalCount === 0 && (
+          <div className="px-1 py-2 text-[12px] text-[#9b9a97]">No pending items</div>
         )}
 
+        {/* Pending tasks waiting to start */}
+        {!loading &&
+          pendingTasks.map((task) => (
+            <div
+              key={task.id}
+              className="flex items-center gap-1 px-1 py-1.5 rounded hover:bg-[#f9f9f8] transition-colors"
+            >
+              <button
+                onClick={() => navigate({ to: "/tasks/$id", params: { id: task.id } })}
+                className="flex-1 min-w-0 text-left"
+              >
+                <span className="text-[12px] text-[#37352f] truncate block">{task.title}</span>
+                <span className="text-[10px] text-[#9b9a97]">Waiting to start</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  approve.mutate({ id: task.id })
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded text-[#9b9a97] hover:text-[#2e7d6f] hover:bg-[#f7f6f3] transition-colors shrink-0"
+                title="Start"
+              >
+                <Play className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  reject.mutate({ id: task.id })
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#f7f6f3] transition-colors shrink-0"
+                title="Cancel"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+
+        {/* Draft approvals */}
         {!loading &&
           approvals.map((appr) => (
             <div
@@ -62,6 +110,7 @@ export function ApprovalsWidget({ approvals, loading }: Props) {
                 className="flex-1 min-w-0 text-left"
               >
                 <span className="text-[12px] text-[#37352f] truncate block">{appr.title}</span>
+                <span className="text-[10px] text-[#9b9a97]">Pending approval</span>
               </button>
               <button
                 onClick={(e) => {
@@ -78,9 +127,8 @@ export function ApprovalsWidget({ approvals, loading }: Props) {
                   e.stopPropagation()
                   reject.mutate({ id: appr.task_id })
                 }}
-                className="h-7 w-7 flex items-center justify-center rounded text-[#9b9a97] hover:text-[#eb5757] transition-colors shrink-0"
+                className="h-7 w-7 flex items-center justify-center rounded text-[#9b9a97] hover:text-[#eb5757] hover:bg-[#f7f6f3] transition-colors shrink-0"
                 title="Reject"
-                style={{ "--tw-bg-opacity": "0.03" } as React.CSSProperties}
               >
                 <X className="h-3.5 w-3.5" />
               </button>

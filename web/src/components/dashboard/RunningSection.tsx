@@ -47,7 +47,7 @@ export function RunningSection({ tasks, loading }: Props) {
           ))}
 
         {!loading && tasks.length === 0 && (
-          <div className="px-2 py-3 text-[12px] text-[#9b9a97]">실행 중인 태스크 없음</div>
+          <div className="px-2 py-3 text-[12px] text-[#9b9a97]">No running tasks</div>
         )}
 
         {!loading &&

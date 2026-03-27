@@ -72,7 +72,7 @@ export function SchedulesWidget({ schedules, loading }: Props) {
           ))}
 
         {!loading && shown.length === 0 && (
-          <div className="px-1 py-2 text-[12px] text-[#9b9a97]">예정된 스케줄 없음</div>
+          <div className="px-1 py-2 text-[12px] text-[#9b9a97]">No upcoming schedules</div>
         )}
 
         {!loading &&

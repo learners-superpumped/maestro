@@ -43,7 +43,7 @@ function HistoryDropdown({
     >
       {conversations.length === 0 && (
         <div className="px-3 py-4 text-[13px] text-[#9b9a97] text-center">
-          대화 이력이 없습니다
+          No conversation history
         </div>
       )}
       {conversations.map((conv) => (
@@ -59,7 +59,7 @@ function HistoryDropdown({
           )}
         >
           <span className="text-[#37352f] truncate flex-1">
-            {conv.title || "새 대화"}
+            {conv.title || "New conversation"}
           </span>
           <span className="text-[11px] text-[#9b9a97] shrink-0">
             {formatRelativeTime(conv.updated_at || conv.created_at)}
@@ -73,12 +73,12 @@ function HistoryDropdown({
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "방금"
-  if (mins < 60) return `${mins}분 전`
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}시간 전`
+  if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
-  return `${days}일 전`
+  return `${days}d ago`
 }
 
 export function ConductorChatPanel({
@@ -246,7 +246,7 @@ export function ConductorChatPanel({
         <button
           onClick={() => setHistoryOpen(!historyOpen)}
           className="flex items-center gap-1 h-6 px-1.5 rounded hover:bg-[#ebebea] text-[#9b9a97] hover:text-[#37352f] transition-colors"
-          title="대화 이력"
+          title="History"
         >
           <History className="h-3.5 w-3.5" />
           <ChevronDown className="h-3 w-3" />
@@ -257,7 +257,7 @@ export function ConductorChatPanel({
         <button
           onClick={handleNewConversation}
           className="h-6 w-6 flex items-center justify-center rounded hover:bg-[#ebebea] text-[#9b9a97] hover:text-[#37352f] transition-colors"
-          title="새 대화"
+          title="New conversation"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
