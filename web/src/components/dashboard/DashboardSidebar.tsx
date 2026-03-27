@@ -4,19 +4,33 @@ import { SpendChart } from "./SpendChart"
 import { SchedulesWidget } from "./SchedulesWidget"
 import { AssetsWidget } from "./AssetsWidget"
 import { useApprovals } from "@/hooks/queries/use-approvals"
-import { useGoals } from "@/hooks/queries/use-goals"
 import { useStats } from "@/hooks/queries/use-stats"
-import { useSchedules } from "@/hooks/queries/use-schedules"
-import { useAssets } from "@/hooks/queries/use-assets"
-import { useTasks } from "@/hooks/queries/use-tasks"
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/api/client"
 
 export function DashboardSidebar() {
   const { data: approvalsData, isLoading: approvalsLoading } = useApprovals()
-  const { data: goalsData, isLoading: goalsLoading } = useGoals()
+  const { data: goalsData, isLoading: goalsLoading } = useQuery({
+    queryKey: ["goals"],
+    queryFn: () => api.goals.list(),
+    refetchInterval: 30_000,
+  })
   const { data: statsData } = useStats()
-  const { data: schedulesData, isLoading: schedulesLoading } = useSchedules()
-  const { data: assetsData, isLoading: assetsLoading } = useAssets()
-  const { data: allTasksData } = useTasks()
+  const { data: schedulesData, isLoading: schedulesLoading } = useQuery({
+    queryKey: ["schedules"],
+    queryFn: () => api.schedules.list(),
+    refetchInterval: 60_000,
+  })
+  const { data: assetsData, isLoading: assetsLoading } = useQuery({
+    queryKey: ["assets", undefined],
+    queryFn: () => api.assets.list(),
+    refetchInterval: 60_000,
+  })
+  const { data: allTasksData } = useQuery({
+    queryKey: ["tasks", undefined],
+    queryFn: () => api.tasks.list(),
+    refetchInterval: 30_000,
+  })
 
   const approvals = approvalsData?.approvals ?? []
   const goals = goalsData?.goals ?? []
